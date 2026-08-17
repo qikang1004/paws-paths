@@ -1,0 +1,21 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["miniprogram-api-typings", "jest", "node"],
+    "noEmit": true
+  },
+  "include": [
+    "app.ts",
+    "config.ts",
+    "api",
+    "store",
+    "utils",
+    "pages",
+    "packages",
+    "components",
+    "custom-tab-bar",
+    "tools",
+    "test",
+    "shared"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "miniprogram",
+  "private": true,
+  "scripts": {
+    "test": "jest",
+    "build:tokens": "ts-node tools/build-tokens.ts",
+    "sync:types": "ts-node tools/sync-types.ts"
+  },
+  "dependencies": {
+    "yaml": "2.4.2"
+  },
+  "devDependencies": {
+    "ts-node": "10.9.2",
+    "miniprogram-api-typings": "3.12.2",
+    "miniprogram-ci": "1.9.11",
+    "miniprogram-automator": "0.12.1"
+  }
+}
