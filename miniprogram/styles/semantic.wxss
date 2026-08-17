@@ -1,0 +1,134 @@
+/* 语义层：只允许 var() 与 rpx，禁止十六进制与裸 px。 */
+/* 只有 headline-xl 与 label-md 在 DESIGN.md 里定义了 letterSpacing， */
+/* 其余层级不得引用 --font-*-spacing，否则 token 漂移测试会红。 */
+
+.text-headline-xl {
+  font-size: var(--font-headline-xl-size);
+  line-height: var(--font-headline-xl-line);
+  font-weight: var(--font-headline-xl-weight);
+  letter-spacing: var(--font-headline-xl-spacing);
+}
+.text-headline-lg {
+  font-size: var(--font-headline-lg-size);
+  line-height: var(--font-headline-lg-line);
+  font-weight: var(--font-headline-lg-weight);
+}
+.text-headline-md {
+  font-size: var(--font-headline-md-size);
+  line-height: var(--font-headline-md-line);
+  font-weight: var(--font-headline-md-weight);
+}
+.text-body-lg {
+  font-size: var(--font-body-lg-size);
+  line-height: var(--font-body-lg-line);
+  font-weight: var(--font-body-lg-weight);
+}
+.text-body-md {
+  font-size: var(--font-body-md-size);
+  line-height: var(--font-body-md-line);
+  font-weight: var(--font-body-md-weight);
+}
+.text-body-sm {
+  font-size: var(--font-body-sm-size);
+  line-height: var(--font-body-sm-line);
+  font-weight: var(--font-body-sm-weight);
+}
+.text-label-md {
+  font-size: var(--font-label-md-size);
+  line-height: var(--font-label-md-line);
+  font-weight: var(--font-label-md-weight);
+  letter-spacing: var(--font-label-md-spacing);
+}
+
+.c-primary { color: var(--color-primary); }
+.c-on-surface { color: var(--color-on-surface); }
+.c-on-surface-variant { color: var(--color-on-surface-variant); }
+.c-error { color: var(--color-error); }
+
+.page-gutter {
+  padding-left: var(--space-margin-mobile);
+  padding-right: var(--space-margin-mobile);
+}
+.feed-gap { gap: var(--space-gutter-mobile); }
+.section-gap { margin-top: var(--space-xl); }
+.safe-bottom { padding-bottom: calc(var(--space-md) + env(safe-area-inset-bottom)); }
+
+/* 卡片：白底浮在米色页面上，长扩散软阴影，按压下沉。 */
+.card {
+  background-color: var(--color-surface-container-lowest);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  box-shadow: var(--shadow-ambient);
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+}
+.card--pressed {
+  transform: scale(0.97);
+  box-shadow: var(--shadow-pressed);
+}
+
+.avatar { border-radius: var(--radius-full); }
+
+/* 标签：全圆角胶囊 + label-md 字号。 */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-container);
+  color: var(--color-on-surface-variant);
+  font-size: var(--font-label-md-size);
+  line-height: var(--font-label-md-line);
+  font-weight: var(--font-label-md-weight);
+  letter-spacing: var(--font-label-md-spacing);
+}
+.chip--active {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  padding: var(--space-sm) var(--space-lg);
+  font-size: var(--font-body-lg-size);
+  line-height: var(--font-body-lg-line);
+  font-weight: var(--font-body-lg-weight);
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+}
+.btn-primary {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+  box-shadow: var(--shadow-ambient);
+}
+.btn-secondary {
+  background-color: var(--color-secondary);
+  color: var(--color-on-secondary);
+}
+.btn-ghost {
+  background-color: transparent;
+  color: var(--color-on-surface);
+  border: 4rpx solid var(--color-on-surface);
+}
+.btn--pressed {
+  transform: scale(0.97);
+  box-shadow: var(--shadow-pressed);
+}
+.btn--disabled { opacity: 0.4; }
+
+.field {
+  background-color: var(--color-surface-container-low);
+  border: 2rpx solid var(--color-outline);
+  border-radius: var(--radius-full);
+  padding: var(--space-md);
+  color: var(--color-on-surface);
+  font-size: var(--font-body-md-size);
+  line-height: var(--font-body-md-line);
+}
+.field--focus {
+  border: 4rpx solid var(--color-primary);
+}
+.field--error {
+  border: 4rpx solid var(--color-error);
+}

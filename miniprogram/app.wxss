@@ -1,0 +1,10 @@
+/* tokens.wxss 是生成物，semantic.wxss 是手写语义层，顺序不可颠倒。 */
+@import './styles/tokens.wxss';
+@import './styles/semantic.wxss';
+
+page {
+  background-color: var(--color-background);
+  color: var(--color-on-surface);
+  font-size: var(--font-body-md-size);
+  line-height: var(--font-body-md-line);
+}
