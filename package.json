@@ -4,7 +4,8 @@
   "workspaces": ["packages/*", "server", "miniprogram"],
   "scripts": {
     "test": "npm run test --workspaces --if-present",
-    "build": "npm run build --workspaces --if-present"
+    "build": "npm run build --workspaces --if-present",
+    "sync:types": "npm run build -w @paws/types && npm run sync:types -w miniprogram"
   },
   "devDependencies": {
     "typescript": "5.4.5",
