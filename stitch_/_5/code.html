@@ -1,0 +1,318 @@
+<!DOCTYPE html><html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>个人中心</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary": "#4a6549",
+                    "inverse-surface": "#382f29",
+                    "on-tertiary-fixed": "#001f23",
+                    "on-tertiary-container": "#004f58",
+                    "on-error": "#ffffff",
+                    "surface-container": "#fbebe2",
+                    "on-tertiary": "#ffffff",
+                    "tertiary-fixed-dim": "#54d8e9",
+                    "tertiary-container": "#3ec7d8",
+                    "error": "#ba1a1a",
+                    "on-primary-container": "#733700",
+                    "primary-container": "#ff9f5a",
+                    "on-secondary-fixed-variant": "#334d33",
+                    "primary": "#944a07",
+                    "on-secondary-fixed": "#07200b",
+                    "outline-variant": "#dac2b4",
+                    "background": "#fff8f5",
+                    "surface": "#fff8f5",
+                    "primary-fixed-dim": "#ffb786",
+                    "on-primary-fixed-variant": "#723600",
+                    "on-secondary-container": "#506b4f",
+                    "tertiary-fixed": "#93f1ff",
+                    "surface-container-low": "#fff1ea",
+                    "secondary-fixed-dim": "#b0cfad",
+                    "surface-container-highest": "#f0dfd7",
+                    "surface-container-high": "#f5e5dc",
+                    "outline": "#877367",
+                    "tertiary": "#006973",
+                    "on-primary-fixed": "#311300",
+                    "on-secondary": "#ffffff",
+                    "primary-fixed": "#ffdcc6",
+                    "inverse-on-surface": "#feede5",
+                    "error-container": "#ffdad6",
+                    "secondary-container": "#ccebc7",
+                    "surface-tint": "#944a07",
+                    "on-primary": "#ffffff",
+                    "on-error-container": "#93000a",
+                    "surface-container-lowest": "#ffffff",
+                    "surface-bright": "#fff8f5",
+                    "on-surface-variant": "#544339",
+                    "on-background": "#221a15",
+                    "surface-dim": "#e7d7ce",
+                    "surface-variant": "#f0dfd7",
+                    "secondary-fixed": "#ccebc7",
+                    "on-surface": "#221a15",
+                    "inverse-primary": "#ffb786",
+                    "on-tertiary-fixed-variant": "#004f57"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xl": "32px",
+                    "gutter-mobile": "12px",
+                    "xs": "4px",
+                    "md": "16px",
+                    "lg": "24px",
+                    "margin-mobile": "20px",
+                    "sm": "8px",
+                    "base": "4px"
+            },
+            "fontFamily": {
+                    "headline-lg": [
+                            "Quicksand"
+                    ],
+                    "headline-md": [
+                            "Quicksand"
+                    ],
+                    "body-sm": [
+                            "Quicksand"
+                    ],
+                    "body-md": [
+                            "Quicksand"
+                    ],
+                    "body-lg": [
+                            "Quicksand"
+                    ],
+                    "headline-xl": [
+                            "Quicksand"
+                    ],
+                    "label-md": [
+                            "Quicksand"
+                    ]
+            },
+            "fontSize": {
+                    "headline-lg": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "headline-md": [
+                            "20px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-sm": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "26px",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "headline-xl": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "label-md": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "600"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen pb-32">
+<header class="bg-background dark:bg-background w-full top-0 sticky z-40">
+<div class="flex justify-between items-center px-margin-mobile py-sm w-full">
+<button class="hover:opacity-80 active:scale-95 transition-transform duration-150 ease-in-out text-on-surface-variant dark:text-on-surface-variant">
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed-dim" style="font-variation-settings: 'FILL' 0;">location_on</span>
+</button>
+<h1 class="font-headline-lg text-headline-lg text-primary dark:text-primary-fixed-dim tracking-tight">萌宠社交圈</h1>
+<button class="hover:opacity-80 active:scale-95 transition-transform duration-150 ease-in-out text-on-surface-variant dark:text-on-surface-variant">
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed-dim" style="font-variation-settings: 'FILL' 0;">notifications</span>
+</button>
+</div>
+</header>
+<main>
+<section class="px-margin-mobile pt-lg pb-xl">
+<div class="flex items-center gap-md">
+<div class="w-24 h-24 rounded-full overflow-hidden shrink-0 border-4 border-surface-container-lowest shadow-[0_4px_12px_rgba(148,74,7,0.05)]">
+<img class="w-full h-full object-cover" data-alt="A close up portrait photograph of an elegant golden retriever dog looking happy and friendly, shot in soft natural sunlight. The background is a slightly blurred warm cream and sage green aesthetic, emphasizing the pet's caring, joyful, and organic nature." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCvTnx0dLwnrt0a9RPeTZwcL_sUyW-GsEXZFyyhWHVQEnvn1O0jWTEx0R_8oJmkJBDIsz0pBi7iDHd_-2TdWKxCTSp66RTJYpeusFcxEYNlsg-XsD8DlpioROP23E2jvMrWTip4ewJb0vvFGNEK9ntBIB-sfFRLRRFYC_7sO6kZODCE7or91CtHaNMNYHsk-mhyrcz7ZofSFWntYWtC30JHSbBz6sZ9bePUl28jjpK_Iir2QUFzPH22UA">
+</div>
+<div class="flex flex-col justify-center">
+<h2 class="font-headline-xl text-headline-xl text-on-background mb-xs">李狗蛋的铲屎官</h2>
+<div class="inline-flex items-center gap-xs px-sm py-[2px] bg-secondary-container text-on-secondary-container rounded-full self-start shadow-[0_2px_8px_rgba(74,101,73,0.1)]">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">verified</span>
+<span class="font-label-md text-label-md">已认证宠主</span>
+</div>
+</div>
+</div>
+</section>
+<section class="py-md">
+<div class="px-margin-mobile mb-md flex justify-between items-end">
+<h3 class="font-headline-md text-headline-md text-on-background">我的宠物</h3>
+</div>
+<div class="flex overflow-x-auto gap-gutter-mobile px-margin-mobile pb-sm snap-x hide-scrollbar">
+<div class="w-40 shrink-0 snap-start bg-surface-container-lowest rounded-DEFAULT shadow-[0_4px_16px_rgba(148,74,7,0.06)] overflow-hidden flex flex-col transform transition-transform active:scale-95">
+<div class="h-32 w-full bg-surface-variant relative">
+<img class="w-full h-full object-cover" data-alt="A playful shiba inu puppy looking directly at the camera with a joyful expression. The setting is bright and sunny, consistent with a warm organic modern style, featuring soft lighting and a light cream background to match the app aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAluFbxHExjl3E_14VB2T1tzqlJw_uNEdm1pnClmbqOV-xam_5fBPI6HqIe8kOQuf7Yo6mF12webg_L7hZYIZ7W-ojunkr8cSlPy24gSeH9iGa4Nsn0uAnM3Fl5ZcZJMwxeyNW-g1OhSzYs7VBjq4znLsT1Tr5m3txzw_JLcTLRspXTR0MwEULtujmrJ5W-beixL2UiiZSwfJzbcJZXtIns0IKyTUs5DtmdTC_EmCyEaQnNOolmkxPbTQ">
+<div class="absolute top-xs right-xs bg-surface-container-lowest/80 backdrop-blur-sm rounded-full p-[2px]">
+<span class="material-symbols-outlined text-primary text-[16px]" style="font-variation-settings: 'FILL' 1;">male</span>
+</div>
+</div>
+<div class="p-sm flex-1 bg-surface-container-lowest">
+<h4 class="font-body-lg text-body-lg text-on-background">旺财</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant">柴犬 · 2岁</p>
+</div>
+</div>
+<div class="w-40 shrink-0 snap-start bg-surface-container-lowest rounded-DEFAULT shadow-[0_4px_16px_rgba(148,74,7,0.06)] overflow-hidden flex flex-col transform transition-transform active:scale-95">
+<div class="h-32 w-full bg-surface-variant relative">
+<img class="w-full h-full object-cover" data-alt="A fluffy white ragdoll cat sleeping peacefully on a soft knitted blanket. The color palette is composed of warm creams and soft whites with a touch of pastel orange light, highlighting a cozy, caring, and trustworthy vibe fitting a modern pet application." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDsucA3JcmjMTQGALnqcBIlZk_nPHvcnuo5PkdaPdoxlLXPATNzRtr2lgkS2WMAv7yC1Tt_fzQ1vCe0ku0mOSY5gzrGDlK52Gcn-e2x-kuF1cACx3Xb0Z8OLU0yNGNfUeGQIT40MmWY4MLYxsrlzzM6J4hI1-dMIlIg20MW4aLJftcLf278x6FwXBaMZNIHO8E31voNwamIxOTa-4J_I_JNLopcmr9TMbAzr3H8xGh61BAQGVf-45TYmg">
+<div class="absolute top-xs right-xs bg-surface-container-lowest/80 backdrop-blur-sm rounded-full p-[2px]">
+<span class="material-symbols-outlined text-tertiary text-[16px]" style="font-variation-settings: 'FILL' 1;">female</span>
+</div>
+</div>
+<div class="p-sm flex-1 bg-surface-container-lowest">
+<h4 class="font-body-lg text-body-lg text-on-background">雪球</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant">布偶猫 · 1岁</p>
+</div>
+</div>
+<div class="w-24 shrink-0 snap-start flex flex-col items-center justify-center border-2 border-dashed border-outline-variant rounded-DEFAULT bg-surface/50 text-on-surface-variant hover:bg-surface-container-low hover:border-primary/50 transition-colors cursor-pointer active:scale-95">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center mb-xs">
+<span class="material-symbols-outlined text-[24px] text-primary" style="font-variation-settings: 'FILL' 0;">add</span>
+</div>
+<span class="font-label-md text-label-md">添加</span>
+</div>
+</div>
+</section>
+<section class="py-md">
+<div class="px-margin-mobile mb-md">
+<h3 class="font-headline-md text-headline-md text-on-background">宠物认证</h3>
+</div>
+<div class="flex gap-gutter-mobile px-margin-mobile overflow-x-auto hide-scrollbar pb-sm">
+<div class="flex-1 min-w-[160px] bg-surface-container-low p-md rounded-DEFAULT shadow-[0_2px_8px_rgba(148,74,7,0.04)] flex flex-col gap-sm active:scale-95 transition-transform cursor-pointer">
+<div class="flex items-center justify-between">
+<div class="w-10 h-10 rounded-full bg-primary-container/20 text-primary flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">badge</span>
+</div>
+<span class="text-label-md font-label-md px-sm py-[2px] bg-secondary-container text-on-secondary-container rounded-full">已认证</span>
+</div>
+<div>
+<h4 class="font-body-lg text-body-lg text-on-background">犬证管理</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant">电子证件已同步</p>
+</div>
+</div>
+<div class="flex-1 min-w-[160px] bg-surface-container-low p-md rounded-DEFAULT shadow-[0_2px_8px_rgba(148,74,7,0.04)] flex flex-col gap-sm active:scale-95 transition-transform cursor-pointer">
+<div class="flex items-center justify-between">
+<div class="w-10 h-10 rounded-full bg-tertiary-container/20 text-tertiary flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">medical_services</span>
+</div>
+<span class="text-label-md font-label-md px-sm py-[2px] bg-surface-container-highest text-on-surface-variant rounded-full">已接种3针</span>
+</div>
+<div>
+<h4 class="font-body-lg text-body-lg text-on-background">疫苗档案</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant">下次接种: 2024.10</p>
+</div>
+</div>
+</div>
+</section><section class="px-margin-mobile py-lg">
+<div class="bg-surface-container-lowest rounded-DEFAULT shadow-[0_4px_24px_rgba(148,74,7,0.04)] overflow-hidden flex flex-col">
+<a class="flex items-center px-md py-lg active:bg-surface-container-low transition-colors group" href="#"><div class="w-10 h-10 rounded-full bg-tertiary-container/20 text-tertiary flex items-center justify-center mr-md group-hover:scale-110 transition-transform shadow-[0_2px_8px_rgba(62,199,216,0.2)]"><span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person_add</span></div><span class="font-body-lg text-body-lg text-on-background flex-1">我关注的</span><span class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">chevron_right</span></a><div class="h-[1px] bg-surface-variant mx-md"></div><a class="flex items-center px-md py-lg active:bg-surface-container-low transition-colors group" href="#">
+<div class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center mr-md group-hover:scale-110 transition-transform shadow-[0_2px_8px_rgba(255,159,90,0.2)]">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">history_edu</span>
+</div>
+<span class="font-body-lg text-body-lg text-on-background flex-1">我的动态</span>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</a>
+<div class="h-[1px] bg-surface-variant mx-md"></div>
+<a class="flex items-center px-md py-lg active:bg-surface-container-low transition-colors group" href="#">
+<div class="w-10 h-10 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center mr-md group-hover:scale-110 transition-transform shadow-[0_2px_8px_rgba(204,235,199,0.2)]">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">favorite</span>
+</div>
+<span class="font-body-lg text-body-lg text-on-background flex-1">收藏的周边</span>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</a>
+<div class="h-[1px] bg-surface-variant mx-md"></div>
+<a class="flex items-center px-md py-lg active:bg-surface-container-low transition-colors group" href="#">
+<div class="w-10 h-10 rounded-full bg-tertiary-container text-on-tertiary-container flex items-center justify-center mr-md group-hover:scale-110 transition-transform shadow-[0_2px_8px_rgba(62,199,216,0.2)]">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">history</span>
+</div>
+<span class="font-body-lg text-body-lg text-on-background flex-1">浏览历史</span>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</a>
+<div class="h-[1px] bg-surface-variant mx-md"></div>
+<a class="flex items-center px-md py-lg active:bg-surface-container-low transition-colors group" href="#">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest text-on-surface flex items-center justify-center mr-md group-hover:scale-110 transition-transform shadow-[0_2px_8px_rgba(240,223,215,0.4)]">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings</span>
+</div>
+<span class="font-body-lg text-body-lg text-on-background flex-1">设置</span>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</a>
+</div>
+</section>
+<button class="fixed bottom-32 right-margin-mobile z-40 flex items-center gap-xs bg-primary-container text-on-primary-container px-lg py-md rounded-full shadow-[0_4px_16px_rgba(148,74,7,0.3)] hover:opacity-90 active:scale-95 transition-all duration-200 ease-in-out">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">post_add</span>
+<span class="font-headline-md">发布</span>
+</button></main>
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-margin-mobile pb-xl pt-md bg-surface-container-lowest dark:bg-inverse-surface rounded-t-lg shadow-[0_-4px_20px_0_rgba(148,74,7,0.08)]">
+<div class="flex flex-col items-center justify-center text-on-secondary-fixed-variant dark:text-outline-variant px-lg py-xs hover:bg-secondary-container dark:hover:bg-on-secondary-fixed-variant rounded-full transition-colors cursor-pointer group">
+<span class="material-symbols-outlined mb-xs group-hover:scale-110 transition-transform" style="font-variation-settings: 'FILL' 0;">pets</span>
+<span class="font-label-md text-label-md">广场</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-secondary-fixed-variant dark:text-outline-variant px-lg py-xs hover:bg-secondary-container dark:hover:bg-on-secondary-fixed-variant rounded-full transition-colors cursor-pointer group">
+<span class="material-symbols-outlined mb-xs group-hover:scale-110 transition-transform" style="font-variation-settings: 'FILL' 0;">explore</span>
+<span class="font-label-md text-label-md">周边</span>
+</div>
+<div class="flex flex-col items-center justify-center bg-primary-container dark:bg-primary-fixed-dim text-on-primary-container dark:text-on-primary-fixed-variant rounded-full px-lg py-xs scale-90 transition-all duration-200 ease-in-out shadow-[0_2px_12px_rgba(255,159,90,0.3)]">
+<span class="material-symbols-outlined mb-xs" style="font-variation-settings: 'FILL' 1;">person</span>
+<span class="font-label-md text-label-md">我的</span>
+</div>
+</nav>
+
+
+</body></html>

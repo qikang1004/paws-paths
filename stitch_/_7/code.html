@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>我关注的 - 萌宠社交圈</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-low": "#fff1ea",
+                        "on-secondary-fixed": "#07200b",
+                        "primary": "#944a07",
+                        "on-tertiary-fixed-variant": "#004f57",
+                        "surface-dim": "#e7d7ce",
+                        "surface-variant": "#f0dfd7",
+                        "tertiary-fixed-dim": "#54d8e9",
+                        "on-secondary": "#ffffff",
+                        "primary-container": "#ff9f5a",
+                        "error-container": "#ffdad6",
+                        "surface-container-high": "#f5e5dc",
+                        "surface-tint": "#944a07",
+                        "surface": "#fff8f5",
+                        "on-primary-fixed": "#311300",
+                        "on-secondary-fixed-variant": "#334d33",
+                        "surface-container": "#fbebe2",
+                        "inverse-primary": "#ffb786",
+                        "error": "#ba1a1a",
+                        "on-background": "#221a15",
+                        "on-primary": "#ffffff",
+                        "outline-variant": "#dac2b4",
+                        "on-primary-fixed-variant": "#723600",
+                        "on-error": "#ffffff",
+                        "on-surface-variant": "#544339",
+                        "background": "#fff8f5",
+                        "inverse-on-surface": "#feede5",
+                        "on-error-container": "#93000a",
+                        "tertiary": "#006973",
+                        "on-surface": "#221a15",
+                        "primary-fixed-dim": "#ffb786",
+                        "on-tertiary": "#ffffff",
+                        "primary-fixed": "#ffdcc6",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-fixed": "#001f23",
+                        "on-secondary-container": "#506b4f",
+                        "surface-container-highest": "#f0dfd7",
+                        "outline": "#877367",
+                        "secondary-fixed": "#ccebc7",
+                        "tertiary-fixed": "#93f1ff",
+                        "inverse-surface": "#382f29",
+                        "surface-bright": "#fff8f5",
+                        "on-tertiary-container": "#004f58",
+                        "secondary-fixed-dim": "#b0cfad",
+                        "on-primary-container": "#733700",
+                        "secondary": "#4a6549",
+                        "secondary-container": "#ccebc7",
+                        "tertiary-container": "#3ec7d8"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "xl": "32px",
+                        "gutter-mobile": "12px",
+                        "lg": "24px",
+                        "margin-mobile": "20px",
+                        "md": "16px",
+                        "base": "4px",
+                        "sm": "8px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Quicksand"],
+                        "label-md": ["Quicksand"],
+                        "body-sm": ["Quicksand"],
+                        "headline-md": ["Quicksand"],
+                        "body-lg": ["Quicksand"],
+                        "headline-xl": ["Quicksand"],
+                        "body-md": ["Quicksand"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-lg": ["18px", { "lineHeight": "26px", "fontWeight": "500" }],
+                        "headline-xl": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Quicksand', sans-serif; }
+        .squishy-press:active { transform: scale(0.96); transition: transform 0.15s ease-out; }
+    </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen pb-[100px]">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky bg-background flex justify-between items-center px-margin-mobile py-sm z-40">
+<button class="squishy-press flex items-center justify-center p-sm rounded-full text-on-surface hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<h1 class="font-headline-lg text-headline-lg text-primary text-center absolute left-1/2 -translate-x-1/2">
+            我关注的
+        </h1>
+<div class="w-10"></div> <!-- Placeholder to balance header -->
+</header>
+<!-- Main Content Canvas -->
+<main class="px-margin-mobile pt-lg flex flex-col gap-md">
+<!-- Search / Filter Bar (Optional addition for utility) -->
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full bg-surface-container-low border border-outline-variant focus:border-primary focus:border-2 rounded-full py-sm pl-xl pr-md font-body-sm text-body-sm text-on-surface placeholder:text-on-surface-variant outline-none transition-all duration-200" placeholder="搜索已关注..." type="text"/>
+</div>
+<div class="h-base"></div> <!-- Spacer -->
+<!-- Following List -->
+<div class="flex flex-col gap-gutter-mobile">
+<!-- List Item 1 -->
+<div class="bg-surface-container-lowest rounded-lg p-md shadow-[0_4px_20px_0_rgba(148,74,7,0.04)] flex items-center gap-md">
+<img class="w-16 h-16 rounded-full object-cover shadow-[0_2px_10px_0_rgba(148,74,7,0.06)]" data-alt="A close up, high quality photo of an adorable Golden Retriever puppy looking happy in a sunlit park setting. Warm, soft natural lighting highlights its golden fur. The overall mood is cheerful, bright, and organic, fitting a clean, modern app interface. Shot with a shallow depth of field." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC-zzUUpNCf7yWShCJ4o_3lTtROL3EY8uteM7MeHWFsxh7iLbHzgjasZ9gwJ21qSuAfRGNFJ3fZqwDNsfHNv3QDQ7X4H3hTsukMRSQ8m8Afr-bqcWN2dNg5YQ4c2WQ5_OLmCuSm7sI1FUW-KkqJwpNX_K-iBsCVtvaGQm9b-NW2HwH6Rqpd-Zbj7ylS2BXmyTV6alOfzV1wrjQruYx4vLn7iqzJzJkCVtjy8zOHsAVe7dPvRWtgzLj7Mg"/>
+<div class="flex-1 flex flex-col justify-center">
+<h2 class="font-headline-md text-headline-md text-on-surface leading-tight">Milo</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Golden Retriever • 2 yrs</p>
+<p class="font-body-sm text-body-sm text-primary-container truncate mt-xs">Just learned a new trick! 🐾</p>
+</div>
+<button class="squishy-press font-label-md text-label-md text-on-surface-variant px-md py-xs rounded-full border-2 border-outline-variant hover:bg-surface-variant transition-colors whitespace-nowrap">
+                    取消关注
+                </button>
+</div>
+<!-- List Item 2 -->
+<div class="bg-surface-container-lowest rounded-lg p-md shadow-[0_4px_20px_0_rgba(148,74,7,0.04)] flex items-center gap-md">
+<img class="w-16 h-16 rounded-full object-cover shadow-[0_2px_10px_0_rgba(148,74,7,0.06)]" data-alt="A beautiful, fluffy Maine Coon cat resting elegantly on a soft white blanket. Sunlight streams through a nearby window, creating a warm, cozy, and luxurious atmosphere. The color palette is composed of soft creams, whites, and the cat's rich brown tabby fur. Professional pet photography style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrKG8NHdM0fnYna6ALYRVFuYwQiQEAyzhsxmLE2fpi3KTKIygOwrns1ymqJexvgVWRGVOT4lii7k3Infeiw2FBxxPx_OpRjnF2mMZ36MRJfK_pAyc-6TJq85RVCVFJr-lZcyN1vUfQjfds7ypOu9Fq92MTaGaVSMFh-HiFLgy1bnIIxLcsASvRidmt5b15Tkz_mm7LDVe6pZGFuJXWvRvxhHniKAKL9PYbM-oe5JleejpFovkt7slteg"/>
+<div class="flex-1 flex flex-col justify-center">
+<h2 class="font-headline-md text-headline-md text-on-surface leading-tight">Bella</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Maine Coon • 4 yrs</p>
+<p class="font-body-sm text-body-sm text-primary-container truncate mt-xs">Nap time is all the time.</p>
+</div>
+<button class="squishy-press font-label-md text-label-md text-on-surface-variant px-md py-xs rounded-full border-2 border-outline-variant hover:bg-surface-variant transition-colors whitespace-nowrap">
+                    取消关注
+                </button>
+</div>
+<!-- List Item 3 -->
+<div class="bg-surface-container-lowest rounded-lg p-md shadow-[0_4px_20px_0_rgba(148,74,7,0.04)] flex items-center gap-md">
+<img class="w-16 h-16 rounded-full object-cover shadow-[0_2px_10px_0_rgba(148,74,7,0.06)]" data-alt="A playful French Bulldog running happily through green grass with a small bright yellow ball in its mouth. The scene is energetic and joyful, illuminated by bright afternoon sunlight. The colors are vibrant greens and warm tones, evoking a friendly and lively outdoor pet adventure." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDo_QR1Z-HQ8Ii_m1JlIFAA83FI7ZwrsI3mKpcRNe4l6Z9A5KkjvAb1hwwQ7dyzal9RjnX_DKxofLtyCtGAAthPkd5ndN_MRbZNrYv99XJerC5rprJ1Jee0cKOWWcBNC1qcAil307oNPMZWb8DlHTbHM_4jn-XmOICaJTS37GZPEdSVMB1Yrg-IQUF9uuoYPnLDm2yP18hapr59v601dy9fjlEb1irSk7g8xxyd5Oq2QCoZ_jpUirGroQ"/>
+<div class="flex-1 flex flex-col justify-center">
+<h2 class="font-headline-md text-headline-md text-on-surface leading-tight">Oliver</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">French Bulldog • 1 yr</p>
+<p class="font-body-sm text-body-sm text-primary-container truncate mt-xs">Park adventures today!</p>
+</div>
+<button class="squishy-press font-label-md text-label-md text-on-surface-variant px-md py-xs rounded-full border-2 border-outline-variant hover:bg-surface-variant transition-colors whitespace-nowrap">
+                    取消关注
+                </button>
+</div>
+<!-- List Item 4 -->
+<div class="bg-surface-container-lowest rounded-lg p-md shadow-[0_4px_20px_0_rgba(148,74,7,0.04)] flex items-center gap-md">
+<img class="w-16 h-16 rounded-full object-cover shadow-[0_2px_10px_0_rgba(148,74,7,0.06)]" data-alt="An adorable, curious white and orange Corgi looking directly into the camera with its head tilted slightly. The background is a soft, blurred out cafe setting with warm string lights. The overall aesthetic is inviting, cozy, and cute, with high-quality, soft focus photography." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD5t_vWY_y1O0a_XHOug6BG05U6QiH62ep5ODkDOgUQiwlozEGrtHBNqCElS6XFsE2kedhDQuKiiUye15W2vLbVzRX11fFuUnMc6tyIOXtvswD9Cbh0fHgN_5dgKjq08ovK4kdkycRdtf_rNuW9mSlfuse97zly7Ng-2Hj-MFalCmoOc7qZ_8lwgWItcDOGAAYQYP7RZSBWXwc0C57bJsMoC5PMUg15yjJlwnuCoY1ZW1SJetREOr-E3A"/>
+<div class="flex-1 flex flex-col justify-center">
+<h2 class="font-headline-md text-headline-md text-on-surface leading-tight">Daisy</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Corgi • 3 yrs</p>
+<p class="font-body-sm text-body-sm text-primary-container truncate mt-xs">Ready for treats.</p>
+</div>
+<button class="squishy-press font-label-md text-label-md text-on-surface-variant px-md py-xs rounded-full border-2 border-outline-variant hover:bg-surface-variant transition-colors whitespace-nowrap">
+                    取消关注
+                </button>
+</div>
+</div>
+<!-- End of list indicator -->
+<div class="py-lg flex justify-center items-center opacity-60">
+<span class="material-symbols-outlined text-primary text-3xl">pets</span>
+</div>
+</main>
+<!-- Navigation shell suppressed as this is a transactional/task-focused sub-page with a 'Back' button intent. -->
+</body></html>

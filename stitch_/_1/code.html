@@ -1,0 +1,265 @@
+<!DOCTYPE html><html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>萌宠社交圈</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .icon-fill {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* Custom Masonry via Column Count for pure CSS solution */
+        .masonry-grid {
+            column-count: 2;
+            column-gap: 12px; /* maps to gutter-mobile */
+        }
+        .masonry-item {
+            break-inside: avoid;
+            margin-bottom: 12px;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "secondary": "#4a6549",
+                      "inverse-surface": "#382f29",
+                      "on-tertiary-fixed": "#001f23",
+                      "on-tertiary-container": "#004f58",
+                      "on-error": "#ffffff",
+                      "surface-container": "#fbebe2",
+                      "on-tertiary": "#ffffff",
+                      "tertiary-fixed-dim": "#54d8e9",
+                      "tertiary-container": "#3ec7d8",
+                      "error": "#ba1a1a",
+                      "on-primary-container": "#733700",
+                      "primary-container": "#ff9f5a",
+                      "on-secondary-fixed-variant": "#334d33",
+                      "primary": "#944a07",
+                      "on-secondary-fixed": "#07200b",
+                      "outline-variant": "#dac2b4",
+                      "background": "#fff8f5",
+                      "surface": "#fff8f5",
+                      "primary-fixed-dim": "#ffb786",
+                      "on-primary-fixed-variant": "#723600",
+                      "on-secondary-container": "#506b4f",
+                      "tertiary-fixed": "#93f1ff",
+                      "surface-container-low": "#fff1ea",
+                      "secondary-fixed-dim": "#b0cfad",
+                      "surface-container-highest": "#f0dfd7",
+                      "surface-container-high": "#f5e5dc",
+                      "outline": "#877367",
+                      "tertiary": "#006973",
+                      "on-primary-fixed": "#311300",
+                      "on-secondary": "#ffffff",
+                      "primary-fixed": "#ffdcc6",
+                      "inverse-on-surface": "#feede5",
+                      "error-container": "#ffdad6",
+                      "secondary-container": "#ccebc7",
+                      "surface-tint": "#944a07",
+                      "on-primary": "#ffffff",
+                      "on-error-container": "#93000a",
+                      "surface-container-lowest": "#ffffff",
+                      "surface-bright": "#fff8f5",
+                      "on-surface-variant": "#544339",
+                      "on-background": "#221a15",
+                      "surface-dim": "#e7d7ce",
+                      "surface-variant": "#f0dfd7",
+                      "secondary-fixed": "#ccebc7",
+                      "on-surface": "#221a15",
+                      "inverse-primary": "#ffb786",
+                      "on-tertiary-fixed-variant": "#004f57"
+              },
+              "borderRadius": {
+                      "DEFAULT": "1rem",
+                      "lg": "2rem",
+                      "xl": "3rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "xl": "32px",
+                      "gutter-mobile": "12px",
+                      "xs": "4px",
+                      "md": "16px",
+                      "lg": "24px",
+                      "margin-mobile": "20px",
+                      "sm": "8px",
+                      "base": "4px"
+              },
+              "fontFamily": {
+                      "headline-lg": ["Quicksand"],
+                      "headline-md": ["Quicksand"],
+                      "body-sm": ["Quicksand"],
+                      "body-md": ["Quicksand"],
+                      "body-lg": ["Quicksand"],
+                      "headline-xl": ["Quicksand"],
+                      "label-md": ["Quicksand"]
+              },
+              "fontSize": {
+                      "headline-lg": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                      "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "body-lg": ["18px", {"lineHeight": "26px", "fontWeight": "500"}],
+                      "headline-xl": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+              }
+            }
+          }
+        }
+      </script>
+</head>
+<body class="bg-background text-on-background min-h-screen font-body-md selection:bg-primary-container selection:text-on-primary-container antialiased">
+<!-- Mobile Device Container for Preview Constraints -->
+<div class="max-w-md mx-auto relative min-h-screen bg-background shadow-2xl overflow-hidden flex flex-col pb-[90px]">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky z-40 bg-background flex justify-between items-center px-margin-mobile py-sm">
+<button class="flex items-center gap-xs text-primary hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined font-headline-lg text-headline-lg">location_on</span>
+<span class="font-body-sm text-body-sm text-on-surface font-semibold">同城</span>
+</button>
+<h1 class="font-headline-lg text-headline-lg text-primary absolute left-1/2 -translate-x-1/2">萌宠社交圈</h1>
+<button class="text-primary hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined font-headline-lg text-headline-lg">notifications</span>
+</button>
+</header>
+<!-- Main Content Canvas (Waterfall List) -->
+<main class="flex-1 px-margin-mobile py-md overflow-y-auto custom-scrollbar">
+<!-- Category Chips (Optional enhancement for "lively" feel) -->
+<div class="flex gap-sm overflow-x-auto pb-md mb-xs no-scrollbar">
+<button class="px-md py-xs bg-primary text-on-primary font-body-sm text-body-sm rounded-full whitespace-nowrap shadow-sm">推荐</button>
+<button class="px-md py-xs bg-surface-container text-on-surface-variant font-body-sm text-body-sm rounded-full whitespace-nowrap hover:bg-surface-variant transition-colors border border-outline-variant">汪星人</button>
+<button class="px-md py-xs bg-surface-container text-on-surface-variant font-body-sm text-body-sm rounded-full whitespace-nowrap hover:bg-surface-variant transition-colors border border-outline-variant">喵星人</button>
+<button class="px-md py-xs bg-surface-container text-on-surface-variant font-body-sm text-body-sm rounded-full whitespace-nowrap hover:bg-surface-variant transition-colors border border-outline-variant">附近活动</button>
+</div><div class="flex gap-xs overflow-x-auto pb-md mb-xs no-scrollbar">
+  <button class="px-sm py-1 bg-surface-container-low text-on-surface-variant font-label-md text-label-md rounded-full whitespace-nowrap border border-outline-variant hover:bg-surface-variant transition-colors">金毛</button>
+  <button class="px-sm py-1 bg-surface-container-low text-on-surface-variant font-label-md text-label-md rounded-full whitespace-nowrap border border-outline-variant hover:bg-surface-variant transition-colors">布偶</button>
+  <button class="px-sm py-1 bg-surface-container-low text-on-surface-variant font-label-md text-label-md rounded-full whitespace-nowrap border border-outline-variant hover:bg-surface-variant transition-colors">柯基</button>
+  <button class="px-sm py-1 bg-surface-container-low text-on-surface-variant font-label-md text-label-md rounded-full whitespace-nowrap border border-outline-variant hover:bg-surface-variant transition-colors">柴犬</button>
+  <button class="px-sm py-1 bg-surface-container-low text-on-surface-variant font-label-md text-label-md rounded-full whitespace-nowrap border border-outline-variant hover:bg-surface-variant transition-colors">英短</button>
+  <button class="px-sm py-1 bg-surface-container-low text-on-surface-variant font-label-md text-label-md rounded-full whitespace-nowrap border border-outline-variant hover:bg-surface-variant transition-colors">泰迪</button>
+</div>
+<!-- Masonry Grid -->
+<div class="masonry-grid">
+<!-- Card 1 (Taller) -->
+<div class="masonry-item bg-surface-container-lowest rounded-DEFAULT overflow-hidden shadow-[0_4px_12px_rgba(148,74,7,0.04)] hover:shadow-[0_8px_20px_rgba(148,74,7,0.08)] transition-all duration-200 cursor-pointer group active:scale-[0.98]">
+<div class="relative aspect-[3/4] overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A bright, high-quality portrait photograph of a happy Golden Retriever sitting in a sunlit green park. The lighting is soft and warm, highlighting the dog's golden fur. The mood is joyful, caring, and vibrant, fitting a modern pet social app with an organic, friendly aesthetic. The background is slightly blurred greenery." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDsph78321A8J41D8DcIlP1bSa5FlP5ld49cS5NQjKr4cjxvF5lVvx8FgavIpQd5repcbVn6el_CRUX2w0-LY_7iOvK3N2UxCKgawL3nUTpxW9nEpMRpxKvFdZCtPEHLhrBGS6Vdmx5Uo7DHJN4rHkLrzj_kWWZ0V84Jz2MS1mUvZvJFA4n1qiqOKyzSNQwwRz25oHDp7mUeFomKPnuVVajA_rtZvgUa9BpEWwMPRH_TA2KxTdQPDW18w">
+</div>
+<div class="p-sm">
+<div class="flex justify-between items-center mb-xs">
+<h2 class="font-headline-md text-headline-md text-on-surface truncate">大黄</h2>
+<span class="font-label-md text-label-md bg-secondary-container text-on-secondary-container px-2 py-1 rounded-full">2岁</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]">pets</span> 金毛猎犬
+                        </p>
+<p class="font-body-sm text-body-sm text-outline mt-1 flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]">near_me</span> 500m
+                        </p>
+</div>
+</div>
+<!-- Card 2 (Square) -->
+<div class="masonry-item bg-surface-container-lowest rounded-DEFAULT overflow-hidden shadow-[0_4px_12px_rgba(148,74,7,0.04)] hover:shadow-[0_8px_20px_rgba(148,74,7,0.08)] transition-all duration-200 cursor-pointer group active:scale-[0.98]">
+<div class="relative aspect-square overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A close-up, high-key photograph of a cute British Shorthair cat with striking copper eyes resting indoors on a soft, cream-colored blanket. The lighting is diffused and modern, creating a soft, tactile, and trustworthy atmosphere. The color palette focuses on warm neutral tones and soft grays." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCmxde4cNRoMef1N99hOL3MyEsW1osPfjEpclMOVAUuWNVzyq3Swf-OZkqXDWdC6s342KvT_NVspE-QFmxrVAzvvLnt7I21MS_ZfA0hGHGtJ5oxA1jm3Ln7dQnfSR4PrjEhp_bh9JXedSHEJhRMnlLLWCALpCGcZADd3JgRFvU4qkZXTFTBrcEwp9zJHeSSRNoQ6IJugzeFd_6mTgC4J8rtrZzLqM6rrEIjwQGQQdcwKmwF-uc1_oqXQQ">
+</div>
+<div class="p-sm">
+<div class="flex justify-between items-center mb-xs">
+<h2 class="font-headline-md text-headline-md text-on-surface truncate">波比</h2>
+<span class="font-label-md text-label-md bg-primary-container text-on-primary-container px-2 py-1 rounded-full">1岁</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]">pets</span> 英短蓝猫
+                        </p>
+<p class="font-body-sm text-body-sm text-outline mt-1 flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]">near_me</span> 1.2km
+                        </p>
+</div>
+</div>
+<!-- Card 3 (Medium) -->
+<div class="masonry-item bg-surface-container-lowest rounded-DEFAULT overflow-hidden shadow-[0_4px_12px_rgba(148,74,7,0.04)] hover:shadow-[0_8px_20px_rgba(148,74,7,0.08)] transition-all duration-200 cursor-pointer group active:scale-[0.98]">
+<div class="relative aspect-[4/5] overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="An energetic, bright photo of a small Corgi running towards the camera on a sandy path with warm afternoon sunlight. The image captures a sense of playful motion and joy. The color palette is warm, featuring earthy browns, soft oranges, and bright natural outdoor colors, perfect for a lively pet community app." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDjAKJw-SWq3kDSDcRXQ68z4rFKLXZ2L4MqHIyVvtTYAfsmNTXDXvohNx4dezY78PGwgbAjYMvZKtFioao2DmEdGvsKxDamgYv-qcKSonMEk2-H8AVPdF-mlzZzgKqk-_Ae2PnL4KNINdN3mIyc9gGKnTiWfhg0v-msnqIEJ7PJqcUTp-xt0lqZY93x0qa4lw8zsoTgKd6vII9nGvtT3rrUWiGJA6llZO-RHC96QSPGVnYB_1NOYn8MjA">
+</div>
+<div class="p-sm">
+<div class="flex justify-between items-center mb-xs">
+<h2 class="font-headline-md text-headline-md text-on-surface truncate">曲奇</h2>
+<span class="font-label-md text-label-md bg-secondary-container text-on-secondary-container px-2 py-1 rounded-full">3岁</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]">pets</span> 柯基
+                        </p>
+<p class="font-body-sm text-body-sm text-outline mt-1 flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]">near_me</span> 800m
+                        </p>
+</div>
+</div>
+<!-- Card 4 (Taller) -->
+<div class="masonry-item bg-surface-container-lowest rounded-DEFAULT overflow-hidden shadow-[0_4px_12px_rgba(148,74,7,0.04)] hover:shadow-[0_8px_20px_rgba(148,74,7,0.08)] transition-all duration-200 cursor-pointer group active:scale-[0.98]">
+<div class="relative aspect-[3/4] overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A serene, beautifully lit portrait of a fluffy Ragdoll cat sitting gracefully by a sunlit window. The light filters through sheer curtains, casting soft shadows. The overall aesthetic is warm, minimalistic, and caring, with a palette dominated by creamy whites, soft blues from the cat's eyes, and subtle ambient shadows." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAjOx-8fzvmfrFP_bsgBGNfykeGQ7F6FylA4P0h2VSYwkn7O4gMt_08uViiMd2qkz-s5g7sKKtz14swGv0kOuPMfHqSM9OHSjp6WCFbjijSOZurXxV45M6sm9_QCRkl1erdsQBy3v8r5zIcQ-6b5N-FfmgosR0odwSOIOe4q92k7zbVlE3YAU0ywG-DY6h1kcF6Qc4_9DlR5IQbb97PCcTHWj-lxw-bi7NDg6g5zEp6NRVnr35xQi6n1g">
+</div>
+<div class="p-sm">
+<div class="flex justify-between items-center mb-xs">
+<h2 class="font-headline-md text-headline-md text-on-surface truncate">雪球</h2>
+<span class="font-label-md text-label-md bg-primary-container text-on-primary-container px-2 py-1 rounded-full">8个月</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]">pets</span> 布偶猫
+                        </p>
+<p class="font-body-sm text-body-sm text-outline mt-1 flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]">near_me</span> 2.5km
+                        </p>
+</div>
+</div>
+<!-- Card 5 (Square) -->
+<div class="masonry-item bg-surface-container-lowest rounded-DEFAULT overflow-hidden shadow-[0_4px_12px_rgba(148,74,7,0.04)] hover:shadow-[0_8px_20px_rgba(148,74,7,0.08)] transition-all duration-200 cursor-pointer group active:scale-[0.98]">
+<div class="relative aspect-square overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A playful, warm candid photo of a brown Poodle dog wearing a small yellow bandana, looking curiously at the camera. The setting is an indoor cafe with warm wooden textures and soft ambient lighting. The mood is friendly and approachable, utilizing a palette of rich chocolate browns, warm creams, and vibrant yellow accents." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDNYqIo1n2bHpqQvbqp0FtQFNI9Z4n8qlRD9NUfiQdYAZn6bUUTO0gcg6vd1C6ZB4mT2aXvxGue9WRdX00texNP_Sa40hmMOGlv3VXf3jU4w5CmpU-EQ1yjvIEOxGIkClVJfk81U25WzwrKoCM_ujj9wmKXaD_oIpKI5f_-Cbv6LwIfA9o2a8WWxYHDLImGKNWtp_f9v6ajL3qLv4QiOqAKWmR7odgYFzm06d9JBLmCyqTf8s7WrzyTaA">
+</div>
+<div class="p-sm">
+<div class="flex justify-between items-center mb-xs">
+<h2 class="font-headline-md text-headline-md text-on-surface truncate">摩卡</h2>
+<span class="font-label-md text-label-md bg-secondary-container text-on-secondary-container px-2 py-1 rounded-full">4岁</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]">pets</span> 泰迪
+                        </p>
+<p class="font-body-sm text-body-sm text-outline mt-1 flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]">near_me</span> 150m
+                        </p>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-margin-mobile pb-xl pt-md bg-surface-container-lowest shadow-[0_-4px_20px_0_rgba(148,74,7,0.08)] rounded-t-lg max-w-md mx-auto right-0">
+<!-- Active Tab: 广场 -->
+<button class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full px-lg py-xs hover:opacity-80 active:scale-90 transition-all duration-200 ease-in-out">
+<span class="material-symbols-outlined icon-fill mb-1 text-[24px]">pets</span>
+<span class="font-label-md text-label-md">广场</span>
+</button>
+<!-- Inactive Tab: 周边 -->
+<button class="flex flex-col items-center justify-center text-on-secondary-fixed-variant px-lg py-xs hover:bg-secondary-container rounded-full transition-all duration-200 ease-in-out">
+<span class="material-symbols-outlined mb-1 text-[24px]">explore</span>
+<span class="font-label-md text-label-md">周边</span>
+</button>
+<!-- Inactive Tab: 我的 -->
+<button class="flex flex-col items-center justify-center text-on-secondary-fixed-variant px-lg py-xs hover:bg-secondary-container rounded-full transition-all duration-200 ease-in-out">
+<span class="material-symbols-outlined mb-1 text-[24px]">person</span>
+<span class="font-label-md text-label-md">我的</span>
+</button>
+</nav>
+</div>
+
+
+</body></html>

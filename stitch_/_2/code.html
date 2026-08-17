@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>宠物详情</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary": "#4a6549",
+                        "inverse-surface": "#382f29",
+                        "on-tertiary-fixed": "#001f23",
+                        "on-tertiary-container": "#004f58",
+                        "on-error": "#ffffff",
+                        "surface-container": "#fbebe2",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed-dim": "#54d8e9",
+                        "tertiary-container": "#3ec7d8",
+                        "error": "#ba1a1a",
+                        "on-primary-container": "#733700",
+                        "primary-container": "#ff9f5a",
+                        "on-secondary-fixed-variant": "#334d33",
+                        "primary": "#944a07",
+                        "on-secondary-fixed": "#07200b",
+                        "outline-variant": "#dac2b4",
+                        "background": "#fff8f5",
+                        "surface": "#fff8f5",
+                        "primary-fixed-dim": "#ffb786",
+                        "on-primary-fixed-variant": "#723600",
+                        "on-secondary-container": "#506b4f",
+                        "tertiary-fixed": "#93f1ff",
+                        "surface-container-low": "#fff1ea",
+                        "secondary-fixed-dim": "#b0cfad",
+                        "surface-container-highest": "#f0dfd7",
+                        "surface-container-high": "#f5e5dc",
+                        "outline": "#877367",
+                        "tertiary": "#006973",
+                        "on-primary-fixed": "#311300",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed": "#ffdcc6",
+                        "inverse-on-surface": "#feede5",
+                        "error-container": "#ffdad6",
+                        "secondary-container": "#ccebc7",
+                        "surface-tint": "#944a07",
+                        "on-primary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-bright": "#fff8f5",
+                        "on-surface-variant": "#544339",
+                        "on-background": "#221a15",
+                        "surface-dim": "#e7d7ce",
+                        "surface-variant": "#f0dfd7",
+                        "secondary-fixed": "#ccebc7",
+                        "on-surface": "#221a15",
+                        "inverse-primary": "#ffb786",
+                        "on-tertiary-fixed-variant": "#004f57"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xl": "32px",
+                        "gutter-mobile": "12px",
+                        "xs": "4px",
+                        "md": "16px",
+                        "lg": "24px",
+                        "margin-mobile": "20px",
+                        "sm": "8px",
+                        "base": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Quicksand"],
+                        "headline-md": ["Quicksand"],
+                        "body-sm": ["Quicksand"],
+                        "body-md": ["Quicksand"],
+                        "body-lg": ["Quicksand"],
+                        "headline-xl": ["Quicksand"],
+                        "label-md": ["Quicksand"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "26px", "fontWeight": "500" }],
+                        "headline-xl": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Quicksand', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 1; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .soft-shadow { box-shadow: 0 8px 32px rgba(148,74,7,0.08); }
+        .squish:active { transform: scale(0.96); transition: transform 0.15s ease; }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen pb-[100px] font-body-md antialiased selection:bg-primary-container selection:text-on-primary-container">
+<!-- Header / Carousel -->
+<header class="relative w-full h-[65vh] md:h-[75vh] bg-surface-variant overflow-hidden rounded-b-xl shadow-[0_8px_32px_rgba(148,74,7,0.05)]">
+<div class="absolute inset-0 flex transition-transform duration-500 ease-in-out" id="carousel-track">
+<div class="w-full h-full flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A high-quality, brightly lit photograph of an adorable, fluffy golden retriever puppy playing in a sunlit grassy park. The puppy has a joyful expression with its tongue out. The scene conveys a warm, organic, and happy mood, with soft sunlight creating a gentle glow, fitting a bright, modern, and caring pet app aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCObDcVTTPDOpQsZSNxm9LOR6EF6dn61PhfjICvGcPzjefAuKlXdlX2cesKS7f-l-aj-gqh8KuBgv0gtTlpFlFI0VwOCkr3RDQqOgANPgUkL3N1pS39gefGAuMxY2i_QaJ9iBi5YsecCb6Gu-_DXTDo74jB1p4aNf4p0VRnFgnR6lRJ7hQ-DaI9LE6SSB5ja28KH9p8pAMJqp3KGrlXiF4L17SIL_1j0onyMoMb0LLkFfxmrrBCLG2Yxw"/>
+</div>
+<div class="w-full h-full flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A close-up portrait of a fluffy golden retriever puppy resting on a soft, cream-colored blanket indoors. The lighting is soft and natural, coming from a nearby window, highlighting the puppy's soft fur and innocent eyes. The mood is peaceful and caring, aligning perfectly with a warm, organic, and trustworthy modern design style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3PPZWtpESwqVOaZXQzkEQXymGMto3A-h2wC4E2wzDB39h32WJhI2M0yGSuQL2lGdJJ2f1yv56zqGDhfbnk8LZocpI_ksu1zUdSATxOj824OWeHmu5wsE8eTWjlWG5EpIkQitB-vOj22sXfkkuYub0JCeH-hO5TNYhVnLdRQ91_IaV907m_FyBUKL23SMSHfpmnxvZX9u3Tg7PPtt9oioDLetKXFsH8yD3iRK16asLbxQkLHOQBFjlyg"/>
+</div>
+<div class="w-full h-full flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A candid shot of a happy golden retriever puppy running towards the camera on a sandy beach. The background features soft blue waves and clear skies. The lighting is vibrant and sunny, capturing a joyful and energetic moment. The visual style is modern, vibrant, and emotionally engaging, perfect for a high-end pet community platform." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLUsVzKg0igPYCDkDbfNuyRQO88PxP1zEgabKS6v9-uA4q3esQghtoFzpSHwACTTSDIyF7PTXiK4wBbCcpGQpLm6Zuf1TqL3DLySiVTXWljJbpvSOF9mTn-2xKPhaq4HAmkPYQmQMYAJ2Sk6uQ2gUGxEr_dhorm0RRmMqbXEGO5N9qJWTPlvoa53C02bZfik2vP2OryZYG3qX-3y7M_frJeb5VufFEB24ULR4LyKspmd084me8XPlYAg"/>
+</div>
+</div>
+<!-- Top Nav Actions -->
+<div class="absolute top-0 left-0 w-full p-margin-mobile flex justify-between items-center z-10 bg-gradient-to-b from-black/30 to-transparent">
+<button class="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white squish hover:bg-white/30 transition-colors">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<div class="flex gap-sm">
+<button class="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white squish hover:bg-white/30 transition-colors">
+<span class="material-symbols-outlined">share</span>
+</button>
+<button class="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white squish hover:bg-white/30 transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">favorite</span>
+</button>
+</div>
+</div>
+<!-- Carousel Indicators -->
+<div class="absolute bottom-lg left-0 w-full flex justify-center gap-sm z-10">
+<div class="w-6 h-2 rounded-full bg-white opacity-100 transition-all duration-300"></div>
+<div class="w-2 h-2 rounded-full bg-white opacity-50 transition-all duration-300"></div>
+<div class="w-2 h-2 rounded-full bg-white opacity-50 transition-all duration-300"></div>
+</div>
+<!-- Subtle gradient at bottom for text readability if needed, though content is below -->
+<div class="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-background to-transparent opacity-80 rounded-b-xl"></div>
+</header>
+<!-- Main Content -->
+<main class="px-margin-mobile -mt-md relative z-20">
+<!-- Basic Info Card -->
+<section class="bg-surface-container-lowest rounded-xl p-lg soft-shadow mb-xl">
+<div class="flex justify-between items-start mb-md">
+<div>
+<h1 class="font-headline-xl text-headline-xl text-on-surface mb-xs flex items-center gap-sm">
+                        Mochi
+                        <span class="material-symbols-outlined text-primary text-[28px]">female</span>
+</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">pets</span> 金毛寻回犬
+                    </p>
+</div>
+<div class="bg-surface-container py-xs px-sm rounded-lg flex flex-col items-center">
+<span class="font-headline-md text-headline-md text-primary">8</span>
+<span class="font-label-md text-label-md text-on-surface-variant">个月</span>
+</div>
+</div>
+<!-- Tags -->
+<div class="flex flex-wrap gap-sm mb-lg">
+<span class="px-md py-sm bg-primary-container text-on-primary-container rounded-full font-label-md text-label-md">活泼好动</span>
+<span class="px-md py-sm bg-secondary-container text-on-secondary-container rounded-full font-label-md text-label-md">极度粘人</span>
+<span class="px-md py-sm bg-surface-container-highest text-on-surface-variant rounded-full font-label-md text-label-md">吃货一枚</span>
+<span class="px-md py-sm bg-surface-container-highest text-on-surface-variant rounded-full font-label-md text-label-md">不拆家</span>
+</div>
+<!-- Description -->
+<div class="mb-lg">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-sm">关于 Mochi</h3>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+                    Mochi 是一只充满活力的金毛小公主。她最喜欢在公园里追逐飞盘，也热衷于探索每一片落叶。虽然有时会因为一只蝴蝶而走神，但只要你拿出零食，她绝对是全场最专注的狗狗。性格极其温顺，对小朋友和其他小动物都非常友好。
+                </p>
+</div>
+<!-- Owner Info Mini -->
+<div class="flex items-center gap-md pt-md border-t border-surface-variant">
+<div class="w-12 h-12 rounded-full overflow-hidden border-2 border-surface-container">
+<img class="w-full h-full object-cover" data-alt="A bright, cheerful portrait photograph of a young woman with a warm smile, set against a soft, creamy background. The lighting is soft and flattering, creating a friendly and approachable mood. The aesthetic is clean, modern, and trustworthy, matching a premium social app profile picture." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAcqP5UW3xBXjo_K_gQ23XQVI2LS2fIISVzZiiLClb4YXE3wOJTBFX8-sLOUAkXsHzidqkHGAgECkIueok8ZQLo40nh1N9bjjxGGOMcxlGonwaVWidljEH51HOm_eOjdI88YIvErdA7KDv7ff-lIkq4W_3y6GtN3e0dGuiP6-3Vk9yBd-uASLH-71hpApQJ1wtFeDqLmFwUKShivh3yRNsEBOCivf3xgLKzBUV4DwZGn4_yY51er78zbw"/>
+</div>
+<div class="flex-1">
+<p class="font-body-lg text-body-lg text-on-surface">@小饼干的主人</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]">location_on</span> 距您 2.5 km
+                    </p>
+</div>
+<button class="px-md py-sm bg-secondary text-on-secondary rounded-full font-label-md text-label-md squish">关注</button>
+</div>
+</section>
+<!-- Gallery / Waterfall -->
+<section>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-md px-xs">更多日常</h3>
+<div class="columns-2 gap-gutter-mobile space-y-gutter-mobile">
+<div class="break-inside-avoid rounded-lg overflow-hidden bg-surface-variant relative group">
+<img class="w-full object-cover rounded-lg" data-alt="A candid photo of a golden retriever puppy playfully chewing on a brightly colored rope toy indoors. The setting is a modern, cozy living room with soft cream and pastel tones. The mood is joyful and relaxed. The lighting is bright and airy, typical of a warm, organic visual design style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBL8wh04UyUzcuDb6Cz-7WsuIYcQUxa218lEMgrnplWun6x-sdWc8IpNS23-oY8LydZiWOyFp9tyHu8Yv34I1pLSQlc2ySUmdqfi-d_5mXZZqD_wyoyNBIAThWDvH0DORlXH8ZpB_EAEapt9phjIUWsKvGb7a38Mb-umOUmMOzJMyUNmsQuwVtgdg9tQQkHs2hBQgaJUyVGgIz4_ke999_jTyFZixeg6SJv-SIsqCM4hPP30CUKC7XB6Q"/>
+<div class="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</div>
+<div class="break-inside-avoid rounded-lg overflow-hidden bg-surface-variant relative group">
+<img class="w-full object-cover rounded-lg" data-alt="A serene photo of a golden retriever puppy sleeping peacefully in a plush, round dog bed. The bed is a soft sage green color, complementing the puppy's golden fur. The lighting is soft and diffused, creating a calming, caring, and tranquil atmosphere, perfectly aligned with a warm and organic aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCHPzwP-ARbF_9aHJ1EfveZzfwB977akO71UU-e1yyL4G6n_mHU1ga4xHETk-fnj1aRUzwSoZnlmPnjRYjHyYkRgj-MFSYCIN0DoUTe8AfI3yaDFStJB2NoFpMfjk1FNswPlelvSnxF0aVKFkYctUYKT2kQZlzXA8frWmy4UYqO-tog6pcgimTQ0XH3dE1s9lsGrQr9c66nHsmUVFHjV5phCh9QMFAixrj5PZGermkhY-a-BoAIcstEuA"/>
+<div class="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</div>
+<div class="break-inside-avoid rounded-lg overflow-hidden bg-surface-variant relative group">
+<img class="w-full object-cover rounded-lg" data-alt="A dynamic action shot of a golden retriever puppy mid-jump, trying to catch a frisbee in a lush green park. The background is slightly blurred (bokeh) to emphasize the dog. The colors are vibrant and joyful, with bright greens and sunny yellows. The mood is energetic and fun." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB7PZDMcjk0AER3jVX5zTpy6PYGbBs6XWNF7Nhtq0g3TtAVJwBkhhQeq82Ng_kv2D5HZlGzs0Un7gYL5Z-BXxO-B1ujy9oJSE74ke9sGiJ-WSrMXQjtyrXVW0CtoEIl7HfA5OkxPk9yBi0OZ--mZojC4VU4_J3-V3LRu5XmEJz5qiXO3kw7UB-V-DA_psGX5ytQh5ncS5qlajUMj-Nc8yePv99T1VU_dmDcMBecaU0S80vbqvZwwkoqbg"/>
+<div class="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</div>
+<div class="break-inside-avoid rounded-lg overflow-hidden bg-surface-variant relative group">
+<img class="w-full object-cover rounded-lg" data-alt="A close-up photograph of a golden retriever puppy's face, looking directly into the lens with large, soulful eyes. The puppy has a slight tilt to its head. The background is a soft, out-of-focus beige wall. The lighting is soft and beautiful, capturing a trustworthy, adorable, and deeply caring emotional connection." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC9-t1-MGpTCPc2ZZ_u6qatzVmWxlkEOj4k5H8qIMUXKDMp9Ow3wTnO6E4YH5QOLmAAgKEUh8evWM0eRpPlQGNb1RcU9h1rHJSjreLOMidOKBuF-g5n4s5SUjEQ0xbGWnrPLbE7kB30Pvt6Y3GQ7K_5dKQ5vp17wVrhvpUPoyoXGKmk3qZBKBsCRtfSqpMoJ0Nw98gRgmCrKtO4QMCVnUp-uJLvJic3_05Yg7rtHX9ZUjuAHD7i2Q8pvw"/>
+<div class="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</div>
+</div>
+</section>
+</main>
+<!-- Fixed Bottom Action Area -->
+<div class="fixed bottom-0 left-0 w-full p-margin-mobile bg-gradient-to-t from-background via-background to-transparent z-50 pointer-events-none">
+<div class="pointer-events-auto mt-lg">
+<button class="w-full bg-primary text-on-primary py-md rounded-full font-headline-md text-headline-md soft-shadow squish flex items-center justify-center gap-sm hover:bg-primary/90 transition-colors">
+<span class="material-symbols-outlined">chat_bubble</span>
+                联系宠主
+            </button>
+</div>
+</div>
+<script>
+        // Simple carousel logic for demonstration
+        const track = document.getElementById('carousel-track');
+        let currentIndex = 0;
+        const totalSlides = 3;
+
+        setInterval(() => {
+            currentIndex = (currentIndex + 1) % totalSlides;
+            track.style.transform = `translateX(-${currentIndex * 100}%)`;
+            
+            // Update indicators (simplified)
+            const indicators = track.nextElementSibling.nextElementSibling.children;
+            for(let i=0; i<indicators.length; i++){
+                if(i === currentIndex) {
+                    indicators[i].className = "w-6 h-2 rounded-full bg-white opacity-100 transition-all duration-300";
+                } else {
+                    indicators[i].className = "w-2 h-2 rounded-full bg-white opacity-50 transition-all duration-300";
+                }
+            }
+        }, 3000);
+    </script>
+</body></html>
