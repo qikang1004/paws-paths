@@ -30,6 +30,15 @@ export function pxToRpx(value: string): string {
   return raw;
 }
 
+/** 十六进制转 `r, g, b` 字符串，供 rgba() 拼装阴影用。 */
+export function hexToRgb(hex: string): string {
+  const m = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(String(hex).trim());
+  if (!m) throw new Error(`无法解析色值：${hex}`);
+  const full = m[1].length === 3 ? m[1].replace(/(.)/g, '$1$1') : m[1];
+  const n = parseInt(full, 16);
+  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
+}
+
 /** Task 15 的图标管线也要读色板，所以这里导出。 */
 export function extractFrontmatter(markdown: string): DesignFrontmatter {
   const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(markdown);
@@ -65,6 +74,14 @@ export function compileTokens(designMarkdown: string): string {
     if (entry.lineHeight) lines.push(`  --font-${level}-line: ${pxToRpx(entry.lineHeight)};`);
     if (entry.fontWeight) lines.push(`  --font-${level}-weight: ${entry.fontWeight};`);
     if (entry.letterSpacing) lines.push(`  --font-${level}-spacing: ${entry.letterSpacing};`);
+  }
+
+  // DESIGN.md「Elevation & Depth」：长、扩散、用正文棕着色，透明度 5-8%。
+  const onSurface = fm.colors?.['on-surface'];
+  if (onSurface) {
+    const rgb = hexToRgb(onSurface);
+    lines.push(`  --shadow-ambient: 0 8rpx 40rpx rgba(${rgb}, 0.06);`);
+    lines.push(`  --shadow-pressed: 0 4rpx 16rpx rgba(${rgb}, 0.04);`);
   }
 
   return `${HEADER}\n\npage {\n${lines.join('\n')}\n}\n`;

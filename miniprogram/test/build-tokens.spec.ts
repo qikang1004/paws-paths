@@ -1,4 +1,4 @@
-import { compileTokens, pxToRpx } from '../tools/build-tokens';
+import { compileTokens, hexToRgb, pxToRpx } from '../tools/build-tokens';
 
 const SAMPLE = `---
 name: Paws & Paths
@@ -85,5 +85,37 @@ describe('compileTokens', () => {
 
   it('正文内容不会泄漏进产物', () => {
     expect(css).not.toContain('Brand & Style');
+  });
+});
+
+const SAMPLE_DARK_TEXT = SAMPLE.replace(
+  "  primary: '#944a07'",
+  "  primary: '#944a07'\n  on-surface: '#221a15'",
+);
+
+describe('hexToRgb', () => {
+  it('六位十六进制转 rgb 三元组', () => {
+    expect(hexToRgb('#221a15')).toBe('34, 26, 21');
+    expect(hexToRgb('#ffffff')).toBe('255, 255, 255');
+  });
+
+  it('三位缩写先展开再转', () => {
+    expect(hexToRgb('#fff')).toBe('255, 255, 255');
+  });
+
+  it('非法色值直接报错，不静默产出坏 token', () => {
+    expect(() => hexToRgb('rgb(1,2,3)')).toThrow(/无法解析色值/);
+  });
+});
+
+describe('阴影 token', () => {
+  it('由 on-surface 派生，透明度落在 5%-8% 区间', () => {
+    const css = compileTokens(SAMPLE_DARK_TEXT);
+    expect(css).toContain('--shadow-ambient: 0 8rpx 40rpx rgba(34, 26, 21, 0.06);');
+    expect(css).toContain('--shadow-pressed: 0 4rpx 16rpx rgba(34, 26, 21, 0.04);');
+  });
+
+  it('缺 on-surface 时不产出阴影 token，也不抛错', () => {
+    expect(compileTokens(SAMPLE)).not.toContain('--shadow-ambient');
   });
 });
