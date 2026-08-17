@@ -112,7 +112,7 @@ describe('阴影 token', () => {
   it('由 on-surface 派生，透明度落在 5%-8% 区间', () => {
     const css = compileTokens(SAMPLE_DARK_TEXT);
     expect(css).toContain('--shadow-ambient: 0 8rpx 40rpx rgba(34, 26, 21, 0.06);');
-    expect(css).toContain('--shadow-pressed: 0 4rpx 16rpx rgba(34, 26, 21, 0.04);');
+    expect(css).toContain('--shadow-pressed: 0 4rpx 16rpx rgba(34, 26, 21, 0.05);');
   });
 
   it('缺 on-surface 时不产出阴影 token，也不抛错', () => {

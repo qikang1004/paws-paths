@@ -81,7 +81,7 @@ export function compileTokens(designMarkdown: string): string {
   if (onSurface) {
     const rgb = hexToRgb(onSurface);
     lines.push(`  --shadow-ambient: 0 8rpx 40rpx rgba(${rgb}, 0.06);`);
-    lines.push(`  --shadow-pressed: 0 4rpx 16rpx rgba(${rgb}, 0.04);`);
+    lines.push(`  --shadow-pressed: 0 4rpx 16rpx rgba(${rgb}, 0.05);`);
   }
 
   return `${HEADER}\n\npage {\n${lines.join('\n')}\n}\n`;
