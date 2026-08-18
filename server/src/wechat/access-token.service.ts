@@ -45,20 +45,22 @@ export class AccessTokenService {
     if (cached) return cached;
 
     for (let attempt = 0; attempt < this.opts.maxRetries; attempt += 1) {
-      if (await this.store.acquireLock(LOCK_KEY, this.opts.lockTtlSeconds)) {
+      const ownerToken = await this.store.acquireLock(LOCK_KEY, this.opts.lockTtlSeconds);
+      if (ownerToken) {
         try {
           const filled = await this.store.get(TOKEN_KEY);
           if (filled) return filled;
 
           const fresh = await this.api.fetchAccessToken();
-          await this.store.setWithTtl(
-            TOKEN_KEY,
-            fresh.access_token,
-            fresh.expires_in - this.opts.safetyMarginSeconds,
-          );
+          const ttlSeconds = fresh.expires_in - this.opts.safetyMarginSeconds;
+          if (ttlSeconds <= 0) {
+            throw new ApiException(ERROR_CODES.UPSTREAM_WECHAT, undefined, HttpStatus.BAD_GATEWAY);
+          }
+
+          await this.store.setWithTtl(TOKEN_KEY, fresh.access_token, ttlSeconds);
           return fresh.access_token;
         } finally {
-          await this.store.releaseLock(LOCK_KEY);
+          await this.store.releaseLock(LOCK_KEY, ownerToken);
         }
       }
 

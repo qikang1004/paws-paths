@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
 
@@ -7,8 +8,8 @@ export const TOKEN_STORE = 'TokenStore';
 export interface TokenStore {
   get(key: string): Promise<string | null>;
   setWithTtl(key: string, value: string, ttlSeconds: number): Promise<void>;
-  acquireLock(key: string, ttlSeconds: number): Promise<boolean>;
-  releaseLock(key: string): Promise<void>;
+  acquireLock(key: string, ttlSeconds: number): Promise<string | null>;
+  releaseLock(key: string, ownerToken: string): Promise<void>;
 }
 
 @Injectable()
@@ -38,12 +39,18 @@ export class RedisTokenStore implements TokenStore, OnModuleDestroy {
   }
 
   /** Atomic SET NX EX prevents competing service instances from refreshing concurrently. */
-  async acquireLock(key: string, ttlSeconds: number): Promise<boolean> {
-    const result = await this.redis.set(key, '1', 'EX', ttlSeconds, 'NX');
-    return result === 'OK';
+  async acquireLock(key: string, ttlSeconds: number): Promise<string | null> {
+    const ownerToken = randomUUID();
+    const result = await this.redis.set(key, ownerToken, 'EX', ttlSeconds, 'NX');
+    return result === 'OK' ? ownerToken : null;
   }
 
-  async releaseLock(key: string): Promise<void> {
-    await this.redis.del(key);
+  async releaseLock(key: string, ownerToken: string): Promise<void> {
+    await this.redis.eval(
+      "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) end return 0",
+      1,
+      key,
+      ownerToken,
+    );
   }
 }

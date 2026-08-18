@@ -7,7 +7,8 @@ const LOCK_KEY = 'wx:access_token:lock';
 
 class FakeTokenStore implements TokenStore {
   private values = new Map<string, string>();
-  private locks = new Set<string>();
+  private locks = new Map<string, string>();
+  private nextOwner = 0;
   readonly ttls: Record<string, number> = {};
 
   async get(key: string): Promise<string | null> {
@@ -19,26 +20,53 @@ class FakeTokenStore implements TokenStore {
     this.ttls[key] = ttlSeconds;
   }
 
-  async acquireLock(key: string, _ttlSeconds: number): Promise<boolean> {
-    if (this.locks.has(key)) return false;
-    this.locks.add(key);
-    return true;
+  async acquireLock(key: string, _ttlSeconds: number): Promise<string | null> {
+    if (this.locks.has(key)) return null;
+
+    const ownerToken = `owner-${++this.nextOwner}`;
+    this.locks.set(key, ownerToken);
+    return ownerToken;
   }
 
-  async releaseLock(key: string): Promise<void> {
+  async releaseLock(key: string, ownerToken: string): Promise<void> {
+    if (this.locks.get(key) === ownerToken) this.locks.delete(key);
+  }
+
+  expireLock(key: string): void {
     this.locks.delete(key);
+  }
+
+  lockOwner(key: string): string | null {
+    return this.locks.get(key) ?? null;
   }
 }
 
 class FakeWechatApi {
   calls = 0;
+  response = { access_token: 'token-1', expires_in: 7200 };
 
   async fetchAccessToken(): Promise<{ access_token: string; expires_in: number }> {
     this.calls += 1;
     await new Promise((resolve) => setTimeout(resolve, 5));
-    return { access_token: `token-${this.calls}`, expires_in: 7200 };
+    return { ...this.response, access_token: `token-${this.calls}` };
   }
 }
+
+describe('FakeTokenStore lock ownership', () => {
+  it('does not delete a replacement lock when an expired owner releases', async () => {
+    const store = new FakeTokenStore();
+    const ownerA = await store.acquireLock(LOCK_KEY, 10);
+    expect(ownerA).not.toBeNull();
+
+    store.expireLock(LOCK_KEY);
+    const ownerB = await store.acquireLock(LOCK_KEY, 10);
+    expect(ownerB).not.toBeNull();
+
+    await store.releaseLock(LOCK_KEY, ownerA!);
+
+    expect(store.lockOwner(LOCK_KEY)).toBe(ownerB);
+  });
+});
 
 describe('AccessTokenService', () => {
   let store: FakeTokenStore;
@@ -63,6 +91,16 @@ describe('AccessTokenService', () => {
     expect(store.ttls[TOKEN_KEY]).toBe(6900);
   });
 
+  it('rejects an expires_in value at or below the safety margin without caching', async () => {
+    api.response = { access_token: 'short-lived', expires_in: 300 };
+
+    await expect(svc.get()).rejects.toMatchObject({
+      code: ERROR_CODES.UPSTREAM_WECHAT,
+    });
+    expect(store.ttls[TOKEN_KEY]).toBeUndefined();
+    expect(await store.get(TOKEN_KEY)).toBeNull();
+  });
+
   it('makes one WeChat API call for five concurrent instances and returns one token', async () => {
     const instances = Array.from(
       { length: 5 },
@@ -78,9 +116,9 @@ describe('AccessTokenService', () => {
     const sneaky = new FakeTokenStore();
     const originalAcquireLock = sneaky.acquireLock.bind(sneaky);
     sneaky.acquireLock = async (key: string, ttlSeconds: number) => {
-      const acquired = await originalAcquireLock(key, ttlSeconds);
-      if (acquired) await sneaky.setWithTtl(TOKEN_KEY, 'filled-by-peer', 100);
-      return acquired;
+      const ownerToken = await originalAcquireLock(key, ttlSeconds);
+      if (ownerToken) await sneaky.setWithTtl(TOKEN_KEY, 'filled-by-peer', 100);
+      return ownerToken;
     };
     const peerAware = new AccessTokenService(sneaky, api, { retryDelayMs: 1, maxRetries: 3 });
 
