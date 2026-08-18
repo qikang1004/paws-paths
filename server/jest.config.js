@@ -6,4 +6,7 @@ module.exports = {
   moduleNameMapper: {
     '^@paws/types$': '<rootDir>/../packages/types/src/index.ts',
   },
+  transform: {
+    '^.+\\.tsx?$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],
+  },
 };

@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "noEmit": true,
+    "baseUrl": "..",
+    "paths": {
+      "@paws/types": ["packages/types/src/index.ts"]
+    }
+  },
+  "include": ["src", "test", "../packages/types/src"]
+}
