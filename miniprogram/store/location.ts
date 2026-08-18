@@ -11,6 +11,7 @@ export type LocationState = { mode: 'precise'; coords: Coords } | { mode: 'city'
 export class LocationStore {
   private current: LocationState | null = null;
   private inflight: Promise<LocationState> | null = null;
+  private generation = 0;
 
   constructor(private readonly wx: WxAdapter) {}
 
@@ -20,13 +21,16 @@ export class LocationStore {
 
   /** 用户在系统设置里重新打开定位后调用，清掉降级结果重新申请。 */
   reset(): void {
+    this.generation += 1;
     this.current = null;
+    this.inflight = null;
   }
 
   ensure(): Promise<LocationState> {
     if (this.current) return Promise.resolve(this.current);
     if (!this.inflight) {
-      const task = this.resolveState();
+      const generation = this.generation;
+      const task = this.resolveState(generation);
       this.inflight = task;
       const release = (): void => {
         if (this.inflight === task) this.inflight = null;
@@ -36,15 +40,17 @@ export class LocationStore {
     return this.inflight;
   }
 
-  private async resolveState(): Promise<LocationState> {
+  private async resolveState(generation: number): Promise<LocationState> {
+    let state: LocationState;
     try {
       const coords = await this.wx.getLocation();
-      this.current = { mode: 'precise', coords };
+      state = { mode: 'precise', coords };
     } catch {
       // 拒绝授权不是错误：spec §6 要求降级为按城市浏览，距离字段隐藏。
-      this.current = { mode: 'city' };
+      state = { mode: 'city' };
     }
-    return this.current;
+    if (this.generation === generation) this.current = state;
+    return state;
   }
 }
 

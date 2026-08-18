@@ -1,5 +1,32 @@
-import { LocationStore } from '../store/location';
+import { LocationStore, type Coords } from '../store/location';
 import { FakeWx } from './fake-wx';
+
+type Deferred<T> = {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(error: unknown): void;
+};
+
+const deferred = <T>(): Deferred<T> => {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+};
+
+class DeferredWx extends FakeWx {
+  readonly locationRequests: Array<Deferred<Coords>> = [];
+
+  override getLocation(): Promise<Coords> {
+    this.getLocationCalls += 1;
+    const request = deferred<Coords>();
+    this.locationRequests.push(request);
+    return request.promise;
+  }
+}
 
 describe('LocationStore', () => {
   let wx: FakeWx;
@@ -41,15 +68,25 @@ describe('LocationStore', () => {
     expect(wx.getLocationCalls).toBe(1);
   });
 
-  it('reset 后允许重新申请授权', async () => {
-    wx.locationOutcome = new Error('auth deny');
-    await store.ensure();
-    wx.locationOutcome = { latitude: 22.54, longitude: 114.06 };
-    store.reset();
-    expect(await store.ensure()).toEqual({
-      mode: 'precise',
-      coords: { latitude: 22.54, longitude: 114.06 },
-    });
-    expect(wx.getLocationCalls).toBe(2);
+  it('reset 后旧请求完成不能覆盖新的定位结果', async () => {
+    const deferredWx = new DeferredWx();
+    const deferredStore = new LocationStore(deferredWx);
+
+    const requestA = deferredStore.ensure();
+    expect(deferredWx.getLocationCalls).toBe(1);
+
+    deferredStore.reset();
+    const requestB = deferredStore.ensure();
+    expect(deferredWx.getLocationCalls).toBe(2);
+
+    const coordsB = { latitude: 22.54, longitude: 114.06 };
+    deferredWx.locationRequests[1].resolve(coordsB);
+    await expect(requestB).resolves.toEqual({ mode: 'precise', coords: coordsB });
+    expect(deferredStore.state).toEqual({ mode: 'precise', coords: coordsB });
+
+    const coordsA = { latitude: 31.23, longitude: 121.47 };
+    deferredWx.locationRequests[0].resolve(coordsA);
+    await expect(requestA).resolves.toEqual({ mode: 'precise', coords: coordsA });
+    expect(deferredStore.state).toEqual({ mode: 'precise', coords: coordsB });
   });
 });
