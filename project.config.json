@@ -1,0 +1,21 @@
+{
+  "projectname": "paws-paths",
+  "appid": "touristappid",
+  "miniprogramRoot": "miniprogram/",
+  "compileType": "miniprogram",
+  "libVersion": "3.5.5",
+  "setting": {
+    "urlCheck": false,
+    "es6": false,
+    "enhance": false,
+    "minified": true,
+    "useCompilerPlugins": ["typescript"],
+    "skylineRenderEnable": true
+  },
+  "packOptions": {
+    "ignore": [
+      { "type": "folder", "value": "test" },
+      { "type": "folder", "value": "tools" }
+    ]
+  }
+}

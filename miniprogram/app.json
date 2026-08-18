@@ -1,0 +1,58 @@
+{
+  "pages": [
+    "pages/plaza/index",
+    "pages/venue-list/index",
+    "pages/profile/index",
+    "pages/pet-detail/index"
+  ],
+  "subPackages": [
+    { "root": "packages/venue", "pages": ["pages/detail/index"] },
+    {
+      "root": "packages/profile",
+      "pages": [
+        "pages/pet-edit/index",
+        "pages/following/index",
+        "pages/my-posts/index",
+        "pages/favorites/index",
+        "pages/history/index",
+        "pages/settings/index"
+      ]
+    },
+    {
+      "root": "packages/cert",
+      "pages": ["pages/license-upload/index", "pages/license-detail/index", "pages/vaccine/index"]
+    },
+    { "root": "packages/chat", "pages": ["pages/conversations/index", "pages/chat/index"] },
+    { "root": "packages/post", "pages": ["pages/compose/index"] }
+  ],
+  "preloadRule": {
+    "pages/plaza/index": {
+      "network": "all",
+      "packages": ["packages/venue", "packages/profile"]
+    }
+  },
+  "tabBar": {
+    "custom": true,
+    "list": [
+      { "pagePath": "pages/plaza/index", "text": "广场" },
+      { "pagePath": "pages/venue-list/index", "text": "周边" },
+      { "pagePath": "pages/profile/index", "text": "我的" }
+    ]
+  },
+  "window": {
+    "navigationStyle": "custom",
+    "backgroundColor": "#fff8f5",
+    "backgroundTextStyle": "dark"
+  },
+  "renderer": "skyline",
+  "rendererOptions": {
+    "skyline": { "defaultDisplayBlock": true, "disableABTest": true, "sdkVersionBegin": "3.0.0" }
+  },
+  "componentFramework": "glass-easel",
+  "lazyCodeLoading": "requiredComponents",
+  "requiredPrivateInfos": ["getLocation"],
+  "permission": {
+    "scope.userLocation": { "desc": "用于展示附近的宠物与宠物友好场所的距离" }
+  },
+  "sitemapLocation": "sitemap.json"
+}

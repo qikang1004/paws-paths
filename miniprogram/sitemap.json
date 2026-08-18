@@ -1,0 +1,4 @@
+{
+  "desc": "小程序页面收录规则，字段说明见微信官方 sitemap 文档",
+  "rules": [{ "action": "allow", "page": "*" }]
+}
