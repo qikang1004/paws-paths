@@ -17,6 +17,7 @@ export interface WxAdapter {
   getStorage(key: string): string | null;
   setStorage(key: string, value: string): void;
   removeStorage(key: string): void;
+  getLocation(): Promise<{ latitude: number; longitude: number }>;
 }
 
 export const wxAdapter: WxAdapter = {
@@ -40,4 +41,14 @@ export const wxAdapter: WxAdapter = {
   getStorage: (key) => (wx.getStorageSync(key) as string) || null,
   setStorage: (key, value) => wx.setStorageSync(key, value),
   removeStorage: (key) => wx.removeStorageSync(key),
+
+  getLocation: () =>
+    new Promise((resolve, reject) => {
+      // gcj02 与腾讯地图坐标系一致；必须先在 app.json 声明 requiredPrivateInfos，否则直接 fail。
+      wx.getLocation({
+        type: 'gcj02',
+        success: (res) => resolve({ latitude: res.latitude, longitude: res.longitude }),
+        fail: reject,
+      });
+    }),
 };

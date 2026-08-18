@@ -4,6 +4,14 @@ export type Responder = (opts: WxRequestOptions) => WxRequestResult<unknown>;
 
 export class FakeWx implements WxAdapter {
   loginCalls = 0;
+  getLocationCalls = 0;
+
+  /** 设成 Error 就是模拟用户拒绝授权。 */
+  locationOutcome: { latitude: number; longitude: number } | Error = {
+    latitude: 31.23,
+    longitude: 121.47,
+  };
+
   readonly sent: WxRequestOptions[] = [];
   private readonly storage = new Map<string, string>();
   private responders: Responder[] = [];
@@ -17,6 +25,12 @@ export class FakeWx implements WxAdapter {
     this.loginCalls += 1;
     await new Promise((resolve) => setTimeout(resolve, 3));
     return { code: `wx-code-${this.loginCalls}` };
+  }
+
+  async getLocation(): Promise<{ latitude: number; longitude: number }> {
+    this.getLocationCalls += 1;
+    if (this.locationOutcome instanceof Error) throw this.locationOutcome;
+    return this.locationOutcome;
   }
 
   async request<T>(opts: WxRequestOptions): Promise<WxRequestResult<T>> {
