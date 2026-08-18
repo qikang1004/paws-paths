@@ -31,7 +31,9 @@ export function syncTypes(srcDir: string, destDir: string): string[] {
   return names;
 }
 
-if (process.argv[1] === __filename) {
+const mainModule = (require as unknown as { main?: unknown }).main;
+
+if (mainModule === module) {
   const written = syncTypes(SRC, DEST);
   console.log(`已同步 ${written.length} 个文件：${written.join(', ')}`);
 }
