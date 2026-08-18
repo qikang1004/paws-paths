@@ -1,8 +1,9 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { extractFrontmatter } from '../tools/build-tokens';
 import {
   COLOR_PLACEHOLDER,
+  ROLES,
   buildIconMap,
   normalizeSvg,
   paint,
@@ -104,5 +105,35 @@ describe('真实资产', () => {
     const decoded = Buffer.from(map['paw:primary'].split(',')[1], 'base64').toString('utf8');
     expect(decoded).toContain(colors.primary);
     expect(decoded).not.toContain('currentColor');
+  });
+});
+
+// 改了 SVG 或色板却忘记重跑构建脚本时，陈旧的 icons.ts 会被发布，这里兜住。
+describe('产物新鲜度', () => {
+  const DESIGN = resolve(__dirname, '../../stitch_/paws_paths/DESIGN.md');
+  const ICONS = resolve(__dirname, '../assets/icons');
+  const OUTPUT = resolve(__dirname, '../components/wf-icon/icons.ts');
+  /** 构建脚本写的是纯 LF；Windows 检出可能是 CRLF，统一后再严格比对。 */
+  const lf = (s: string) => s.replace(/\r\n/g, '\n');
+
+  it('已提交的 icons.ts 与 SVG 资产、DESIGN.md 色板重算结果严格一致', () => {
+    const palette = extractFrontmatter(lf(readFileSync(DESIGN, 'utf8'))).colors as Record<
+      string,
+      string
+    >;
+    const all = Object.fromEntries(
+      readdirSync(ICONS)
+        .filter((f) => f.endsWith('.svg'))
+        .sort()
+        .map((f) => [f.replace(/\.svg$/, ''), lf(readFileSync(join(ICONS, f), 'utf8'))]),
+    );
+    const regenerated = renderModule(buildIconMap(all, palette, ROLES));
+    try {
+      expect(lf(readFileSync(OUTPUT, 'utf8'))).toBe(regenerated);
+    } catch (err) {
+      throw new Error(
+        `components/wf-icon/icons.ts 已过期，请跑 npm run build:icons -w miniprogram\n${(err as Error).message}`,
+      );
+    }
   });
 });

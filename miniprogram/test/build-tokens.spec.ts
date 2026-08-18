@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { compileTokens, hexToRgb, pxToRpx } from '../tools/build-tokens';
 
 const SAMPLE = `---
@@ -117,5 +119,24 @@ describe('阴影 token', () => {
 
   it('缺 on-surface 时不产出阴影 token，也不抛错', () => {
     expect(compileTokens(SAMPLE)).not.toContain('--shadow-ambient');
+  });
+});
+
+// 改了 DESIGN.md 却忘记重跑构建脚本时，陈旧的 tokens.wxss 会被发布，这里兜住。
+describe('产物新鲜度', () => {
+  const DESIGN = resolve(__dirname, '../../stitch_/paws_paths/DESIGN.md');
+  const OUTPUT = resolve(__dirname, '../styles/tokens.wxss');
+  /** 构建脚本写的是纯 LF；Windows 检出可能是 CRLF，统一后再严格比对。 */
+  const lf = (s: string) => s.replace(/\r\n/g, '\n');
+
+  it('已提交的 tokens.wxss 与 DESIGN.md frontmatter 重算结果严格一致', () => {
+    const regenerated = compileTokens(lf(readFileSync(DESIGN, 'utf8')));
+    try {
+      expect(lf(readFileSync(OUTPUT, 'utf8'))).toBe(regenerated);
+    } catch (err) {
+      throw new Error(
+        `styles/tokens.wxss 已过期，请跑 npm run build:tokens -w miniprogram\n${(err as Error).message}`,
+      );
+    }
   });
 });
