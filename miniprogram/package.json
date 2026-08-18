@@ -4,6 +4,8 @@
   "scripts": {
     "test": "jest",
     "build:tokens": "ts-node tools/build-tokens.ts",
+    "build:icons": "ts-node tools/build-icons.ts",
+    "build:assets": "npm run build:tokens && npm run build:icons",
     "sync:types": "ts-node tools/sync-types.ts"
   },
   "dependencies": {
