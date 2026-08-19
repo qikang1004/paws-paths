@@ -1,0 +1,16 @@
+<view class="tab-bar">
+  <view
+    class="tab {{active === index ? 'tab--active' : ''}}"
+    wx:for="{{tabs}}"
+    wx:key="pagePath"
+    data-index="{{index}}"
+    bindtap="onTap"
+  >
+    <wf-icon
+      name="{{item.icon}}"
+      role="{{active === index ? 'primary' : 'on-surface-variant'}}"
+      size="44rpx"
+    />
+    <text class="tab__text">{{item.text}}</text>
+  </view>
+</view>

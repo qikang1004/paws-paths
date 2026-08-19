@@ -33,6 +33,9 @@
   },
   "tabBar": {
     "custom": true,
+    "color": "#544339",
+    "selectedColor": "#944a07",
+    "backgroundColor": "#ffffff",
     "list": [
       { "pagePath": "pages/plaza/index", "text": "广场" },
       { "pagePath": "pages/venue-list/index", "text": "周边" },

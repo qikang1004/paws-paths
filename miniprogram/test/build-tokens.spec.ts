@@ -117,6 +117,11 @@ describe('阴影 token', () => {
     expect(css).toContain('--shadow-pressed: 0 4rpx 16rpx rgba(34, 26, 21, 0.05);');
   });
 
+  it('派生出朝上的阴影，供自定义 tabBar 用', () => {
+    const css = compileTokens(SAMPLE_DARK_TEXT);
+    expect(css).toContain('--shadow-raised: 0 -8rpx 40rpx rgba(34, 26, 21, 0.06);');
+  });
+
   it('缺 on-surface 时不产出阴影 token，也不抛错', () => {
     expect(compileTokens(SAMPLE)).not.toContain('--shadow-ambient');
   });

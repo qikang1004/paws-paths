@@ -97,5 +97,6 @@ page {
   --font-label-md-weight: 600;
   --font-label-md-spacing: 0.05em;
   --shadow-ambient: 0 8rpx 40rpx rgba(34, 26, 21, 0.06);
+  --shadow-raised: 0 -8rpx 40rpx rgba(34, 26, 21, 0.06);
   --shadow-pressed: 0 4rpx 16rpx rgba(34, 26, 21, 0.05);
 }

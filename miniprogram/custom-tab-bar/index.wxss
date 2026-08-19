@@ -1,0 +1,41 @@
+.tab-bar {
+  position: fixed;
+  left: var(--space-md);
+  right: var(--space-md);
+  /* 底部再抬起一个安全区，Home 指示条不压住胶囊。 */
+  bottom: calc(var(--space-sm) + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: var(--space-sm);
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-container-lowest);
+  box-shadow: var(--shadow-raised);
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-full);
+  transition: background-color 0.2s ease-out;
+}
+
+/* 胶囊高亮：当前项套一层浅橙底。 */
+.tab--active {
+  background-color: var(--color-primary-fixed);
+}
+
+.tab__text {
+  font-size: var(--font-label-md-size);
+  line-height: var(--font-label-md-line);
+  font-weight: var(--font-label-md-weight);
+  letter-spacing: var(--font-label-md-spacing);
+  color: var(--color-on-surface-variant);
+}
+
+.tab--active .tab__text {
+  color: var(--color-primary);
+}

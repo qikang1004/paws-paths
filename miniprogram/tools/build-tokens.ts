@@ -81,6 +81,8 @@ export function compileTokens(designMarkdown: string): string {
   if (onSurface) {
     const rgb = hexToRgb(onSurface);
     lines.push(`  --shadow-ambient: 0 8rpx 40rpx rgba(${rgb}, 0.06);`);
+    // 自定义 tabBar 的胶囊悬浮在页面上，阴影得朝上打，y 取负。
+    lines.push(`  --shadow-raised: 0 -8rpx 40rpx rgba(${rgb}, 0.06);`);
     lines.push(`  --shadow-pressed: 0 4rpx 16rpx rgba(${rgb}, 0.05);`);
   }
 
