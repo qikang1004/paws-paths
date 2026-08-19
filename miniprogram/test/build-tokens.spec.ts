@@ -51,8 +51,21 @@ describe('pxToRpx', () => {
 describe('compileTokens', () => {
   const css = compileTokens(SAMPLE);
 
-  it('产出 page 选择器包裹的变量块', () => {
-    expect(css).toContain('page {');
+  // 框架级 tabBar.custom 的 custom-tab-bar 渲染在 page 节点之外，自定义属性靠 DOM
+  // 继承传递，只挂 page 的话组件里所有 var() 都解析为空。所以 token 块必须同时
+  // 落在一个可复用的 class 上，供 page 子树之外的节点自行挂载。
+  it('token 块同时挂在 page 与 .token-scope 上', () => {
+    expect(css).toContain('page, .token-scope {');
+  });
+
+  it('只有一个 token 块，避免变量被重复声明', () => {
+    expect(css.match(/\{/g)).toHaveLength(1);
+  });
+
+  it('page 与 .token-scope 拿到完全相同的变量', () => {
+    const block = /page, \.token-scope \{([\s\S]*?)\}/.exec(css);
+    expect(block).not.toBeNull();
+    expect(block?.[1]).toContain('--color-primary: #944a07;');
   });
 
   it('色值原样输出为 --color-* 变量', () => {

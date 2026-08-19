@@ -15,6 +15,7 @@ const app = JSON.parse(readFileSync(join(ROOT, 'app.json'), 'utf8')) as {
   };
 };
 const barCss = readFileSync(join(ROOT, 'custom-tab-bar/index.wxss'), 'utf8');
+const barWxml = readFileSync(join(ROOT, 'custom-tab-bar/index.wxml'), 'utf8');
 const tokensCss = readFileSync(join(ROOT, 'styles/tokens.wxss'), 'utf8');
 
 describe('TABS', () => {
@@ -53,6 +54,34 @@ describe('custom-tab-bar 样式', () => {
 
   it('引用的 token 全部有定义', () => {
     expect(findUndefinedVars(barCss, tokensCss)).toEqual([]);
+  });
+});
+
+// custom-tab-bar 挂在 page 节点之外，自定义属性继承不到，必须自己挂 token 作用域，
+// 否则整条 tabBar 退化成无样式全宽行：丢胶囊、圆角、阴影和左右内缩。
+describe('custom-tab-bar 的 token 作用域', () => {
+  /** 根节点 = wxml 第一个元素标签。 */
+  const rootTag = /<\s*[\w-]+[^>]*>/.exec(barWxml)?.[0] ?? '';
+
+  it('根节点带 token-scope 类', () => {
+    expect(rootTag).toMatch(/class="[^"]*\btoken-scope\b[^"]*"/);
+  });
+
+  it('根节点保留原有的 tab-bar 类', () => {
+    expect(rootTag).toMatch(/class="[^"]*\btab-bar\b[^"]*"/);
+  });
+
+  it('tokens.wxss 真的定义了 .token-scope，类名不是空挂', () => {
+    expect(tokensCss).toContain('.token-scope {');
+  });
+
+  // apply-shared 让 app.wxss 里的 .token-scope 规则能落到组件节点上；
+  // 改成 isolated 会让上面那个类名失效，这里一起锁住。
+  it('组件样式隔离保持 apply-shared，app.wxss 的 token 规则才能作用到组件', () => {
+    const json = JSON.parse(readFileSync(join(ROOT, 'custom-tab-bar/index.json'), 'utf8')) as {
+      styleIsolation?: string;
+    };
+    expect(json.styleIsolation).toBe('apply-shared');
   });
 });
 

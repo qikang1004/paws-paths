@@ -86,7 +86,10 @@ export function compileTokens(designMarkdown: string): string {
     lines.push(`  --shadow-pressed: 0 4rpx 16rpx rgba(${rgb}, 0.05);`);
   }
 
-  return `${HEADER}\n\npage {\n${lines.join('\n')}\n}\n`;
+  // 自定义属性靠 DOM 继承传递，只挂 page 的话 page 子树之外的节点拿不到。
+  // 框架级 tabBar.custom 的 custom-tab-bar 就渲染在 page 之外，缺了 .token-scope
+  // 会让组件里所有 var() 解析为空，整条 tabBar 退化成无样式全宽行。
+  return `${HEADER}\n\npage, .token-scope {\n${lines.join('\n')}\n}\n`;
 }
 
 /** CLI 入口：读 DESIGN.md，写 styles/tokens.wxss。 */

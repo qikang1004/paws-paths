@@ -4,7 +4,7 @@
  * 改 token 请改 DESIGN.md 后跑 npm run build:tokens -w miniprogram。
  */
 
-page {
+page, .token-scope {
   --color-surface: #fff8f5;
   --color-surface-dim: #e7d7ce;
   --color-surface-bright: #fff8f5;
