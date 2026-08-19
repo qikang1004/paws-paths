@@ -3,3 +3,12 @@ dist/
 *.log
 server/.env
 project.private.config.json
+
+# 微信上传私钥，只从 CI Secret 注入
+private.key
+private.*.key
+
+# 环境变量真值
+.env
+.env.*
+!.env.example

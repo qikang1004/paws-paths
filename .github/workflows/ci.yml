@@ -1,0 +1,85 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      # @paws/types 得先出 dist：server 的 tsc 与 sync:types 都依赖它，
+      # 顺序错了会报 TS2307 找不到模块。
+      - run: npm run build -w @paws/types
+
+      # 生成物必须与源保持一致：漂了就当场失败，别等真机上发现颜色不对。
+      # git add -N 先把新生成的未跟踪文件纳入 diff 视野，
+      # 否则新增 token/图标/类型文件是未跟踪状态，git diff 会假绿。
+      - name: 检查生成物是否过期
+        run: |
+          npm run build:assets -w miniprogram
+          npm run sync:types
+          git add -N \
+            miniprogram/styles/tokens.wxss \
+            miniprogram/components/wf-icon/icons.ts \
+            miniprogram/shared
+          git diff --exit-code -- \
+            miniprogram/styles/tokens.wxss \
+            miniprogram/components/wf-icon/icons.ts \
+            miniprogram/shared
+
+      # jest 只typecheck测试引用到的文件，tools/upload.ts 没人 import，
+      # 不单独跑 tsc 的话它的类型错误会漏到 CI 之外。
+      - name: 类型检查
+        run: |
+          npx tsc -p miniprogram/tsconfig.json
+          npm run build -w server
+
+      # wxss 不得出现 hex 字面量与裸 px，由 test/style-guard.spec.ts 把关，
+      # 跟着 miniprogram 测试一起跑。
+      - run: npm test -w @paws/types
+      - run: npm test -w server
+      - run: npm test -w miniprogram
+
+  upload:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run sync:types
+
+      # 私钥走 env 注入，不做 ${{ }} 内联：内联会把密钥原文拼进 shell 命令，
+      # 一旦 set -x 或报错回显就泄露。umask 077 保证落盘即 600。
+      - name: 写入上传私钥
+        env:
+          WX_PRIVATE_KEY: ${{ secrets.WX_PRIVATE_KEY }}
+        run: |
+          umask 077
+          printf '%s' "$WX_PRIVATE_KEY" > private.key
+
+      - name: 上传体验版
+        run: npm run upload -w miniprogram
+        env:
+          WX_APPID: ${{ secrets.WX_APPID }}
+          WX_PRIVATE_KEY_PATH: private.key
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+
+      # if: always() —— 上传失败也必须清掉私钥，别留在 runner 上。
+      - name: 清理私钥
+        if: always()
+        run: rm -f private.key
