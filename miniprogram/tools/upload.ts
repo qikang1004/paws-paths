@@ -2,24 +2,83 @@ import { resolve } from 'node:path';
 import ci from 'miniprogram-ci';
 import { redactSensitive, requireEnv, resolveDesc, resolveVersion } from './upload-args';
 
-type ConsoleMethod = 'log' | 'info' | 'warn' | 'error';
-const GUARDED: ConsoleMethod[] = ['log', 'info', 'warn', 'error'];
+type LogFn = (...args: unknown[]) => void;
+type Sink = Record<string, LogFn | undefined>;
+
+/** 进度类通道：脱敏后放行，排查上传卡在哪一步全靠它。 */
+const REDACTED_CHANNELS = ['log', 'info'];
+/**
+ * 失败类通道：整条压掉。CodeError 打的是 log.error(code, message)，
+ * 两个无标签位置参数，裸消息没法用正则区分敏感与无害，只能 fail-closed。
+ */
+const SUPPRESSED_CHANNELS = ['warn', 'error'];
+
+const SUPPRESSED_NOTICE = '[已隐去微信接口错误详情]';
+
+/** 对象不转文本就等于原样透传给 console，脱敏白做。Error 单独处理：JSON.stringify 对它只给 {}。 */
+function toRedactableText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value instanceof Error) return `${value.name}: ${value.message}`;
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value); // 循环引用
+  }
+}
+
+function patchSink(sink: Sink, restore: Array<() => void>): void {
+  const install = (name: string, wrap: (orig: LogFn) => LogFn): void => {
+    const original = sink[name];
+    if (typeof original !== 'function') return;
+    sink[name] = wrap(original);
+    restore.push(() => {
+      sink[name] = original;
+    });
+  };
+
+  for (const name of REDACTED_CHANNELS) {
+    install(name, (orig) => (...args: unknown[]) => {
+      orig(...args.map((a) => redactSensitive(toRedactableText(a))));
+    });
+  }
+  for (const name of SUPPRESSED_CHANNELS) {
+    install(name, (orig) => () => {
+      orig(SUPPRESSED_NOTICE);
+    });
+  }
+}
 
 /**
- * miniprogram-ci 内部直接往 console 打日志，里面会带 errCode/errMsg，
- * 我们的 try/catch 管不到。所以上传期间接管 console，全部过一遍脱敏。
+ * dist/utils/log.js 在模块加载时就按引用抓走了 console.*
+ * （exports.default={info:console.info,...}），而本文件顶层 import miniprogram-ci
+ * 已让它缓存原始函数——之后再替换 console.* 对它完全无效，实测拦到 0 行。
+ * 所以必须改写这个对象的属性本身。实测其属性 writable/configurable 均为 true、
+ * 对象未冻结，退出时能还原（不像「require 前打 console 补丁」那样被永久冻住，
+ * 也不依赖 import 顺序）。
  */
-async function withRedactedConsole<T>(fn: () => Promise<T>): Promise<T> {
-  const saved = GUARDED.map((name) => [name, console[name]] as const);
-  for (const [name, original] of saved) {
-    console[name] = (...args: unknown[]): void => {
-      original(...args.map((a) => redactSensitive(typeof a === 'string' ? a : String(a))));
-    };
+function loadLibLogSink(): Sink | undefined {
+  try {
+    const req = require as unknown as (id: string) => { default: Sink };
+    return req('miniprogram-ci/dist/utils/log').default;
+  } catch {
+    return undefined; // 库结构变了就降级为只补 console，别让脱敏失败把上传搞挂
   }
+}
+
+/**
+ * 库内 77 处经 log.default.* 输出（含 CodeError、request url、响应体转储等
+ * 全部 errCode/errMsg 泄漏点），另有 74 处绕开门面直接 console.*，
+ * 两条路都得堵，所以两个 sink 都打补丁。
+ */
+export async function withRedactedLogging<T>(fn: () => Promise<T>): Promise<T> {
+  const restore: Array<() => void> = [];
+  const sink = loadLibLogSink();
+  if (sink) patchSink(sink, restore);
+  patchSink(console as unknown as Sink, restore);
   try {
     return await fn();
   } finally {
-    for (const [name, original] of saved) console[name] = original;
+    for (const undo of restore.reverse()) undo();
   }
 }
 
@@ -54,7 +113,7 @@ async function main(): Promise<void> {
   const desc = resolveDesc(env, version);
 
   try {
-    await withRedactedConsole(async () => {
+    await withRedactedLogging(async () => {
       const project = new ci.Project({
         appid: env.WX_APPID as string,
         type: 'miniProgram',
