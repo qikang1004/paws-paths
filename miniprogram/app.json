@@ -52,6 +52,7 @@
     "skyline": { "defaultDisplayBlock": true, "disableABTest": true, "sdkVersionBegin": "3.0.0" }
   },
   "componentFramework": "glass-easel",
+  "glassEaselWebview": true,
   "lazyCodeLoading": "requiredComponents",
   "requiredPrivateInfos": ["getLocation"],
   "permission": {
