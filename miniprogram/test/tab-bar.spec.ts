@@ -4,6 +4,7 @@ import { ICONS } from '../components/wf-icon/icons';
 import { TABS, activeIndexFor } from '../custom-tab-bar/tabs';
 import { extractFrontmatter } from '../tools/build-tokens';
 import { findBarePx, findHexLiterals, findUndefinedVars } from '../tools/style-guard';
+import { syncTabBar } from '../utils/tab-bar';
 
 const ROOT = resolve(__dirname, '..');
 const app = JSON.parse(readFileSync(join(ROOT, 'app.json'), 'utf8')) as {
@@ -41,6 +42,36 @@ describe('activeIndexFor', () => {
   it('非 tab 页面返回 -1', () => {
     expect(activeIndexFor('pages/pet-detail/index')).toBe(-1);
     expect(activeIndexFor('')).toBe(-1);
+  });
+});
+
+// Skyline 下 getTabBar 是异步回调形态（同步调用返回 undefined），
+// WebView 下是同步返回实例。syncTabBar 必须两种渲染器都能拿到实例，
+// 否则页面 onShow 的同步在 Skyline 下静默空转，高亮停在旧页。
+describe('syncTabBar', () => {
+  const makePage = (getTabBar: unknown) =>
+    ({ getTabBar }) as unknown as WechatMiniprogram.Page.TrivialInstance;
+
+  it('异步回调形态：向回调传入实例并触发 syncActive（Skyline）', () => {
+    const bar = { syncActive: jest.fn() };
+    // 模拟 Skyline：getTabBar 只接受回调，同步返回值是 undefined
+    const page = makePage((cb?: (bar: unknown) => void) => {
+      cb?.(bar);
+      return undefined;
+    });
+    syncTabBar(page);
+    expect(bar.syncActive).toHaveBeenCalledTimes(1);
+  });
+
+  it('同步返回形态：直接拿到实例并触发 syncActive（WebView）', () => {
+    const bar = { syncActive: jest.fn() };
+    const page = makePage(() => bar);
+    syncTabBar(page);
+    expect(bar.syncActive).toHaveBeenCalledTimes(1);
+  });
+
+  it('getTabBar 不存在时不抛错', () => {
+    expect(() => syncTabBar(makePage(undefined))).not.toThrow();
   });
 });
 

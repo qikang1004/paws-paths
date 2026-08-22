@@ -1,5 +1,8 @@
 .tab-bar {
-  position: fixed;
+  /* Skyline 要求自定义 tabBar 根节点用 absolute + pointer-events: auto，
+     fixed 会导致首屏路由挂起（routeDone 超时）。 */
+  position: absolute;
+  pointer-events: auto;
   left: var(--space-md);
   right: var(--space-md);
   /* 底部再抬起一个安全区，Home 指示条不压住胶囊。 */
