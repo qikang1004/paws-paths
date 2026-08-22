@@ -1,4 +1,4 @@
-import { ERROR_CODES, messageForCode } from '../shared/types';
+import { ERROR_CODES, messageForCode } from '../shared/types/index';
 import type { SessionStore } from '../store/session';
 import { ApiError } from './errors';
 import type { WxAdapter, WxRequestOptions, WxRequestResult } from './wx-promise';

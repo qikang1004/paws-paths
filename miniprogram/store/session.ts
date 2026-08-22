@@ -1,6 +1,6 @@
 import { ApiError } from '../api/errors';
 import type { WxAdapter } from '../api/wx-promise';
-import { ERROR_CODES, messageForCode } from '../shared/types';
+import { ERROR_CODES, messageForCode } from '../shared/types/index';
 
 export const TOKEN_STORAGE_KEY = 'paws:token';
 

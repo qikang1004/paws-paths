@@ -1,4 +1,4 @@
-import { ERROR_CODES } from '../shared/types';
+import { ERROR_CODES } from '../shared/types/index';
 import { ApiClient } from '../api/request';
 import { SessionStore, TOKEN_STORAGE_KEY } from '../store/session';
 import { FakeWx, fail, ok } from './fake-wx';
