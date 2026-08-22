@@ -113,6 +113,37 @@ describe('redactSensitive', () => {
     expect(out).not.toContain('sig-secret-xyz');
     expect(out).toContain('[已隐去]');
   });
+
+  // 下划线是词字符，早先的 \bsecret= 在 client_secret / app_secret 里卡在 _ 与 s 之间的
+  // 非边界处，整段值照样漏进日志。放宽成 (?:前缀_)?secret 后这些形态才被兜住。
+  it('隐去 key=value 形态的 client_secret / app_secret（下划线前缀不再漏网）', () => {
+    const out = redactSensitive('client_secret=abc123def456 app_secret=zzz999 robot=1');
+    expect(out).not.toContain('abc123def456');
+    expect(out).not.toContain('zzz999');
+    expect(out).toContain('client_secret=[已隐去]');
+    expect(out).toContain('app_secret=[已隐去]');
+    // 无关参数不受影响。
+    expect(out).toContain('robot=1');
+  });
+
+  it('隐去 JSON 形态的 "client_secret":"..." / "app_secret":"..."', () => {
+    const out = redactSensitive('{"client_secret":"cs-abc-123","app_secret":"as-xyz-789"}');
+    expect(out).not.toContain('cs-abc-123');
+    expect(out).not.toContain('as-xyz-789');
+    expect(out).toContain('[已隐去]');
+  });
+
+  // 反向证明：修复前的 \bsecret 正则对 client_secret= 平凡放行（\b 卡在下划线处），
+  // 若守卫失效这一条必然失败——不是对空值 not.toContain 的恒真断言。
+  it('反向证明：老式 \\bsecret 正则确实漏掉 client_secret（对照修复后的收窄）', () => {
+    const payload = 'client_secret=leaked-value-123';
+    // 复刻修复前的裸 \bsecret= 规则：\b 在 t 与 _ 之间成立、但要求其后紧跟 secret=，
+    // client_secret 里 secret 前是下划线（词字符），无词边界，故整段不被替换。
+    const OLD = /\b(appid|access_token|secret|signature)=([^&\s]*)/gi;
+    expect(payload.replace(OLD, (_m, k: string) => `${k}=[已隐去]`)).toContain('leaked-value-123');
+    // 修复后的实现必须把它隐去。
+    expect(redactSensitive(payload)).not.toContain('leaked-value-123');
+  });
 });
 
 describe('hasErrField（error/warn 通道的 fail-closed 判定）', () => {
