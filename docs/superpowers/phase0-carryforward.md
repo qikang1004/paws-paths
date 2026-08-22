@@ -1,0 +1,48 @@
+# 阶段 0 遗留项交接（Phase 0 Carry-Forward）
+
+阶段 0 全分支最终审查判定「可合并、无 Critical」。以下是审查明确裁定**不在阶段 0 范围**、
+需带入后续阶段的工程项，以及接受为已知限制的部分。上线前的运维与合规必办项不在此文件，
+见仓库根 `RELEASE_CHECKLIST.md`。
+
+## 阶段 1 开工前应闭合
+
+- [ ] **`style-guard.ts` 的 `findUndefinedVars` 选择器盲**（`miniprogram/tools/style-guard.ts:17-26`）。
+  它把自定义属性名收成一个扁平集合，不建模 CSS 作用域，所以「token 声明在 `page {}` 下、
+  组件却渲染在 page 子树之外」这类缺陷检测不出来。`custom-tab-bar` 目前靠 `test/tab-bar.spec.ts`
+  的七条断言手工兜住，但未来任何 page 外组件（如自定义导航栏）会假绿并静默无样式。
+  写第一个 page 外组件之前应改为选择器感知的检查。
+  根因在阶段 0 计划自身对 `styleIsolation: apply-shared` 的论证
+  （`docs/superpowers/plans/2026-08-17-phase0-foundation.md:4100`）——隔离模式只影响选择器匹配，
+  不创造 DOM 继承。实现已按正确语义修正为 `page, .token-scope`，但计划原文的错误结论仍在。
+
+- [ ] **`WechatApiService.fetchAccessToken` 可绕过 Redis 单点缓存**。该方法是 public 且经
+  `server/src/wechat/wechat.module.ts:13` export，业务代码可直接注入它、跳过缓存与分布式锁，
+  违反「`access_token` 只允许通过 Redis 单点缓存获取」这条 Global Constraint。收口需调整 DI 边界。
+
+- [ ] **`RedisTokenStore` 的真实 Lua 脚本从未被测**。现有测试只用 `FakeTokenStore` 镜像语义，
+  compare-and-delete 的实际 Redis 行为无覆盖。需要一个跑真 Redis 的集成测试。
+
+- [ ] **登录端点无限流**。`POST /auth/login` 直接暴露，缺速率限制。
+
+## 接受为已知限制
+
+- **上传日志脱敏依赖内部路径** `miniprogram-ci/dist/utils/log`，依赖已锁 1.9.11。
+  取不到该路径时降级为只补 console（不中断上传），但 log 通道会重新暴露。升级依赖时须复查。
+- **两条进程内无法闭合的泄漏路径**：`worker_manager.js` 未给 worker 设 stderr，worker stderr
+  直连父进程；`dist/utils/report.js` 把错误 message 前 512 字符 POST 到 `servicewechat.com`。
+  均属库行为，本地脱敏无效。
+- **info 通道对无标签内容是尽力而为**：`core/utils/jsonParse.js` 的 `jsonRespParse` 在 JSON
+  解析失败时经 `log.info` 转储原始响应体；若该响应体畸形且无 errcode/errmsg 标签，正则无从识别。
+  真正的接口错误码走 error 通道，由 `hasErrField` 的 fail-closed 判定拦住。
+- **`wx-guard` 是 lint 级强度**：只认字面直呼 `wx.request` / `wx.getLocation`，绕不过
+  `wx['request']`、解构、别名、`globalThis.wx.request`。兜住这些需类型层面的引用分析。
+- **`--radius-full: 19998rpx`** 不是 bug：源值 `9999px` 经 `1px = 2rpx` 单次换算而来，
+  pill 形状语义正确。已核实，不再重开。
+
+## 待实机验证
+
+- [ ] 在微信开发者工具确认 `page, .token-scope` 真的把自定义属性交付到框架级 tabBar 节点
+  （胶囊圆角、上向阴影、左右内缩）。阶段 0 只做了结构性验证。
+- [ ] 确认 `project.config.json` 的 `setting.useCompilerPlugins: ["typescript"]` 与
+  `miniprogram/tsconfig.json` 的 `noEmit: true` 是否冲突。若开发者工具尊重 `noEmit` 而不产出 JS，
+  需另加一份面向工具的 tsconfig 开启 emit，类型检查路径保留 `noEmit`。
