@@ -49,3 +49,54 @@ export function findUndefinedVars(consumerCss: string, tokensCss: string): strin
   );
   return [...new Set(used.filter((name) => !defined.has(name)))];
 }
+
+export interface TokenScope {
+  selector: string;
+  tokens: string[];
+}
+
+/**
+ * 把「选择器组 → 自定义属性」拆成独立作用域。只处理 tokens.wxss 的扁平声明块
+ * （生成物，无嵌套），不引入完整 CSS 引擎。注释先剔除，tokens.wxss 顶部有说明注释。
+ */
+export function parseTokenScopes(tokensCss: string): TokenScope[] {
+  const out: TokenScope[] = [];
+  for (const [, selectors, body] of stripComments(tokensCss).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const tokens = [...new Set(Array.from(body.matchAll(/(--[\w-]+)\s*:/g), (m) => m[1]))];
+    if (tokens.length === 0) continue;
+    for (const selector of selectors
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)) {
+      out.push({ selector, tokens });
+    }
+  }
+  return out;
+}
+
+/** page 作为元素选择器才算 page 作用域；.page-gutter 这类类名不算。 */
+function isPageScoped(selector: string): boolean {
+  return /(?<![\w.#_-])page(?![\w.-])/.test(selector);
+}
+
+/**
+ * 选择器感知的 token 可达性检查：consumerCss 引用的每个变量，若在所有定义它的作用域里
+ * 都只挂在 page 下，page 子树外的组件（custom-tab-bar / 自定义导航栏）就拿不到值。
+ * 自定义属性靠继承送达，page 外节点不在 page 子树上，唯一出路是 .token-scope 这类
+ * 非 page 作用域的全局规则。findUndefinedVars 只查名字存在性，看不见这一层。
+ */
+export function findTokensInaccessibleOutsidePage(tokensCss: string, consumerCss: string): string[] {
+  const coveredOutsidePage = new Set<string>();
+  for (const scope of parseTokenScopes(tokensCss)) {
+    if (isPageScoped(scope.selector)) continue;
+    for (const token of scope.tokens) coveredOutsidePage.add(token);
+  }
+  const used = Array.from(
+    stripComments(consumerCss).matchAll(/var\(\s*(--[\w-]+)/g),
+    (m) => m[1],
+  );
+  return [...new Set(used.filter((name) => !coveredOutsidePage.has(name)))];
+}
+
+/** 渲染在 page 子树之外的框架组件槽位：自定义 tabBar 与自定义导航栏。 */
+export const OUTSIDE_PAGE_SLOTS = ['custom-tab-bar', 'custom-navigation-bar'];
