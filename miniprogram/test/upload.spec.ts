@@ -133,16 +133,37 @@ describe('redactSensitive', () => {
     expect(out).toContain('[已隐去]');
   });
 
+  // 驼峰形态：前缀后的下划线可选，配合 i 标志兜住 clientSecret / appSecret。
+  // 微信服务端 API 用 snake_case，但自建配置或第三方 SDK 常写驼峰，一并收口。
+  it('隐去驼峰形态的 clientSecret / appSecret', () => {
+    const out = redactSensitive('clientSecret=camel-leak-1 appSecret=camel-leak-2');
+    expect(out).not.toContain('camel-leak-1');
+    expect(out).not.toContain('camel-leak-2');
+    expect(redactSensitive('{"clientSecret":"camel-json-leak"}')).not.toContain('camel-json-leak');
+  });
+
+  // 放宽 secret 前缀不能变成「见 secret 就隐去」：无关词与非 key 位置必须原样保留。
+  it('不误伤 secretary= 与 no_secret_here 之外的无关文本', () => {
+    const out = redactSensitive('secretary=zhang robot=1 the secret is not a key');
+    expect(out).toContain('secretary=zhang');
+    expect(out).toContain('robot=1');
+    expect(out).toContain('the secret is not a key');
+  });
+
   // 反向证明：修复前的 \bsecret 正则对 client_secret= 平凡放行（\b 卡在下划线处），
   // 若守卫失效这一条必然失败——不是对空值 not.toContain 的恒真断言。
-  it('反向证明：老式 \\bsecret 正则确实漏掉 client_secret（对照修复后的收窄）', () => {
-    const payload = 'client_secret=leaked-value-123';
-    // 复刻修复前的裸 \bsecret= 规则：\b 在 t 与 _ 之间成立、但要求其后紧跟 secret=，
-    // client_secret 里 secret 前是下划线（词字符），无词边界，故整段不被替换。
+  it('反向证明：老式 \\bsecret 正则确实漏掉 client_secret 与 clientSecret（对照修复后的收窄）', () => {
     const OLD = /\b(appid|access_token|secret|signature)=([^&\s]*)/gi;
-    expect(payload.replace(OLD, (_m, k: string) => `${k}=[已隐去]`)).toContain('leaked-value-123');
-    // 修复后的实现必须把它隐去。
-    expect(redactSensitive(payload)).not.toContain('leaked-value-123');
+    const redactWithOld = (text: string): string =>
+      text.replace(OLD, (_m, k: string) => `${k}=[已隐去]`);
+
+    // client_secret：secret 前是下划线（词字符），无词边界，整段不被替换。
+    expect(redactWithOld('client_secret=leaked-value-123')).toContain('leaked-value-123');
+    expect(redactSensitive('client_secret=leaked-value-123')).not.toContain('leaked-value-123');
+
+    // clientSecret：secret 前是字母，同样无词边界。
+    expect(redactWithOld('clientSecret=camel-leaked-456')).toContain('camel-leaked-456');
+    expect(redactSensitive('clientSecret=camel-leaked-456')).not.toContain('camel-leaked-456');
   });
 });
 

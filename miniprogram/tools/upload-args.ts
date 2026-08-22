@@ -26,17 +26,19 @@ const URL_QUERY_PATTERN = /(https?:\/\/[^\s?]*)\?[^\s"'\])}]*/gi;
 
 /**
  * appid / signature 等也可能脱离完整 url，以 key=value 形式单独出现。
- * secret 用 (?:[a-z0-9]+_)?secret 兜住 client_secret / app_secret：下划线是词字符，
- * 光写 \bsecret 时 client_secret 里 _ 与 s 之间没有词边界，\b 卡住漏掉整个值。
+ * secret 用 [a-z0-9]*_?secret 兜住 client_secret / app_secret / clientSecret：下划线是词字符，
+ * 光写 \bsecret 时 client_secret 里 _ 与 s 之间没有词边界，\b 卡住漏掉整个值；
+ * 前缀后的 _ 可选，驼峰形态（i 标志下 Secret）同样命中。
+ * secretary= 之类不误伤：secret 后必须紧跟 =。
  */
-const SENSITIVE_PARAM_PATTERN = /\b(appid|access_token|(?:[a-z0-9]+_)?secret|signature)=([^&\s]*)/gi;
+const SENSITIVE_PARAM_PATTERN = /\b(appid|access_token|[a-z0-9]*_?secret|signature)=([^&\s]*)/gi;
 
 /**
  * JSON 形态的 "appid":"..." / "signature":"..."：抓不到就会绕过上面的 key=value 规则。
- * 同样把 secret 放宽到 "client_secret" / "app_secret"（引号后紧跟前缀+secret）。
+ * 同样把 secret 放宽到 "client_secret" / "app_secret" / "clientSecret"。
  */
 const SENSITIVE_JSON_PATTERN =
-  /(["'](?:appid|access_token|(?:[a-z0-9]+_)?secret|signature)["']\s*:\s*)(["'][^"']*["'])/gi;
+  /(["'](?:appid|access_token|[a-z0-9]*_?secret|signature)["']\s*:\s*)(["'][^"']*["'])/gi;
 
 /**
  * miniprogram-ci 自己往 console 打 errCode/errMsg，我们的 try/catch 拦不住，
