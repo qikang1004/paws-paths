@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import ci from 'miniprogram-ci';
-import { redactSensitive, requireEnv, resolveDesc, resolveVersion } from './upload-args';
+import { hasErrField, redactSensitive, requireEnv, resolveDesc, resolveVersion } from './upload-args';
 
 type LogFn = (...args: unknown[]) => void;
 type Sink = Record<string, LogFn | undefined>;
@@ -8,10 +8,18 @@ type Sink = Record<string, LogFn | undefined>;
 /** 进度类通道：脱敏后放行，排查上传卡在哪一步全靠它。 */
 const REDACTED_CHANNELS = ['log', 'info'];
 /**
- * 失败类通道：整条压掉。CodeError 打的是 log.error(code, message)，
- * 两个无标签位置参数，裸消息没法用正则区分敏感与无害，只能 fail-closed。
+ * 失败类通道：默认同样「脱敏后放行」，保住可诊断性——该库 error 通道以工具链输出为主
+ * （postcss/WXML 编译失败带文件路径、worker 崩溃重试、子进程 stderr 透传、"params …
+ * is invalid" 这类校验），整条压制会把编译失败也吞掉，ci.upload() 先编译再上传，
+ * 结果编译错误反复只剩一行 notice、还被 UploadFailedError 误导到 IP 白名单去。
+ *
+ * 唯一例外：检测到 errcode/errmsg 字段特征时整条压制（fail-closed）。因为真正的
+ * 接口错误里 errmsg 的值可能落在与标签相邻的另一个位置参数（CodeError 打的是
+ * log.error(code, message)，request 打的是 `${url} ${err}`，warn 可能分成
+ * ('errCode: -1', 'invalid ip …') 两段），逐参数脱敏会放过无标签那半段的正文，
+ * 所以一旦嗅到字段特征就把整条（含全部位置参数）压掉。
  */
-const SUPPRESSED_CHANNELS = ['warn', 'error'];
+const FAILCLOSE_CHANNELS = ['warn', 'error'];
 
 const SUPPRESSED_NOTICE = '[已隐去微信接口错误详情]';
 
@@ -41,9 +49,16 @@ function patchSink(sink: Sink, restore: Array<() => void>): void {
       orig(...args.map((a) => redactSensitive(toRedactableText(a))));
     });
   }
-  for (const name of SUPPRESSED_CHANNELS) {
-    install(name, (orig) => () => {
-      orig(SUPPRESSED_NOTICE);
+  for (const name of FAILCLOSE_CHANNELS) {
+    install(name, (orig) => (...args: unknown[]) => {
+      const texts = args.map(toRedactableText);
+      // 任一位置参数带 errcode/errmsg 字段特征 → 整条压掉，跨参数的裸值也一起丢。
+      if (texts.some(hasErrField)) {
+        orig(SUPPRESSED_NOTICE);
+        return;
+      }
+      // 其余（编译/worker/校验类诊断）脱敏后照常可见。
+      orig(...texts.map(redactSensitive));
     });
   }
 }
@@ -87,16 +102,21 @@ const PROJECT_PATH = resolve(__dirname, '../..');
 
 /**
  * 微信接口的报错原文常带 errcode/errmsg，还可能回显私钥路径，
- * 一旦进了 CI 日志就等于公开。所以这里把原文整体丢掉，只留排查清单。
+ * 一旦进了 CI 日志就等于公开。所以这里不透传接口原文，只留排查清单。
+ *
+ * 注意：ci.upload() 先编译后上传。编译期错误（postcss/WXML/worker/校验）现在会
+ * 经 error 通道脱敏后如实打印在本提示上方——遇到失败请先看上方日志判断是「编译失败」
+ * 还是「上传/接口失败」，别一上来就照下面的接口清单排查。下面几项只针对接口失败。
  */
 const UPLOAD_FAILED_HINT = [
-  '体验版上传失败（已隐去微信接口返回原文，避免密钥与错误码进日志）。',
-  '按这几项自查：',
+  '上传流程失败（接口返回原文已隐去，避免密钥与错误码进日志）。',
+  '请先看上方日志：若是 postcss / WXML / 依赖等编译报错，按其中的文件路径直接修源码即可。',
+  '若上方无编译错误、确属上传/接口失败，再按这几项自查：',
   '  1. 上传密钥是否与 WX_APPID 对应，是否已在小程序后台重置过；',
   '  2. GitHub Actions 出口 IP 是否加进了后台的 IP 白名单；',
   '  3. robot 编号（WX_CI_ROBOT）是否被其他流水线占用；',
   '  4. tag 是否是 vX.Y.Z，且该版本号未被上传过。',
-  '完整报错请到小程序后台「版本管理」查看，不要把接口原文贴进日志或 issue。',
+  '完整接口报错请到小程序后台「版本管理」查看，不要把接口原文贴进日志或 issue。',
 ].join('\n');
 
 class UploadFailedError extends Error {
