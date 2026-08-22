@@ -16,6 +16,15 @@ const ALLOWLIST = ['api/wx-promise.ts'];
  * - test：守卫与用例本身会把 wx.request 当字符串/断言写出来，不是运行时直呼；
  * - tools：构建/上传脚本跑在 Node 里，不接触小程序 wx 运行时；
  * - shared/types：由 packages/types 同步而来的产物，不是手写源。
+ *
+ * `tools/` 整目录排除依赖一条约定：那里只放 Node 侧构建脚本（project.config.json 的
+ * packOptions.ignore 也把它排除出包体）。若将来把小程序运行时代码误放进 tools/，这条
+ * 守卫会静默漏掉它——运行时代码应放在 api/ store/ pages/ 等被扫描的目录下。
+ *
+ * 强度限制（lint 级）：检测只认字面直呼 `wx.request` / `wx.getLocation`，
+ * 拦得住阶段 1 最可能的复制粘贴形态，但绕不过 wx['request']、const { request } = wx、
+ * const w = wx; w.request()、globalThis.wx.request 这类间接写法。要兜住这些需要类型层面
+ * 的引用分析，成本远高于收益，阶段 0 不做。
  */
 const EXCLUDE_DIRS = ['test', 'tools', 'shared/types'];
 
