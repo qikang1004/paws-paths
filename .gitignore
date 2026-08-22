@@ -12,3 +12,8 @@ private.*.key
 .env
 .env.*
 !.env.example
+
+# SDD 流程草稿（ledger、任务简报、实现报告、review 包）。
+# 这些是执行过程的临时工件，不是交付物；带入仓库的裁定见
+# RELEASE_CHECKLIST.md 与 docs/superpowers/phase0-carryforward.md。
+.superpowers/
