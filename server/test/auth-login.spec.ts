@@ -7,7 +7,7 @@ import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 import { ApiException } from '../src/common/api.exception';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
-import { WechatApiService } from '../src/wechat/wechat-api.service';
+import { WECHAT_SESSION_API } from '../src/wechat/wechat-api.service';
 
 class FakeWechatApi {
   openid = 'openid-aaa';
@@ -19,10 +19,6 @@ class FakeWechatApi {
     }
     return { openid: this.openid, sessionKey: `sk-${code}` };
   }
-
-  async fetchAccessToken(): Promise<{ access_token: string; expires_in: number }> {
-    return { access_token: 'at', expires_in: 7200 };
-  }
 }
 
 describe('POST /auth/wx-login', () => {
@@ -32,7 +28,7 @@ describe('POST /auth/wx-login', () => {
   beforeAll(async () => {
     process.env.JWT_SECRET = 'test-secret';
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(WechatApiService)
+      .overrideProvider(WECHAT_SESSION_API)
       .useValue(fake)
       .compile();
     app = moduleRef.createNestApplication();

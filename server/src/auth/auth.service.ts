@@ -1,9 +1,9 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { ERROR_CODES } from '@paws/types';
 import { sign } from 'jsonwebtoken';
 import { ApiException } from '../common/api.exception';
 import { UsersService } from '../users/users.service';
-import { WechatApiService } from '../wechat/wechat-api.service';
+import { WECHAT_SESSION_API, type WechatSessionApi } from '../wechat/wechat-api.service';
 
 export interface LoginResult {
   token: string;
@@ -14,7 +14,7 @@ export interface LoginResult {
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly wechat: WechatApiService,
+    @Inject(WECHAT_SESSION_API) private readonly wechat: WechatSessionApi,
     private readonly users: UsersService,
   ) {}
 
