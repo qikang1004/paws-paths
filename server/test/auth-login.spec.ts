@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 import { ApiException } from '../src/common/api.exception';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
+import { RATE_LIMIT_STORE } from '../src/common/rate-limit/rate-limit.store';
 import { WECHAT_SESSION_API } from '../src/wechat/wechat-api.service';
 
 class FakeWechatApi {
@@ -21,15 +22,27 @@ class FakeWechatApi {
   }
 }
 
+/** 内存限流存储：默认放行（failOpen=true 时计数压在上限内），置 failOpen=false 模拟超限。 */
+class FakeRateLimitStore {
+  failOpen = true;
+
+  async increment(): Promise<number> {
+    return this.failOpen ? 1 : 31;
+  }
+}
+
 describe('POST /auth/wx-login', () => {
   let app: INestApplication;
   const fake = new FakeWechatApi();
+  const rate = new FakeRateLimitStore();
 
   beforeAll(async () => {
     process.env.JWT_SECRET = 'test-secret';
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(WECHAT_SESSION_API)
       .useValue(fake)
+      .overrideProvider(RATE_LIMIT_STORE)
+      .useValue(rate)
       .compile();
     app = moduleRef.createNestApplication();
     app.useGlobalInterceptors(new ResponseInterceptor());
@@ -44,6 +57,7 @@ describe('POST /auth/wx-login', () => {
   beforeEach(() => {
     fake.fail = false;
     fake.openid = 'openid-aaa';
+    rate.failOpen = true;
   });
 
   it('新 openid 建号并签发可验签的 JWT', async () => {
@@ -86,5 +100,14 @@ describe('POST /auth/wx-login', () => {
       .expect(502);
     expect(res.body.code).toBe(ERROR_CODES.UPSTREAM_WECHAT);
     expect(res.body.message).toBe('微信服务暂时不可用');
+  });
+
+  it('超限时返回 429 + RATE_LIMITED，不再放行到业务逻辑', async () => {
+    rate.failOpen = false;
+    const res = await request(app.getHttpServer())
+      .post('/auth/wx-login')
+      .send({ code: 'spam' })
+      .expect(429);
+    expect(res.body.code).toBe(ERROR_CODES.RATE_LIMITED);
   });
 });
