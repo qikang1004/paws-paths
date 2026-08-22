@@ -162,7 +162,9 @@ export function createPool(): Pool | null {
 
 `database.module.ts`：`@Module({ providers: [{ provide: PG_POOL, useFactory: createPool }], exports: [PG_POOL] })`，`PG_POOL = 'PgPool'`。`app.module.ts` imports 加 `DatabaseModule`。
 
-- [ ] **Step 6: 起库验证（需用户确认启动 Docker Desktop）**
+- [ ] **Step 6: 生产构建注意（无数据库也须完成）**：`runMigrations` 用 `__dirname` 读 `schema.sql`/`seed.sql`。检查 `server/tsconfig.json` 的构建输出——若 `outDir` 不复制 `.sql`，在 server 的构建脚本（`package.json` 的 build script）加一步把 `src/database/*.sql` 复制进 dist（`cpx` 不可用，用 `node -e "require('fs').cpSync('src/database','dist/database',{recursive:true})"` 或等价）。tsc 编译干净即可，复制动作加进 build 脚本并在 README 注明。
+
+- [ ] **Step 7: 起库验证（需用户确认启动 Docker Desktop；本轮用户已选择不跑 Docker，本步跳过）**
 
 ```bash
 cd D:/tmp/test && docker compose up -d
@@ -171,7 +173,7 @@ DATABASE_URL=postgres://postgres:postgres@localhost:5432/paws npx jest test/post
 
 预期：4 条断言全 PASS。验证完可 `docker compose stop`（容器保留便于后续任务复用）。
 
-- [ ] **Step 7: 提交**
+- [ ] **Step 8: 提交**
 
 ```bash
 git add docker-compose.yml server/package.json server/package-lock.json server/src/database server/src/app.module.ts server/test/postgres.integration.spec.ts
@@ -518,11 +520,16 @@ git commit -m "feat(server): venues domain with venue_extras repositories"
       search(opts: { keyword: string; category: string; lat: number; lng: number }): Promise<MapPlace[] | null>;
     }
     ```
-    逻辑：`key = poi:gh:${encodeGeohash(lat,lng)}:${category}`（keyword 也拼进 key 后缀，`poi:gh:wx4g0f:dog-hospital:宠物医院`，防不同搜索互相污染）→ cache.get 命中则 JSON.parse 返回 → 未命中调 `client.searchPlace` → 成功且非空：cache.set(key, JSON.stringify(places), 600) 并返回 → client 返回 null（配额耗尽/网络失败）→ **返回 null**（上层降级 venue_extras）。
+    逻辑：`key = poi:gh:${encodeGeohash(lat,lng,6)}:${category}:${keyword}`（keyword 参与 key，防不同搜索互相污染）→ cache.get 命中则 JSON.parse 返回 → 未命中调 `client.searchPlace` → 成功且非空：cache.set(key, JSON.stringify(places), 600) 并返回 → client 返回 null（配额耗尽/网络失败）→ **返回 null**（上层降级 venue_extras）。
   - `PoiCategoryMapper`: `mapPoiCategory(raw: string): VenueCategory`（`/医院|clinic/i → 'hospital'`；`/店|超市|商场|用品|食品|粮/i → 'shop'`；`/美容|洗澡|洗护|spa|造型/i → 'grooming'`；`/公园|景区|绿地|广场|草坪/i → 'park'`；`/咖啡|cafe|餐厅|饭店|餐饮|宠物友好/i → 'cafe'`；默认 `'other'`），导出常量 `CATEGORY_LABELS: Record<VenueCategory, string>`（`{ hospital:'宠物医院', shop:'宠物店', grooming:'美容洗护', park:'宠物公园', cafe:'宠物友好', other:'其他' }`）。
   - `PoiProxyModule` 或并入 `VenuesModule`：providers 用 `useFactory` 绑定 `MAP_POI_CLIENT = process.env.TENCENT_MAP_KEY ? new TencentPoiClient(key) : null`（null 时 `PoiProxyService.search` 直接返回 null → 纯 venue_extras 模式，本机无 key 的常态）；`POI_CACHE = new RedisPoiCache()`。
 
-- [ ] **Step 1: 写失败测试（geohash）** `server/test/geohash.spec.ts`：`encodeGeohash(39.9042,116.4074,6)==='wx4g0f'`；`encodeGeohash(31.2304,121.4737,6)==='wtw3sm'`（上海）；`encodeGeohash(0,0,6)==='s00000'`；精度参数生效（6 位 vs 4 位长度）。
+- [ ] **Step 1: 写失败测试（geohash）** `server/test/geohash.spec.ts`：
+  - `encodeGeohash(57.64911, 10.40744, 11) === 'u4pruydqqvj'`（维基百科 geohash 标准示例，可确证）。
+  - `encodeGeohash(0, 0, 6) === 's00000'`（可确证）。
+  - 前缀性质：`encodeGeohash(39.9042, 116.4074, 4)` 等于 `encodeGeohash(39.9042, 116.4074, 6).slice(0, 4)`。
+  - 长度：`encodeGeohash(31.2304, 121.4737, 6).length === 6`、`encodeGeohash(31.2304, 121.4737, 4).length === 4`。
+  - 实现约定：base32 字母表 `0123456789bcdefghjkmnpqrstuvwxyz`，lng 占偶数位、lat 占奇数位，区间取中点 `>=` 归上。
 - [ ] **Step 2: 实现 geohash → 全绿**
 - [ ] **Step 3: 写失败测试（PoiProxyService，fakes）**
 
@@ -946,7 +953,7 @@ git commit -m "feat(mp): waterfall list component with pet-card and photo templa
   3. `shouldLoadMore(true,false)` → true；`(false,true)` → false。
   4. 品种联动：`breedsForSpecies('other') === []` → 页面不渲染第二层。
 - [ ] **Step 2: 实现 plaza-model + 页面 → Step 3: 全绿（含 guard suite：页面不得 `wx.request`/`wx.getLocation` 直呼——定位必须经 `store/location.ts`）**
-- [ ] **Step 4: 开发者工具冒烟**（见 Task 18 的验收清单，此处仅确认页面能编译、数据能拉到）
+- [ ] **Step 4: 开发者工具冒烟**（见 Task 17 的验收清单，此处仅确认页面能编译、数据能拉到）
 - [ ] **Step 5: 提交**
 
 ```bash
@@ -1069,11 +1076,11 @@ git commit -m "feat(mp): venue detail with degraded info, navigation and favorit
   - miniprogram：`cd miniprogram && npm test`（167 + 新增全绿）。
   - 双包 `tsc --noEmit` 干净。
   - guard suites（style-guard、module-guard、freshness）全绿。
-- [ ] **Step 2: Docker 演示环境**（需用户确认启动 Docker Desktop）：`docker compose up -d` → `DATABASE_URL` 设入 `server/.env`（本机）→ server 以 Postgres 模式启动。
-- [ ] **Step 3: 演示走查**（开发者工具，touristappid + urlCheck:false）：
-  1. 广场首屏：瀑布流 10 只宠物、距离由近到远、模式条显示「精确」。
+- [ ] **Step 2: 演示模式确认**：本轮不跑 Docker → server 不设 `DATABASE_URL`，以 InMemory 模式启动（`npm run start:dev` 或 node dist）；Postgres 实现的验证推迟到有库环境（集成测试已就位，`DATABASE_URL` 一设即全绿）。若之后想切真库：`docker compose up -d` + 设 `DATABASE_URL` 即可，无代码改动。
+- [ ] **Step 3: 演示走查**（开发者工具，touristappid + urlCheck:false，服务端 InMemory 模式）：
+  1. 广场首屏：瀑布流 8 只宠物、距离由近到远、模式条显示「精确」。
   2. 筛选：切「猫」→ 第二层品种 chips 出现；选「布偶」→ 只回奶昔。
-  3. 下拉刷新 + 上拉加载第二页（hasMore 逻辑）。
+  3. 下拉刷新 + 分页：默认 pageSize=10 时 8 条即 hasMore=false；临时把 pageSize 调成 3 验证上拉加载第二页的拼接与 hasMore 置位，验证后改回。
   4. 进详情：轮播滑动、信息/标签/主人卡、相册瀑布流、图片预览、分享卡片。
   5. 周边：搜索「医院」→ 2 家；切「公园」类目；卡片降级（无 TENCENT_MAP_KEY 时走 extras，rating/人均正常显示——用 `wx.setStorageSync` 或临时改 env 关闭 key 验证「extras 缺失 → 评分行隐藏」的另一侧：临时从 seed 删一家 rating 或在 service 层短路）。
   6. 场所详情：收藏 toggle、地址复制、导航按钮（有坐标）。
