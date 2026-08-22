@@ -115,3 +115,45 @@ describe('syncTypes', () => {
     }
   });
 });
+
+// icons.ts / tokens.wxss 都有本地新鲜度守卫，shared/types 却只在 CI 查漂移，本地 npm test
+// 看不出改了 packages/types 忘记重新 sync。照 icons.spec.ts / build-tokens.spec.ts 的写法补上：
+// 从提交在库的源 packages/types/src 现场重新编译并同步，与已提交产物严格比对（LF 归一化）。
+describe('产物新鲜度', () => {
+  const TYPES_TSCONFIG = resolve(__dirname, '../../packages/types/tsconfig.json');
+  const TSC = resolve(__dirname, '../../node_modules/typescript/bin/tsc');
+  const COMMITTED = resolve(__dirname, '../shared/types');
+  /** 构建脚本写的是纯 LF；Windows 检出可能是 CRLF，统一后再严格比对。 */
+  const lf = (s: string) => s.replace(/\r\n/g, '\n');
+  const snapshot = (dir: string): Record<string, string> =>
+    Object.fromEntries(
+      readdirSync(dir)
+        .sort()
+        .map((name) => [name, lf(readFileSync(join(dir, name), 'utf8'))]),
+    );
+
+  it('已提交的 shared/types 与 packages/types/src 现场重编译+同步的结果严格一致', () => {
+    const freshDist = mkdtempSync(join(tmpdir(), 'paws-fresh-dist-'));
+    const freshDest = mkdtempSync(join(tmpdir(), 'paws-fresh-dest-'));
+    try {
+      // 现场把 packages/types 编译进临时 dist：等价于 npm run build -w @paws/types，
+      // 不依赖工作树里 dist 是否已存在，测试自足。
+      execFileSync(process.execPath, [TSC, '-p', TYPES_TSCONFIG, '--outDir', freshDist], {
+        encoding: 'utf8',
+      });
+      syncTypes(freshDist, freshDest);
+      const regenerated = snapshot(freshDest);
+      const committed = snapshot(COMMITTED);
+      try {
+        expect(committed).toEqual(regenerated);
+      } catch (err) {
+        throw new Error(
+          `miniprogram/shared/types 已过期，请跑 npm run sync:types（先 npm run build -w @paws/types）\n${(err as Error).message}`,
+        );
+      }
+    } finally {
+      rmSync(freshDist, { recursive: true, force: true });
+      rmSync(freshDest, { recursive: true, force: true });
+    }
+  });
+});
