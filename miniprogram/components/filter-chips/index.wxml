@@ -1,0 +1,31 @@
+<view class="filter-chips">
+  <scroll-view class="filter-chips__row" scroll-x enable-flex show-scrollbar="{{false}}">
+    <view
+      wx:for="{{categories}}"
+      wx:key="value"
+      class="chip filter-chips__chip {{selected === item.value ? 'chip--active' : ''}}"
+      data-value="{{item.value}}"
+      bindtap="onCategoryTap"
+    >
+      {{item.label}}
+    </view>
+  </scroll-view>
+
+  <scroll-view
+    wx:if="{{subOptions.length}}"
+    class="filter-chips__row filter-chips__row--sub"
+    scroll-x
+    enable-flex
+    show-scrollbar="{{false}}"
+  >
+    <view
+      wx:for="{{subOptions}}"
+      wx:key="value"
+      class="chip filter-chips__chip {{subSelected === item.value ? 'chip--active' : ''}}"
+      data-value="{{item.value}}"
+      bindtap="onSubTap"
+    >
+      {{item.label}}
+    </view>
+  </scroll-view>
+</view>
