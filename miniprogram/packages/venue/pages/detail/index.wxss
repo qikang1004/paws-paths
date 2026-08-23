@@ -1,0 +1,60 @@
+.vdetail__cover {
+  width: 100%;
+  height: 500rpx;
+  display: block;
+  background-color: var(--color-surface-container);
+}
+
+.vdetail__body {
+  padding-top: var(--space-md);
+  padding-bottom: calc(var(--space-xl) + env(safe-area-inset-bottom));
+}
+
+.vdetail__title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.vdetail__distance {
+  margin-left: var(--space-sm);
+  flex: none;
+}
+
+.vdetail__tags {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: var(--space-sm);
+}
+
+.vdetail__row {
+  margin-top: var(--space-xs);
+}
+.vdetail__rating {
+  color: var(--color-tertiary);
+}
+
+/* 地址一行放不下就换行显示，复制入口靠右不参与压缩。 */
+.vdetail__address {
+  display: flex;
+  align-items: flex-start;
+  margin-top: var(--space-sm);
+}
+.vdetail__address-text {
+  flex: 1;
+  min-width: 0;
+}
+.vdetail__copy {
+  flex: none;
+  margin-left: var(--space-sm);
+}
+
+.vdetail__actions {
+  margin-top: var(--space-xl);
+}
+.vdetail__nav {
+  margin-top: var(--space-sm);
+}
+
+.vdetail__state {
+  padding-top: var(--space-xl);
+}

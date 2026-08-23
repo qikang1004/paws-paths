@@ -1,0 +1,53 @@
+/* 形状与排版跟随 semantic.wxss 的 .btn 口径，这里只补组件自己的变体。 */
+.sq-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  font-size: var(--font-body-lg-size);
+  line-height: var(--font-body-lg-line);
+  font-weight: var(--font-body-lg-weight);
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+}
+
+.sq-button--md {
+  padding: var(--space-sm) var(--space-lg);
+}
+
+.sq-button--lg {
+  padding: var(--space-md) var(--space-xl);
+}
+
+.sq-button--primary {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+  box-shadow: var(--shadow-ambient);
+}
+
+.sq-button--plain {
+  background-color: var(--color-surface-container);
+  color: var(--color-on-surface);
+}
+
+.sq-button--danger {
+  background-color: var(--color-error);
+  color: var(--color-on-error);
+}
+
+.sq-button--ghost {
+  background-color: transparent;
+  color: var(--color-primary);
+  border: 2rpx solid var(--color-outline-variant);
+}
+
+.sq-button--pressed {
+  transform: scale(0.97);
+}
+
+.sq-button--disabled {
+  opacity: 0.5;
+}
+
+.sq-button__label {
+  color: inherit;
+}

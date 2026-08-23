@@ -1,0 +1,8 @@
+<view class="empty-state">
+  <wf-icon name="{{icon}}" role="on-surface-variant" size="128rpx" />
+  <text class="empty-state__title text-headline-md">{{title}}</text>
+  <text wx:if="{{hint}}" class="empty-state__hint text-body-md c-on-surface-variant">{{hint}}</text>
+  <view class="empty-state__action">
+    <slot />
+  </view>
+</view>

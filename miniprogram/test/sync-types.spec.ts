@@ -78,6 +78,11 @@ describe('syncTypes', () => {
           'ES2022',
           '--moduleResolution',
           'node',
+          // 裸 CLI 没有 tsconfig，默认会加载 node_modules/@types 下所有包（含服务端的
+          // @types/pg → pg-protocol，其 d.ts 要求更新的 @types/node）。这里只编译
+          // sync-types.ts，它只用到 node:fs / node:path。
+          '--types',
+          'node',
           '--outDir',
           compiledTools,
           resolve(__dirname, '../tools/sync-types.ts'),

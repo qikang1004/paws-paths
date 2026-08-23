@@ -5,8 +5,15 @@ import type { AccessTokenFetcher } from './access-token.service';
 
 const BASE = 'https://api.weixin.qq.com';
 
+/** DI 令牌：业务代码只能注入这个窄接口，拿不到 WechatApiService 本体上的 fetchAccessToken。 */
+export const WECHAT_SESSION_API = 'WechatSessionApi';
+
+export interface WechatSessionApi {
+  code2Session(code: string): Promise<{ openid: string; sessionKey: string }>;
+}
+
 @Injectable()
-export class WechatApiService implements AccessTokenFetcher {
+export class WechatApiService implements AccessTokenFetcher, WechatSessionApi {
   private readonly logger = new Logger(WechatApiService.name);
 
   /** 只允许 AccessTokenService 调用；业务代码一律用 AccessTokenService.get()。 */

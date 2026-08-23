@@ -1,0 +1,21 @@
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl) var(--space-lg);
+  text-align: center;
+}
+
+.empty-state__title {
+  margin-top: var(--space-md);
+  color: var(--color-on-surface);
+}
+
+.empty-state__hint {
+  margin-top: var(--space-sm);
+}
+
+.empty-state__action {
+  margin-top: var(--space-lg);
+}

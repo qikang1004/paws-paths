@@ -1,0 +1,21 @@
+/* chip 与 chip--active 的配色来自 semantic.wxss，这里只排版。 */
+.filter-chips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.filter-chips__row {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-sm);
+  white-space: nowrap;
+}
+
+.filter-chips__row--sub {
+  padding-top: var(--space-xs);
+}
+
+.filter-chips__chip {
+  flex-shrink: 0;
+}

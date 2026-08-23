@@ -1,0 +1,35 @@
+.venues {
+  padding-top: var(--space-sm);
+}
+
+.venues__search {
+  display: flex;
+  align-items: center;
+  background-color: var(--color-surface-container);
+  border-radius: var(--radius-full);
+  padding: var(--space-xs) var(--space-md);
+}
+.venues__input {
+  flex: 1;
+  min-width: 0;
+  height: 64rpx;
+  color: var(--color-on-surface);
+}
+.venues__clear {
+  flex: none;
+  margin-left: var(--space-sm);
+  font-size: var(--font-body-sm-size);
+  line-height: var(--font-body-sm-line);
+  color: var(--color-primary);
+}
+
+.venues__list {
+  padding-top: var(--space-sm);
+}
+
+.venues__footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: var(--space-md);
+}

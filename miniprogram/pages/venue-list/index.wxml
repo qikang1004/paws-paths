@@ -1,1 +1,38 @@
-<view class="page-gutter">占位页，后续阶段填充。</view>
+<view class="venues page-gutter">
+  <view class="venues__search">
+    <input
+      class="venues__input text-body-md"
+      value="{{keyword}}"
+      placeholder="搜索医院、宠物店、公园"
+      confirm-type="search"
+      bindinput="onKeywordInput"
+      bindconfirm="onSearchConfirm"
+    />
+    <text class="venues__clear" wx:if="{{keyword}}" bindtap="onClearKeyword">清空</text>
+  </view>
+
+  <filter-chips
+    categories="{{categoryOptions}}"
+    selected="{{category}}"
+    subOptions="{{[]}}"
+    bind:change="onCategoryChange"
+  />
+
+  <view class="venues__list" wx:if="{{venues.length}}">
+    <venue-card
+      wx:for="{{venues}}"
+      wx:key="poiId"
+      venue="{{item}}"
+      bind:tap="onVenueTap"
+    />
+  </view>
+  <empty-state
+    wx:elif="{{!loading}}"
+    title="附近没有找到合适的地方"
+    hint="换个关键词或类目试试"
+  />
+
+  <view class="venues__footer safe-bottom" wx:if="{{loading}}">
+    <sq-button type="plain" loading="{{loading}}">加载中…</sq-button>
+  </view>
+</view>

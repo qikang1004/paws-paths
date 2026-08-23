@@ -1,0 +1,97 @@
+/*
+  分列容器。列间距不用 flex gap：glass-easel 上支持情况不确定，
+  改用相邻列的左外边距，两种渲染器都稳。
+*/
+.wf-list {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+}
+.wf-col {
+  flex: 1;
+  min-width: 0;
+}
+.wf-col + .wf-col {
+  margin-left: var(--space-gutter-mobile);
+}
+
+/* 卡片：封面要通栏，所以卡片本身不留内边距，内边距挪到 body 上。 */
+.pet-card {
+  padding: 0;
+  overflow: hidden;
+  margin-bottom: var(--space-gutter-mobile);
+}
+.pet-card-cover {
+  width: 100%;
+  overflow: hidden;
+  background-color: var(--color-surface-container);
+}
+.pet-card-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.pet-card-body {
+  padding: var(--space-sm);
+}
+.pet-card-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.pet-card-name {
+  font-size: var(--font-body-lg-size);
+  line-height: var(--font-body-lg-line);
+  font-weight: var(--font-body-lg-weight);
+  color: var(--color-on-surface);
+}
+.pet-card-distance {
+  font-size: var(--font-body-sm-size);
+  line-height: var(--font-body-sm-line);
+  color: var(--color-on-surface-variant);
+  margin-left: var(--space-xs);
+  flex: none;
+}
+.pet-card-meta {
+  font-size: var(--font-body-sm-size);
+  line-height: var(--font-body-sm-line);
+  color: var(--color-on-surface-variant);
+  margin-top: var(--space-xs);
+}
+.pet-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: var(--space-xs);
+}
+.pet-card-owner {
+  display: flex;
+  align-items: center;
+  margin-top: var(--space-sm);
+}
+.pet-card-avatar {
+  width: var(--space-lg);
+  height: var(--space-lg);
+  flex: none;
+  background-color: var(--color-surface-container);
+}
+.pet-card-owner-name {
+  font-size: var(--font-body-sm-size);
+  line-height: var(--font-body-sm-line);
+  color: var(--color-on-surface-variant);
+  margin-left: var(--space-xs);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 相册格子：同一套分列逻辑，只是内容换成整图。 */
+.photo-cell {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: var(--space-gutter-mobile);
+  background-color: var(--color-surface-container);
+}
+.photo-img {
+  width: 100%;
+  display: block;
+}

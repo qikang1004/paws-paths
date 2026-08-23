@@ -1,0 +1,55 @@
+/* 横向卡片：左图右文，没有封面时文字区独占整宽。 */
+.venue-card {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  margin-bottom: var(--space-gutter-mobile);
+}
+.venue-card__cover {
+  width: 200rpx;
+  height: 200rpx;
+  flex: none;
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-container);
+  margin-right: var(--space-sm);
+}
+.venue-card__body {
+  flex: 1;
+  min-width: 0;
+}
+.venue-card__title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.venue-card__name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.venue-card__distance {
+  margin-left: var(--space-sm);
+  flex: none;
+}
+.venue-card__address {
+  display: block;
+  margin-top: var(--space-xs);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.venue-card__stats {
+  display: flex;
+  align-items: center;
+  margin-top: var(--space-xs);
+}
+.venue-card__rating {
+  color: var(--color-tertiary);
+}
+.venue-card__price {
+  margin-left: var(--space-sm);
+}
+.venue-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+}

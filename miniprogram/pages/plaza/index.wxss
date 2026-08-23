@@ -1,0 +1,33 @@
+.plaza {
+  padding-top: var(--space-sm);
+}
+
+/* 定位条：模式在左，失败时右侧给一个去开启的出口。 */
+.plaza__location {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: var(--space-sm);
+}
+.plaza__mode {
+  font-size: var(--font-body-sm-size);
+  line-height: var(--font-body-sm-line);
+  color: var(--color-on-surface-variant);
+}
+.plaza__open {
+  font-size: var(--font-body-sm-size);
+  line-height: var(--font-body-sm-line);
+  color: var(--color-primary);
+}
+
+.plaza__footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: var(--space-md);
+}
+.plaza__end {
+  font-size: var(--font-body-sm-size);
+  line-height: var(--font-body-sm-line);
+  color: var(--color-on-surface-variant);
+}

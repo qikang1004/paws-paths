@@ -85,6 +85,14 @@
   background-color: var(--color-primary);
   color: var(--color-on-primary);
 }
+/* 卡片内的小号标签。放在语义层而不是某个组件里：apply-shared 只让页面与 app.wxss
+   的样式进得来，组件之间不互通，宠物卡与场所卡都要用就必须提到这一层。 */
+.chip--sm {
+  padding: 0 var(--space-sm);
+  margin-right: var(--space-xs);
+  margin-top: var(--space-xs);
+  line-height: var(--font-body-lg-line);
+}
 
 .btn {
   display: flex;

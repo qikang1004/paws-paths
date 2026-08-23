@@ -1,10 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
+  OUTSIDE_PAGE_SLOTS,
   findBarePx,
   findHexLiterals,
+  findTokensInaccessibleOutsidePage,
   findUndefinedVars,
   listWxssFiles,
+  parseTokenScopes,
 } from '../tools/style-guard';
 
 const read = (p: string) => readFileSync(resolve(__dirname, '..', p), 'utf8');
@@ -103,5 +106,89 @@ describe('全部 wxss 都不得出现 hex 字面量或裸 px（readdir 遍历，
     const offending = '.x { color: #fff; padding: 16px; }';
     expect(findHexLiterals(offending)).toEqual(['#fff']);
     expect(findBarePx(offending)).toEqual(['16px']);
+  });
+});
+
+// findUndefinedVars 只做「名字存在性」检查，看不到作用域：若 token 只声明在 page {}
+// 下、组件却渲染在 page 子树之外（custom-tab-bar / 自定义导航栏），它照样放行。
+// 下面是选择器感知的补层：token 必须至少有一个非 page 作用域（如 .token-scope）的定义。
+describe('parseTokenScopes：把选择器组拆成独立作用域', () => {
+  it('分组选择器 page, .token-scope 拆成两个作用域', () => {
+    expect(parseTokenScopes('page, .token-scope { --a: 1; }')).toEqual([
+      { selector: 'page', tokens: ['--a'] },
+      { selector: '.token-scope', tokens: ['--a'] },
+    ]);
+  });
+
+  it('注释里的声明不算（tokens.wxss 顶部就有说明注释）', () => {
+    expect(parseTokenScopes('/* page { --x: 1; } */ .token-scope { --b: 2; }')).toEqual([
+      { selector: '.token-scope', tokens: ['--b'] },
+    ]);
+  });
+
+  it('空声明块不产生作用域', () => {
+    expect(parseTokenScopes('page {}')).toEqual([]);
+  });
+});
+
+describe('findTokensInaccessibleOutsidePage：page 子树外的组件拿不到只挂 page 下的 token', () => {
+  it('只挂在 page 下的 token 判为不可达', () => {
+    const tokens = 'page { --a: 1; } .token-scope { --b: 2; }';
+    expect(findTokensInaccessibleOutsidePage(tokens, '.x { color: var(--a); }')).toEqual(['--a']);
+  });
+
+  it('挂在 .token-scope 下的 token 可达', () => {
+    const tokens = 'page { --a: 1; } .token-scope { --b: 2; }';
+    expect(findTokensInaccessibleOutsidePage(tokens, '.x { color: var(--b); }')).toEqual([]);
+  });
+
+  it('分组选择器 page, .token-scope 声明的 token 对子树外组件可达', () => {
+    const tokens = 'page, .token-scope { --a: 1; }';
+    expect(findTokensInaccessibleOutsidePage(tokens, '.x { color: var(--a); }')).toEqual([]);
+  });
+
+  it('类名里带 page 的选择器不算 page 作用域（.page-gutter 不该被误判）', () => {
+    const tokens = '.page-gutter { --a: 1; }';
+    expect(findTokensInaccessibleOutsidePage(tokens, '.x { color: var(--a); }')).toEqual([]);
+  });
+
+  it('未在任何作用域定义的 token 同样判为不可达', () => {
+    const tokens = 'page { --a: 1; }';
+    expect(findTokensInaccessibleOutsidePage(tokens, '.x { color: var(--ghost); }')).toEqual([
+      '--ghost',
+    ]);
+  });
+
+  it('反向证明：consumer 只引用 token，作用域拆分不是恒真', () => {
+    const tokens = 'page { --a: 1; }';
+    expect(findTokensInaccessibleOutsidePage(tokens, '.x { color: var(--a); }')).toEqual(['--a']);
+    expect(findTokensInaccessibleOutsidePage(tokens, '.x { color: var(--b); }')).toEqual(['--b']);
+  });
+});
+
+describe('page 子树外的框架组件槽位（custom-*）不得引用只挂 page 下的 token', () => {
+  const tokens = read('styles/tokens.wxss');
+  const ROOT = resolve(__dirname, '..');
+  const slotFiles = listWxssFiles(ROOT).filter((rel) =>
+    OUTSIDE_PAGE_SLOTS.some((slot) => rel.startsWith(`${slot}/`)),
+  );
+
+  it('槽位清单覆盖 custom-tab-bar（现在的唯一 page 外组件）', () => {
+    expect(slotFiles).toContain('custom-tab-bar/index.wxss');
+  });
+
+  it('槽位里每个 wxss 引用的 token 都在非 page 作用域有定义', () => {
+    const offenders: string[] = [];
+    for (const rel of slotFiles) {
+      const hits = findTokensInaccessibleOutsidePage(tokens, readFileSync(join(ROOT, rel), 'utf8'));
+      if (hits.length > 0) offenders.push(`${rel}: ${hits.join(', ')}`);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('反向证明：若 tokens 把 token 收回 page 下，真实 custom-tab-bar 样式会被判违规', () => {
+    const barCss = readFileSync(join(ROOT, 'custom-tab-bar/index.wxss'), 'utf8');
+    const pageOnlyTokens = 'page { --a: 1; }';
+    expect(findTokensInaccessibleOutsidePage(pageOnlyTokens, barCss).length).toBeGreaterThan(0);
   });
 });
