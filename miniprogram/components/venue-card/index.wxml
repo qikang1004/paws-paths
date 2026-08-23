@@ -1,0 +1,28 @@
+<view class="card venue-card" wx:if="{{view}}" bindtap="onTap">
+  <image
+    class="venue-card__cover"
+    wx:if="{{view.coverUrl}}"
+    src="{{view.coverUrl}}"
+    mode="aspectFill"
+  />
+  <view class="venue-card__body">
+    <view class="venue-card__title">
+      <text class="venue-card__name text-body-lg">{{view.name}}</text>
+      <text class="venue-card__distance text-body-sm c-on-surface-variant" wx:if="{{view.distanceText}}">
+        {{view.distanceText}}
+      </text>
+    </view>
+    <text class="venue-card__address text-body-sm c-on-surface-variant">{{view.address}}</text>
+
+    <view class="venue-card__stats" wx:if="{{view.showRating || view.showPrice}}">
+      <text class="venue-card__rating text-body-sm" wx:if="{{view.showRating}}">{{view.ratingText}}</text>
+      <text class="venue-card__price text-body-sm c-on-surface-variant" wx:if="{{view.showPrice}}">
+        {{view.priceText}}
+      </text>
+    </view>
+
+    <view class="venue-card__tags">
+      <text class="chip chip--sm" wx:for="{{view.tags}}" wx:key="*this">{{item}}</text>
+    </view>
+  </view>
+</view>

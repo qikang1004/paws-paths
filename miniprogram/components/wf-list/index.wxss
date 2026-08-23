@@ -63,14 +63,6 @@
   flex-wrap: wrap;
   margin-top: var(--space-xs);
 }
-/* 卡片里的标签比筛选栏的小一号，语义 .chip 的形状与配色照旧继承。 */
-.chip--sm {
-  padding: 0 var(--space-sm);
-  margin-right: var(--space-xs);
-  margin-top: var(--space-xs);
-  font-size: var(--font-label-md-size);
-  line-height: var(--font-body-lg-line);
-}
 .pet-card-owner {
   display: flex;
   align-items: center;
