@@ -1,1 +1,33 @@
-<view class="page-gutter">占位页，后续阶段填充。</view>
+<view class="plaza page-gutter">
+  <view class="plaza__location">
+    <text class="plaza__mode">{{modeText}}</text>
+    <text class="plaza__open" wx:if="{{canOpenSetting}}" bindtap="onOpenSetting">去开启</text>
+  </view>
+
+  <filter-chips
+    categories="{{speciesOptions}}"
+    selected="{{filter.species}}"
+    subOptions="{{breedOptions}}"
+    subSelected="{{filter.breed}}"
+    bind:change="onFilterChange"
+  />
+
+  <wf-list
+    wx:if="{{items.length}}"
+    items="{{items}}"
+    itemTemplate="pet-card-tpl"
+    bind:item-tap="onPetTap"
+  />
+  <empty-state
+    wx:elif="{{!loading}}"
+    title="没有找到合适的毛孩子"
+    hint="换个筛选条件试试"
+  />
+
+  <view class="plaza__footer safe-bottom" wx:if="{{loading}}">
+    <sq-button type="plain" loading="{{loading}}">加载中…</sq-button>
+  </view>
+  <view class="plaza__footer safe-bottom" wx:elif="{{items.length && !hasMore}}">
+    <text class="plaza__end">没有更多了</text>
+  </view>
+</view>
