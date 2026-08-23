@@ -55,6 +55,14 @@
 - **`--radius-full: 19998rpx`** 不是 bug：源值 `9999px` 经 `1px = 2rpx` 单次换算而来，
   pill 形状语义正确。已核实，不再重开。
 
+- **Redis 不可用时登录端点返回 500**（阶段 1 演示时暴露）。`LoginRateLimitGuard` →
+  `RedisRateLimitStore.increment` 没有 try/catch：Redis 缺失（ECONNREFUSED）或存在但需密码
+  （NOAUTH）都会抛出，经统一异常层变成 `50000 服务异常`。等效于 fail-closed（拒绝登录），
+  方向偏安全，但错误码不透明，且 Redis 抖动会拖垮全部登录与所有需要身份的动作。
+  浏览闭环不受影响（`/pets`、`/venues` 为 optional-auth）。是否改为 fail-open 或
+  null-safe 降级（对齐 `RedisPoiCache` 的做法）是安全取舍，待决策后再动。
+  详见 `phase1-notes.md`「本轮暴露的限制」。
+
 ## 待实机验证
 
 - [ ] 在微信开发者工具确认 `page, .token-scope` 真的把自定义属性交付到框架级 tabBar 节点
