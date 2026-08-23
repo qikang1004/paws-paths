@@ -1,0 +1,34 @@
+<!--
+  被 components/wf-list/index.wxml <import> 使用，模板内变量名固定为 item。
+  模板在 wf-list 的作用域里编译，所以 bindtap 解析到 wf-list 的 methods。
+  展示字段（distanceText / genderText / ageText 等）由页面组装好放进 item，
+  模板只渲染不计算；ratio 由 wf-list 预算好，用来撑住占位高度消除加载抖动。
+-->
+<template name="pet-card-tpl">
+  <view class="card pet-card" data-id="{{item.id}}" bindtap="onItemTap">
+    <view class="pet-card-cover" style="height: {{item.ratio * 323}}rpx;">
+      <image class="pet-card-img" src="{{item.coverUrl}}" mode="aspectFill"/>
+    </view>
+    <view class="pet-card-body">
+      <view class="pet-card-title">
+        <text class="pet-card-name">{{item.name}}</text>
+        <text class="pet-card-distance" wx:if="{{item.distanceText}}">{{item.distanceText}}</text>
+      </view>
+      <view class="pet-card-meta">{{item.breed}} · {{item.genderText}} · {{item.ageText}}</view>
+      <view class="pet-card-tags">
+        <text class="chip chip--sm" wx:for="{{item.personalityTags}}" wx:key="*this">{{item}}</text>
+      </view>
+      <view class="pet-card-owner">
+        <image class="pet-card-avatar avatar" src="{{item.ownerAvatarUrl}}"/>
+        <text class="pet-card-owner-name">{{item.ownerNickname}}</text>
+      </view>
+    </view>
+  </view>
+</template>
+
+<template name="photo-tpl">
+  <view class="photo-cell" data-index="{{item.index}}" bindtap="onPhotoTap">
+    <image class="photo-img" src="{{item.url}}" mode="aspectFill"
+           style="height: {{item.ratio * 323}}rpx;"/>
+  </view>
+</template>

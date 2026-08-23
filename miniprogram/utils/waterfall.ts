@@ -8,12 +8,12 @@ export interface WaterfallItem {
  * 瀑布流分列：每项进入当前累计高度最矮的一列，等高时取靠左的列，
  * 因此相同 ratio 的项会按输入顺序依次铺开，分配稳定可预期。
  */
-export function distributeWaterfall(
-  items: WaterfallItem[],
+export function distributeWaterfall<T extends WaterfallItem>(
+  items: T[],
   columnCount: number,
-): WaterfallItem[][] {
+): T[][] {
   const count = Math.max(1, Math.floor(columnCount));
-  const columns: WaterfallItem[][] = Array.from({ length: count }, () => []);
+  const columns: T[][] = Array.from({ length: count }, () => []);
   const heights = new Array<number>(count).fill(0);
 
   for (const item of items) {

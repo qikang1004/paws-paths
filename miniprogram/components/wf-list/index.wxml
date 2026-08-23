@@ -1,0 +1,8 @@
+<import src="../../shared/card-templates.wxml"/>
+<view class="wf-list">
+  <view class="wf-col" wx:for="{{columns}}" wx:key="index" wx:for-item="col">
+    <block wx:for="{{col}}" wx:key="id">
+      <template is="{{itemTemplate}}" data="{{item}}"/>
+    </block>
+  </view>
+</view>
