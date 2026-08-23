@@ -1,0 +1,8 @@
+<view
+  class="sq-button sq-button--{{type}} sq-button--{{size}} {{disabled || loading ? 'sq-button--disabled' : ''}}"
+  hover-class="{{disabled || loading ? '' : 'sq-button--pressed'}}"
+  bindtap="onTap"
+>
+  <text wx:if="{{loading}}" class="sq-button__label">请稍候…</text>
+  <slot wx:else />
+</view>
