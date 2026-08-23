@@ -1,1 +1,52 @@
-<view class="page-gutter">占位页，后续阶段填充。</view>
+<view class="detail" wx:if="{{view}}">
+  <swiper
+    class="detail__swiper"
+    wx:if="{{view.photos.length}}"
+    indicator-dots="{{view.photos.length > 1}}"
+    circular="{{true}}"
+  >
+    <swiper-item wx:for="{{view.photos}}" wx:key="id">
+      <image class="detail__cover" src="{{item.url}}" mode="aspectFill" />
+    </swiper-item>
+  </swiper>
+
+  <view class="detail__body page-gutter">
+    <view class="detail__title">
+      <text class="detail__name text-headline-md">{{view.name}}</text>
+      <text class="detail__distance text-body-sm c-on-surface-variant" wx:if="{{view.distanceText}}">
+        {{view.distanceText}}
+      </text>
+    </view>
+    <text class="detail__meta text-body-md c-on-surface-variant">{{view.metaText}}</text>
+
+    <text class="detail__bio text-body-md" wx:if="{{view.bioShown}}">{{view.bio}}</text>
+
+    <view class="detail__tags" wx:if="{{view.personalityTags.length}}">
+      <text class="chip chip--sm" wx:for="{{view.personalityTags}}" wx:key="*this">{{item}}</text>
+    </view>
+
+    <view class="card detail__owner section-gap">
+      <image class="detail__avatar avatar" src="{{view.ownerAvatarUrl}}" mode="aspectFill" />
+      <text class="detail__owner-name text-body-lg">{{view.ownerNickname}}</text>
+      <view class="detail__verified" wx:if="{{view.ownerVerified}}">
+        <wf-icon name="person" role="primary" size="32rpx" />
+        <text class="detail__verified-text text-label-md c-primary">已认证</text>
+      </view>
+    </view>
+
+    <view class="section-gap" wx:if="{{view.album.length}}">
+      <text class="detail__section-title text-body-lg">相册</text>
+      <wf-list
+        items="{{view.album}}"
+        itemTemplate="photo-tpl"
+        bind:photo-tap="onPhotoTap"
+      />
+    </view>
+  </view>
+</view>
+
+<view class="detail__state" wx:elif="{{error}}">
+  <empty-state title="没找到这只毛孩子" hint="它可能已经被主人隐藏了">
+    <sq-button type="primary" bindtap="onRetry">重新加载</sq-button>
+  </empty-state>
+</view>

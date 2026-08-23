@@ -1,0 +1,76 @@
+/* 轮播固定高度：图片比例不一，靠 aspectFill 裁切保持首屏不跳。 */
+.detail__swiper {
+  width: 100%;
+  height: 750rpx;
+  background-color: var(--color-surface-container);
+}
+.detail__cover {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.detail__body {
+  padding-top: var(--space-md);
+  padding-bottom: calc(var(--space-xl) + env(safe-area-inset-bottom));
+}
+
+.detail__title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.detail__distance {
+  margin-left: var(--space-sm);
+  flex: none;
+}
+.detail__meta {
+  display: block;
+  margin-top: var(--space-xs);
+}
+.detail__bio {
+  display: block;
+  margin-top: var(--space-sm);
+}
+
+.detail__tags {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: var(--space-sm);
+}
+
+.detail__owner {
+  display: flex;
+  align-items: center;
+}
+.detail__avatar {
+  width: 88rpx;
+  height: 88rpx;
+  flex: none;
+  background-color: var(--color-surface-container);
+}
+.detail__owner-name {
+  margin-left: var(--space-sm);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.detail__verified {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+.detail__verified-text {
+  margin-left: var(--space-xs);
+}
+
+.detail__section-title {
+  display: block;
+  margin-bottom: var(--space-sm);
+}
+
+.detail__state {
+  padding-top: var(--space-xl);
+}
