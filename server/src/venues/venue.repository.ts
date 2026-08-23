@@ -6,7 +6,7 @@ export const VENUE_REPOSITORY = 'VenueRepository';
 
 export type VenueCategory = 'hospital' | 'shop' | 'grooming' | 'park' | 'cafe' | 'other';
 
-/** 域记录（camelCase），与 packages/types 的 Venue 字段一一对应。 */
+/** 域记录（camelCase），与 packages/types 的 Venue 字段一一对应（含 lat/lng，导航需要）。 */
 export interface VenueExtrasRow {
   poiId: string;
   name: string;
@@ -17,6 +17,8 @@ export interface VenueExtrasRow {
   tags: string[];
   curatedPhoto: string | null;
   distanceMeters: number | null;
+  lat: number | null;
+  lng: number | null;
 }
 
 export interface VenueSearchQuery {
@@ -87,6 +89,8 @@ function toRow(seed: VenueSeedRecord, distanceMeters: number | null): VenueExtra
     tags: seed.tags,
     curatedPhoto: seed.curatedPhoto,
     distanceMeters,
+    lat: seed.lat,
+    lng: seed.lng,
   };
 }
 
@@ -148,6 +152,7 @@ export class PostgresVenueRepository implements VenueRepository {
         `
         SELECT poi_id AS "poiId", name, address, category, rating::float8 AS rating,
                avg_price AS "avgPrice", tags, curated_photo AS "curatedPhoto",
+               ST_X(location::geometry) AS lat, ST_Y(location::geometry) AS lng,
                ST_Distance(location, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS "distanceMeters"
         FROM venue_extras
         WHERE ($3::text IS NULL OR name ILIKE '%' || $3 || '%' OR address ILIKE '%' || $3 || '%')
@@ -164,6 +169,7 @@ export class PostgresVenueRepository implements VenueRepository {
       `
       SELECT poi_id AS "poiId", name, address, category, rating::float8 AS rating,
              avg_price AS "avgPrice", tags, curated_photo AS "curatedPhoto",
+             ST_X(location::geometry) AS lat, ST_Y(location::geometry) AS lng,
              null::float8 AS "distanceMeters"
       FROM venue_extras
       WHERE ($1::text IS NULL OR name ILIKE '%' || $1 || '%' OR address ILIKE '%' || $1 || '%')
@@ -180,6 +186,7 @@ export class PostgresVenueRepository implements VenueRepository {
       `
       SELECT poi_id AS "poiId", name, address, category, rating::float8 AS rating,
              avg_price AS "avgPrice", tags, curated_photo AS "curatedPhoto",
+             ST_X(location::geometry) AS lat, ST_Y(location::geometry) AS lng,
              null::float8 AS "distanceMeters"
       FROM venue_extras
       WHERE poi_id = $1
