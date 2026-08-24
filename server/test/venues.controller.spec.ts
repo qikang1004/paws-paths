@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { sign } from 'jsonwebtoken';
+import { Pool } from 'pg';
 import request from 'supertest';
 import { ERROR_CODES } from '@paws/types';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
@@ -11,9 +12,29 @@ describe('VenuesController', () => {
   let app: INestApplication;
   let token: string;
 
+  /**
+   * 设了 DATABASE_URL 时本套件走真库，和 favorites-postgres.integration.spec.ts 并行跑。
+   * 两边都写 favorites 表，共用种子用户 u-1 会互相看见对方的行（也会被对方的清理删掉），
+   * 所以这里用专属用户 u-test-venues-ctl 隔离，并在收尾时清掉自己的痕迹。
+   */
+  const USER_ID = 'u-test-venues-ctl';
+  const DB_URL = process.env.DATABASE_URL;
+  let pool: Pool | null = null;
+
   beforeAll(async () => {
     process.env.JWT_SECRET = 'test-secret';
-    token = sign({ openid: 'openid-huang' }, 'test-secret', { subject: 'u-1' });
+    token = sign({ openid: 'openid-huang' }, 'test-secret', { subject: USER_ID });
+    if (DB_URL) {
+      // 建表与种子由 test/global-setup.ts 全局跑一次。
+      pool = new Pool({ connectionString: DB_URL, max: 2 });
+      // favorites.user_id 有外键，专属用户得先存在。
+      await pool.query(
+        `INSERT INTO users (id, openid, nickname) VALUES ($1, $2, $3)
+         ON CONFLICT (id) DO NOTHING`,
+        [USER_ID, `openid-${USER_ID}`, '场所接口测试用户'],
+      );
+      await pool.query(`DELETE FROM favorites WHERE user_id = $1`, [USER_ID]);
+    }
     const moduleRef = await Test.createTestingModule({ imports: [VenuesModule] }).compile();
     app = moduleRef.createNestApplication();
     app.useGlobalInterceptors(new ResponseInterceptor());
@@ -23,6 +44,11 @@ describe('VenuesController', () => {
 
   afterAll(async () => {
     await app.close();
+    if (pool) {
+      await pool.query(`DELETE FROM favorites WHERE user_id = $1`, [USER_ID]);
+      await pool.query(`DELETE FROM users WHERE id = $1`, [USER_ID]);
+      await pool.end();
+    }
   });
 
   it('GET /venues → 200，10 家，首项距离最近', async () => {

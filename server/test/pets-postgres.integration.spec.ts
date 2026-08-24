@@ -1,5 +1,4 @@
 import { Pool } from 'pg';
-import { runMigrations } from '../src/database/migrations';
 import {
   haversineMeters,
   InMemoryPetRepository,
@@ -14,9 +13,9 @@ describeDb('pets postgres integration', () => {
   let pool: Pool;
   const center = { lat: 39.9042, lng: 116.4074 };
 
-  beforeAll(async () => {
+  beforeAll(() => {
+    // 建表与种子由 test/global-setup.ts 全局跑一次。
     pool = new Pool({ connectionString: DB_URL });
-    await runMigrations(pool);
   });
 
   afterAll(async () => {

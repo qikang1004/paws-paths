@@ -2,6 +2,10 @@
 # 启动：docker compose up -d；停止：docker compose stop。
 # 服务端以 Postgres 模式运行需设 DATABASE_URL=postgres://postgres:postgres@localhost:5432/paws
 # （未设时服务端走 InMemory 降级模式，见 server/src/database/database.pool.ts）。
+#
+# Redis 的 CHANGE_ME_REDIS_PASSWORD 是占位符，用前替换，并同步改 server/.env 的 REDIS_URL。
+# Postgres 密码这里仍是弱口令 postgres（仅本地），若要改也记得同步 DATABASE_URL；
+# 注意卷里已有数据时 Postgres 不会重置密码（初始化只跑一次），需 docker compose down -v 清卷重建。
 services:
   postgres:
     image: postgis/postgis:16-3.4
@@ -23,10 +27,19 @@ services:
   redis:
     image: redis:7-alpine
     container_name: paws-redis
+    # 把 CHANGE_ME_REDIS_PASSWORD 换成真实密码，并同步改到 server/.env 的 REDIS_URL。
+    # 只有密码没有用户名时冒号前必须留空：redis://:密码@127.0.0.1:6379
+    # 密码含 @ : / ? # 等字符时要在 URL 里做 percent-encoding，否则连接串会被解析错。
+    command: ["redis-server", "--requirepass", "CHANGE_ME_REDIS_PASSWORD", "--appendonly", "yes"]
     ports:
       - "6379:6379"
     volumes:
       - paws-redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a CHANGE_ME_REDIS_PASSWORD ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   paws-pgdata:

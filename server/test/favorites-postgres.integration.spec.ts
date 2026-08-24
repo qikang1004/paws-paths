@@ -1,5 +1,4 @@
 import { Pool } from 'pg';
-import { runMigrations } from '../src/database/migrations';
 import { PostgresFavoritesRepository } from '../src/venues/favorites.repository';
 
 /** 收藏表集成测试：DATABASE_URL 门控，无库优雅跳过。 */
@@ -11,9 +10,9 @@ describeDb('favorites postgres integration', () => {
   const userId = 'u-1';
   const poiId = 'v-4';
 
-  beforeAll(async () => {
+  beforeAll(() => {
+    // 建表与种子由 test/global-setup.ts 全局跑一次；用例用的种子用户 u-1 已存在。
     pool = new Pool({ connectionString: DB_URL });
-    await runMigrations(pool);
   });
 
   afterAll(async () => {
