@@ -13,6 +13,12 @@ git-ignored 的流程草稿里，移到仓库根显式追踪。逐项勾选。
 - [ ] 用正式 AppID 替换 `project.config.json` 里的 `touristappid`。
 - [ ] 上传私钥绝不入库：只从 CI Secret 注入，落盘 `private.key` 后在上传步骤结束时 `rm -f`（`.github/workflows/ci.yml` 已含 `if: always()` 清理步骤）。
 
+## 服务端环境变量
+
+- [ ] 确认部署环境的 `FAKE_WECHAT_LOGIN` 留空或为 `0`。这是**认证绕过开关**：开着它任何 code 都能换到 openid，等于谁都能登录成任意用户。启动日志里会有一条 WARN，上线后核对一次。
+- [ ] 确认 `SEED_DEMO_DATA` 留空或为 `0`，别把 8 只测试宠物插进生产库。
+- [ ] `WX_APPID` / `WX_SECRET` 由平台密钥管理注入，不落任何仓库文件。
+
 ## 微信后台与 CI Secret
 
 - [ ] 在微信小程序后台把 GitHub Actions 的出口 IP 加入 IP 白名单。

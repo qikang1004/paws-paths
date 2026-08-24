@@ -53,6 +53,7 @@ DATABASE_URL=postgres://用户:密码@127.0.0.1:5432/paws
 REDIS_URL=redis://:你的密码@127.0.0.1:6379
 JWT_SECRET=一串足够长的随机字符
 SEED_DEMO_DATA=1
+FAKE_WECHAT_LOGIN=1
 PORT=5000
 ```
 
@@ -64,6 +65,10 @@ PORT=5000
 - 密码含 `@` 不需要转义。`ioredis` 和 `pg` 都按最后一个 `@` 切分认证段,`redis://:pa@ss@host:6379` 能正确解析;写成 `%40` 也可以,两种都实测通过。含 `/` `?` `#` 时才需要 percent-encoding。
 
 `SEED_DEMO_DATA=1` 才灌演示数据(8 用户 / 8 宠物 / 17 照片 / 10 场所)。**只认字面 `1`**,写 `true` 或 `yes` 一律视为关闭——灌数据是不可逆的写库动作,不靠猜语义。
+
+`FAKE_WECHAT_LOGIN=1` 让登录能在本地跑通。真登录要拿 code 去微信服务器换 openid,本地没有正式 AppID、开发者工具的 code 也只对特定 AppID 有效,所以真登录本地走不通;**填个假 AppID 也不行**,微信会回 `errcode 40013`。开着这个开关后,任何 code 都会哈希成一个稳定的 `fake-` 前缀 openid,同一 code 每次都是同一用户。
+
+同样只认字面 `1`。**部署环境必须留空或设 `0`**——开着它等于谁都能登录成任意用户。启动时会打一条 WARN 提醒。`WX_APPID` / `WX_SECRET` 这时可以留空。
 
 ### 4. 启动服务端
 
@@ -121,9 +126,10 @@ jest 不会自动读 `.env`,所以要跑数据库集成测试必须显式用 `no
 
 1. **环境变量由平台注入,不要上传 `.env`。** 代码里没有 dotenv,`.env` 只在本地配合 `--env-file` 用。
 2. **`SEED_DEMO_DATA` 生产必须留空或设 `0`。** 否则会把 8 只测试宠物插进生产库。
-3. **建表自动执行,不需要单独的迁移步骤。** 迁移包在 PostgreSQL 咨询锁里,多副本同时启动也不会互相踩。
-4. `npm run build` 会把 `src/database/*.sql` 复制进 `dist/`,别只 `tsc`。
-5. Redis 和 PostgreSQL 用托管实例,连接串走平台的密钥管理。
+3. **`FAKE_WECHAT_LOGIN` 生产必须留空或设 `0`。** 这是认证绕过开关,开着它任何人都能登录成任意用户。部署前确认一遍,并留意启动日志里那条 WARN。
+4. **建表自动执行,不需要单独的迁移步骤。** 迁移包在 PostgreSQL 咨询锁里,多副本同时启动也不会互相踩。
+5. `npm run build` 会把 `src/database/*.sql` 复制进 `dist/`,别只 `tsc`。
+6. Redis 和 PostgreSQL 用托管实例,连接串走平台的密钥管理。
 
 ### 小程序
 
@@ -138,7 +144,7 @@ CI 已配好(`.github/workflows/ci.yml`):推 `v*` 标签触发上传体验版,�
 
 ## 五、已知问题
 
-**登录接口在本地必然 500,这是预期的。** `POST /auth/wx-login` 要拿 code 去微信服务器换 openid,没有真实 `WX_APPID` / `WX_SECRET` 就走不通(测试号 `touristappid` 拿不到)。报错是 `缺少环境变量 WX_APPID`。浏览类接口(广场、宠物详情、周边)不需要登录态,不受影响。
+**登录在本地要靠 `FAKE_WECHAT_LOGIN=1`。** 不开这个开关,`POST /auth/wx-login` 会报 `缺少环境变量 WX_APPID`;填假 AppID 则变成微信上游 `errcode 40013`,同样登录不了。原因是 `code2Session` 会真的请求微信服务器,而正式 AppID 要有小程序账号才能拿到。浏览类接口(广场、宠物详情、周边)不需要登录态,不开也能用。
 
 **Redis 不可用时登录也会 500,但原因不同。** 登录限流依赖 Redis 且没有降级路径(`RedisRateLimitStore.increment` 无 try/catch)。Redis 挂了、密码错了、或 `REDIS_URL` 格式不对都会 500。排查时先看服务端日志区分是哪一种——两者响应体一样,日志不一样。
 

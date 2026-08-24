@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { verify } from 'jsonwebtoken';
+import { Pool } from 'pg';
 import request from 'supertest';
 import { ERROR_CODES } from '@paws/types';
 import { AppModule } from '../src/app.module';
@@ -11,7 +12,7 @@ import { RATE_LIMIT_STORE } from '../src/common/rate-limit/rate-limit.store';
 import { WECHAT_SESSION_API } from '../src/wechat/wechat-api.service';
 
 class FakeWechatApi {
-  openid = 'openid-aaa';
+  openid = '';
   fail = false;
 
   async code2Session(code: string): Promise<{ openid: string; sessionKey: string }> {
@@ -36,6 +37,16 @@ describe('POST /auth/wx-login', () => {
   const fake = new FakeWechatApi();
   const rate = new FakeRateLimitStore();
 
+  /**
+   * openid 每轮唯一，并在收尾时清库。
+   *
+   * 设了 DATABASE_URL 时用户会真的落库（UsersModule 按有无连接池选实现），
+   * 固定 openid 的话第一轮跑完用户就留在库里，第二轮 isNewUser 就是 false。
+   */
+  const RUN = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  const OPENID_A = `openid-aaa-${RUN}`;
+  const OPENID_B = `openid-bbb-${RUN}`;
+
   beforeAll(async () => {
     process.env.JWT_SECRET = 'test-secret';
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
@@ -52,11 +63,22 @@ describe('POST /auth/wx-login', () => {
 
   afterAll(async () => {
     await app.close();
+    // 设了 DATABASE_URL 时上面的登录会真的建用户，跑完清掉，别在库里堆测试数据。
+    if (process.env.DATABASE_URL) {
+      const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+      try {
+        await pool.query(`DELETE FROM users WHERE openid = ANY($1::text[])`, [
+          [OPENID_A, OPENID_B],
+        ]);
+      } finally {
+        await pool.end();
+      }
+    }
   });
 
   beforeEach(() => {
     fake.fail = false;
-    fake.openid = 'openid-aaa';
+    fake.openid = OPENID_A;
     rate.failOpen = true;
   });
 
@@ -69,7 +91,7 @@ describe('POST /auth/wx-login', () => {
     expect(res.body.data.isNewUser).toBe(true);
     const payload = verify(res.body.data.token, 'test-secret') as Record<string, unknown>;
     expect(payload.sub).toBe(res.body.data.userId);
-    expect(payload.openid).toBe('openid-aaa');
+    expect(payload.openid).toBe(OPENID_A);
     expect(typeof payload.exp).toBe('number');
   });
 
@@ -82,7 +104,7 @@ describe('POST /auth/wx-login', () => {
 
   it('不同 openid 得到不同 userId', async () => {
     const a = await request(app.getHttpServer()).post('/auth/wx-login').send({ code: 'a' });
-    fake.openid = 'openid-bbb';
+    fake.openid = OPENID_B;
     const b = await request(app.getHttpServer()).post('/auth/wx-login').send({ code: 'b' });
     expect(b.body.data.userId).not.toBe(a.body.data.userId);
   });
