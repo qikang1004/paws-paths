@@ -68,6 +68,10 @@
 
 ## 待实机验证
 
+- [x] **`<template is="{{itemTemplate}}">` 动态模板的 Skyline 渲染兼容性**。wf-list 的测试只
+  断言 markup 结构，不是实际渲染。**已闭合**：用户在开发者工具确认双列瀑布流显示无误，
+  两列高度独立累加、图片按原始宽高比。计划里的回退方案（页面直写双列 + pet-card 独立组件）
+  **不启用**，wf-list 保持现状。
 - [ ] 在微信开发者工具确认 `page, .token-scope` 真的把自定义属性交付到框架级 tabBar 节点
   （胶囊圆角、上向阴影、左右内缩）。阶段 0 只做了结构性验证。
 - [ ] 确认 `project.config.json` 的 `setting.useCompilerPlugins: ["typescript"]` 与
