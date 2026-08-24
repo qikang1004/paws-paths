@@ -6,8 +6,14 @@
  * 需要内网穿透或把服务部署到测试域名。
  */
 
-/** 本机 server（server/ 里 npm start 默认监听 3000）。 */
-export const LOCAL_API_BASE_URL = 'http://127.0.0.1:3000';
+/**
+ * 本机 server。端口必须和 server/.env 里的 PORT 一致。
+ *
+ * 3000 常被别的开发服务器占用，所以这里用 5000。两边不一致时的表现很误导：
+ * 打到别人的开发服务器上，它会用首页 HTML 回落成 HTTP 200，
+ * 看起来像「请求通了但没数据」，而不是明显的连接失败。
+ */
+export const LOCAL_API_BASE_URL = 'http://127.0.0.1:5000';
 
 /** 线上域名。上线前替换成真实备案域名，别留 example.com。 */
 export const PROD_API_BASE_URL = 'https://api.paws-paths.example.com';

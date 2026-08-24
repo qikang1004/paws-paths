@@ -18,7 +18,7 @@ docker-compose.yml 本地数据库（可选，已有独立 PG/Redis 就不用）
 |---|---|---|
 | Node.js ≥ 20 | 是 | 用了 `--env-file`,低于 20.6 起不来 |
 | PostgreSQL 16 + **PostGIS** | 否 | 不设 `DATABASE_URL` 时自动降级为内存模式,有假数据可看 |
-| Redis | 否 | **登录接口返回 500**,其他接口正常(见「已知问题」) |
+| Redis | 否 | 登录接口返回 500,浏览类接口正常(见「已知问题」) |
 | 微信开发者工具 | 看端 | 只调后端不需要 |
 
 PostGIS 是硬要求,不是可选扩展。附近搜索用 `ST_DWithin`/`geography` 类型,建表第一句就是 `CREATE EXTENSION postgis`,没装会直接失败。
@@ -53,13 +53,15 @@ DATABASE_URL=postgres://用户:密码@127.0.0.1:5432/paws
 REDIS_URL=redis://:你的密码@127.0.0.1:6379
 JWT_SECRET=一串足够长的随机字符
 SEED_DEMO_DATA=1
-PORT=3000
+PORT=5000
 ```
+
+`PORT` 改了要同步改 `miniprogram/config.ts` 的 `LOCAL_API_BASE_URL`,两边必须一致。3000 常被别的开发服务器占用,所以默认用 5000。
 
 **`REDIS_URL` 有两个坑,踩了会报 `WRONGPASS` 或 `NOAUTH`:**
 
-- 只有密码没有用户名时,**冒号前必须留空**:`redis://:密码@host:6379`。写成 `redis://密码@host:6379` 会把密码当成用户名,实际传的密码是空的。
-- 密码含 `@ : / ? #` 要做 percent-encoding。比如密码 `ab@cd` 写成 `ab%40cd`。
+- 只有密码没有用户名时,**冒号前必须留空**:`redis://:密码@host:6379`。写成 `redis://密码@host:6379` 会把密码当成用户名,实际传的密码是空的——这是最容易踩的一个。
+- 密码含 `@` 不需要转义。`ioredis` 和 `pg` 都按最后一个 `@` 切分认证段,`redis://:pa@ss@host:6379` 能正确解析;写成 `%40` 也可以,两种都实测通过。含 `/` `?` `#` 时才需要 percent-encoding。
 
 `SEED_DEMO_DATA=1` 才灌演示数据(8 用户 / 8 宠物 / 17 照片 / 10 场所)。**只认字面 `1`**,写 `true` 或 `yes` 一律视为关闭——灌数据是不可逆的写库动作,不靠猜语义。
 
@@ -78,10 +80,13 @@ node --env-file=.env dist/main.js
 验证:
 
 ```bash
-curl "http://127.0.0.1:3000/venues?lat=39.9042&lng=116.4074"
+curl "http://127.0.0.1:5000/health"
+curl "http://127.0.0.1:5000/venues?lat=39.9042&lng=116.4074"
 ```
 
-应返回 `{"code":0,"message":"ok","data":[...]}`。
+应返回 `{"code":0,"message":"ok","data":...}`。
+
+**如果返回的是一段 HTML,说明打到了别的服务上**——别的开发服务器会把未知路径回落成首页并回 200,看起来像通了。用 `/health` 验最准:只有本项目会回 `{"code":0,...,"status":"up"}`。
 
 ### 5. 打开小程序
 
@@ -91,7 +96,7 @@ curl "http://127.0.0.1:3000/venues?lat=39.9042&lng=116.4074"
 
 不勾这项,小程序不允许请求 `http://127.0.0.1`,页面会没数据。
 
-接口地址不用手改。`miniprogram/config.ts` 按运行环境自动选:开发者工具(`envVersion === 'develop'`)走 `http://127.0.0.1:3000`,体验版和正式版走线上域名。
+接口地址不用手改。`miniprogram/config.ts` 按运行环境自动选:开发者工具(`envVersion === 'develop'`)走 `http://127.0.0.1:5000`,体验版和正式版走线上域名。改过 `PORT` 的话记得同步这里。
 
 **真机预览连不上本机。** 手机和电脑不是同一个 localhost。要在真机调试有两条路:把 `LOCAL_API_BASE_URL` 临时改成电脑的局域网 IP(手机需在同一 WiFi),或用内网穿透工具。
 
@@ -133,7 +138,9 @@ CI 已配好(`.github/workflows/ci.yml`):推 `v*` 标签触发上传体验版,�
 
 ## 五、已知问题
 
-**Redis 不可用时登录返回 500。** 登录限流依赖 Redis 且没有降级路径(`RedisRateLimitStore.increment` 无 try/catch)。Redis 挂了、密码错了、或 `REDIS_URL` 格式不对,登录接口就 500,其他接口不受影响。
+**登录接口在本地必然 500,这是预期的。** `POST /auth/wx-login` 要拿 code 去微信服务器换 openid,没有真实 `WX_APPID` / `WX_SECRET` 就走不通(测试号 `touristappid` 拿不到)。报错是 `缺少环境变量 WX_APPID`。浏览类接口(广场、宠物详情、周边)不需要登录态,不受影响。
+
+**Redis 不可用时登录也会 500,但原因不同。** 登录限流依赖 Redis 且没有降级路径(`RedisRateLimitStore.increment` 无 try/catch)。Redis 挂了、密码错了、或 `REDIS_URL` 格式不对都会 500。排查时先看服务端日志区分是哪一种——两者响应体一样,日志不一样。
 
 这是**待决策项**,不是待修 bug:限流组件失效时应该 fail-open(放行,可能被刷)还是 fail-closed(拒绝,当前行为)是安全取舍。背景见 `docs/superpowers/phase0-carryforward.md`。
 
