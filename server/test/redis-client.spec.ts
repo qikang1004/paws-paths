@@ -110,11 +110,12 @@ describe('redis-client', () => {
       await expect(closeRedisClient(undefined)).resolves.toBeUndefined();
     });
 
-    it('正常时走 quit()，不强制断开', async () => {
+    it('正常时先 quit() 优雅告别，再补一次 disconnect 收干 socket', async () => {
       const client = fake(() => Promise.resolve('OK'));
       await closeRedisClient(client);
       expect(client.quit).toHaveBeenCalledTimes(1);
-      expect(client.disconnect).not.toHaveBeenCalled();
+      // quit() 成功也可能留着 socket（实测 jest 报 TCPWRAP open handle）
+      expect(client.disconnect).toHaveBeenCalledWith(false);
     });
 
     it('quit() 挂死时超时强制断开，不卡住进程退出', async () => {

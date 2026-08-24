@@ -117,11 +117,11 @@ describe('RedisRateLimitStore 降级行为', () => {
   });
 
   describe('优雅关闭', () => {
-    it('Redis 正常时走 quit()', async () => {
+    it('Redis 正常时走 quit()（并补一次 disconnect 收干 socket）', async () => {
       const redis = fakeRedis();
       await storeWithClient(redis).onModuleDestroy();
       expect(redis.quit).toHaveBeenCalledTimes(1);
-      expect(redis.disconnect).not.toHaveBeenCalled();
+      expect(redis.disconnect).toHaveBeenCalledWith(false);
     });
 
     it('从未建过连接时什么都不做', async () => {

@@ -68,6 +68,10 @@ export async function closeRedisClient(client: Redis | undefined): Promise<void>
   try {
     await withTimeout(client.quit(), QUIT_TIMEOUT_MS);
   } catch {
+    // 忽略：下面的 disconnect 兜底
+  } finally {
+    // quit() 成功也补一次 disconnect —— 实测它偶尔留着 socket（jest 报 TCPWRAP
+    // open handle）。已断开的客户端上重复调用是安全的空操作。
     client.disconnect(false);
   }
 }

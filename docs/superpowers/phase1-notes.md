@@ -68,11 +68,16 @@
 - **收藏链路的演示用自签 JWT 完成**，没走真实 `wx-login`：`WX_APPID`/`WX_SECRET` 为空（正式
   AppID 与私钥按约定不入库），且上面那条 Redis 限流问题也会挡住登录。签名密钥与服务端一致，
   `AuthGuard` 只校验签名与 `sub`，因此收藏的鉴权、幂等、状态回读都是真实通路。
-- **POI 代理分支未实机验证**。无 `TENCENT_MAP_KEY` 时 `TencentPoiClient` 为 null，`search()`
-  直接落到 extras 分支——这正是本轮演示走的路径。「extras 缺失 → 评分/人均行隐藏」这一侧由
-  两端单元测试覆盖（服务端 `venues.service` 用不在 extras 的 poi-a/poi-b 断言 rating/avgPrice
-  为 null；小程序 `buildVenueView` 断言 `showRating/showPrice` 为 false，且 rating 0 视为无评分），
-  但没有真实 POI key 下的端到端截图。
+- **POI 代理的上游调用仍未实机验证**（缓存层已在收口时补上真 Redis 验证）。无
+  `TENCENT_MAP_KEY` 时 `TencentPoiClient` 为 null，`search()` 直接落到 extras 分支——这正是
+  本轮演示走的路径。「extras 缺失 → 评分/人均行隐藏」这一侧由两端单元测试覆盖（服务端
+  `venues.service` 用不在 extras 的 poi-a/poi-b 断言 rating/avgPrice 为 null；小程序
+  `buildVenueView` 断言 `showRating/showPrice` 为 false，且 rating 0 视为无评分）。
+  **收口时补了 `test/poi-cache.integration.spec.ts`（8 条，真 Redis）**：TTL 真落到键上、
+  中文键值往返无损、`poi:gh:wx4g0b:cafe:咖啡` 这类键在真 Redis 里确认生成、二次查询命中
+  缓存不再调上游、坏缓存回源、空结果与 null 都不写缓存。
+  **仍未验的只剩 `TencentPoiClient.searchPlace` 那次真实 HTTP**（URL 拼装、`status !== 0`
+  的判定、字段映射），它需要正式 key，属于外部依赖项而非代码缺陷。
 - **`<template is="{{itemTemplate}}">` 动态模板的渲染兼容性仍未证伪**。wf-list 的测试断言的是
   markup 结构，不是 Skyline/glass-easel 的实际渲染。计划里的回退方案（页面直写双列 + pet-card
   独立组件，wf-list 退化为纯函数 + 列样式）不改变任何对外数据契约，真机/开发者工具首次打开时
@@ -104,7 +109,8 @@
 ## 五、遗留到阶段 2
 
 - ~~Redis 故障时登录限流的 fail-open / fail-closed 取向~~ → 已决策并实现，见第六节。
-- 真实 `TENCENT_MAP_KEY` 下的 POI 代理端到端验证，含 Redis geohash 缓存命中。
+- 真实 `TENCENT_MAP_KEY` 下的 POI 上游调用验证。~~Redis geohash 缓存命中~~已用真 Redis 验过
+  （`test/poi-cache.integration.spec.ts`），剩下的是拿到 key 后验 `searchPlace` 那次真实 HTTP。
 - 有库环境跑通 20 条门控集成用例（PostGIS 距离/半径与 InMemory 的 ±50m 一致性已写好断言）。
 - 微信开发者工具冒烟：~~动态模板渲染~~（用户已确认双列瀑布流显示正常，回退方案不启用）、
   tabBar 自定义属性、图片加载抖动的实际观感。
