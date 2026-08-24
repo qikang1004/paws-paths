@@ -65,14 +65,45 @@ describe('runMigrations', () => {
     expect(sql[1]).toContain('INSERT INTO pets');
   });
 
-  it('建表 SQL 覆盖 5 张业务表与 postgis 扩展', async () => {
+  it('建表 SQL 覆盖 9 张业务表与 postgis 扩展', async () => {
     const { pool, queries } = fakePool();
     await runMigrations(pool);
     const schema = businessSql(queries)[0];
     expect(schema).toContain('CREATE EXTENSION IF NOT EXISTS postgis');
-    for (const t of ['users', 'pets', 'pet_photos', 'venue_extras', 'favorites']) {
+    for (const t of [
+      // 阶段 1
+      'users',
+      'pets',
+      'pet_photos',
+      'venue_extras',
+      'favorites',
+      // 阶段 2
+      'follows',
+      'view_history',
+      'posts',
+      'post_images',
+    ]) {
       expect(schema).toContain(`CREATE TABLE IF NOT EXISTS ${t}`);
     }
+  });
+
+  // 阶段 2 新表的关键约束在建表 SQL 里就该看得见，真库断言在
+  // postgres.integration.spec.ts。这里防的是「表建了但约束漏了」。
+  it('阶段 2 新表带齐唯一约束与审核状态 CHECK', async () => {
+    const { pool, queries } = fakePool();
+    await runMigrations(pool);
+    const schema = businessSql(queries)[0];
+
+    // follows：同一人不能重复关注同一只宠物
+    expect(schema).toContain('UNIQUE (follower_id, target_pet_id)');
+    // view_history：按 (user, target) 幂等更新时间戳，靠唯一约束支撑 ON CONFLICT
+    expect(schema).toContain('UNIQUE (user_id, target_type, target_id)');
+    // 审核状态机的四个状态（spec §4.5），posts 与 post_images 各一份
+    const auditCheck = /CHECK \(audit_status IN \('pending', ?'approved', ?'pending_review', ?'rejected'\)\)/g;
+    expect(schema.match(auditCheck)).toHaveLength(2);
+    // 图片宽高为瀑布流预估高度而存在，spec §4.1 明确非可选
+    expect(schema).toContain('width INTEGER NOT NULL CHECK (width > 0)');
+    expect(schema).toContain('height INTEGER NOT NULL CHECK (height > 0)');
   });
 
   // 多副本部署时每个副本都会跑迁移，并发建表/灌种子会互相踩（远程库上表现为

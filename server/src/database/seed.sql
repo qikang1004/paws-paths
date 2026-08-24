@@ -62,3 +62,45 @@ INSERT INTO venue_extras (poi_id, name, address, category, rating, avg_price, ta
   ('v-9','有猫咖啡','朝阳区望京西路 19 号','cafe',4.7,45,'{"猫咪互动","咖啡"}','https://picsum.photos/seed/venue-v9/800/500',ST_SetSRID(ST_MakePoint(116.4030,39.9020),4326)),
   ('v-10','萌宠主题餐厅','朝阳区阜通西大街 8 号','cafe',4.3,88,'{"宠物餐","人宠同食"}','https://picsum.photos/seed/venue-v10/800/500',ST_SetSRID(ST_MakePoint(116.4110,39.9060),4326))
 ON CONFLICT (poi_id) DO NOTHING;
+
+-- ── 阶段 2 种子 ────────────────────────────────────────────────────
+-- u-1 关注了 3 只别人的宠物（不含自己的 p-1，关注自己应被接口拦下）。
+INSERT INTO follows (id, follower_id, target_pet_id, created_at) VALUES
+  ('f-1','u-1','p-2', now() - interval '3 day'),
+  ('f-2','u-1','p-3', now() - interval '2 day'),
+  ('f-3','u-1','p-5', now() - interval '1 day')
+ON CONFLICT (id) DO NOTHING;
+
+-- 浏览历史混两种 target_type，供「按 viewed_at 倒序」与混排投影用。
+INSERT INTO view_history (id, user_id, target_type, target_id, viewed_at) VALUES
+  ('vh-1','u-1','pet','p-3', now() - interval '4 hour'),
+  ('vh-2','u-1','venue','v-1', now() - interval '3 hour'),
+  ('vh-3','u-1','pet','p-5', now() - interval '2 hour'),
+  ('vh-4','u-1','venue','v-9', now() - interval '1 hour')
+ON CONFLICT (id) DO NOTHING;
+
+-- 动态覆盖审核状态机的三种可见性情形：
+--   po-1/po-2/po-3 approved  → 所有人可见
+--   po-4 pending             → 仅作者 u-2 可见（「审核中」角标）
+--   po-5 rejected            → 仅作者 u-5 可见（带驳回原因）
+-- po-4 / po-5 是「未 approved 对他人不可见」那条过审必要条件的测试素材，
+-- 删掉它们会让 post-visibility.security.spec.ts 失去意义。
+INSERT INTO posts (id, pet_id, author_id, content, audit_status, reject_reason, published_at) VALUES
+  ('po-1','p-1','u-1','今天带大黄去公园撒欢，玩水玩到不肯走。','approved',NULL, now() - interval '5 hour'),
+  ('po-2','p-2','u-2','奶昔今天格外黏人，一直踩奶。','approved',NULL, now() - interval '4 hour'),
+  ('po-3','p-5','u-5','花花学会开门了，家里再没有秘密。','approved',NULL, now() - interval '3 hour'),
+  ('po-4','p-2','u-2','这条还在机审队列里。','pending',NULL, now() - interval '2 hour'),
+  ('po-5','p-5','u-5','这条被机审驳回了。','rejected','包含疑似违规信息', now() - interval '1 hour')
+ON CONFLICT (id) DO NOTHING;
+
+-- 图片宽高各异，供瀑布流按原始比例预估高度。
+-- pi-6 挂在 approved 的 po-3 上但自身 pending：用于验证「文字过审、某张图未过审时
+-- 该图不返回而文字正常显示」，图片与动态的审核状态是独立的。
+INSERT INTO post_images (id, post_id, url, width, height, sort_order, audit_status) VALUES
+  ('pi-1','po-1','https://picsum.photos/seed/post-1a/600/800',600,800,0,'approved'),
+  ('pi-2','po-1','https://picsum.photos/seed/post-1b/800/600',800,600,1,'approved'),
+  ('pi-3','po-2','https://picsum.photos/seed/post-2a/700/700',700,700,0,'approved'),
+  ('pi-4','po-3','https://picsum.photos/seed/post-3a/900/600',900,600,0,'approved'),
+  ('pi-5','po-4','https://picsum.photos/seed/post-4a/600/900',600,900,0,'pending'),
+  ('pi-6','po-3','https://picsum.photos/seed/post-3b/800/800',800,800,1,'pending')
+ON CONFLICT (id) DO NOTHING;
