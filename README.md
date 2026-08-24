@@ -18,7 +18,7 @@ docker-compose.yml 本地数据库（可选，已有独立 PG/Redis 就不用）
 |---|---|---|
 | Node.js ≥ 20 | 是 | 用了 `--env-file`,低于 20.6 起不来 |
 | PostgreSQL 16 + **PostGIS** | 否 | 不设 `DATABASE_URL` 时自动降级为内存模式,有假数据可看 |
-| Redis | 否 | 登录接口返回 500,浏览类接口正常(见「已知问题」) |
+| Redis | 否 | 登录限流降级放行(日志有 ERROR),`access_token` 缓存不可用则微信接口调用会失败 |
 | 微信开发者工具 | 看端 | 只调后端不需要 |
 
 PostGIS 是硬要求,不是可选扩展。附近搜索用 `ST_DWithin`/`geography` 类型,建表第一句就是 `CREATE EXTENSION postgis`,没装会直接失败。
@@ -146,9 +146,15 @@ CI 已配好(`.github/workflows/ci.yml`):推 `v*` 标签触发上传体验版,�
 
 **登录在本地要靠 `FAKE_WECHAT_LOGIN=1`。** 不开这个开关,`POST /auth/wx-login` 会报 `缺少环境变量 WX_APPID`;填假 AppID 则变成微信上游 `errcode 40013`,同样登录不了。原因是 `code2Session` 会真的请求微信服务器,而正式 AppID 要有小程序账号才能拿到。浏览类接口(广场、宠物详情、周边)不需要登录态,不开也能用。
 
-**Redis 不可用时登录也会 500,但原因不同。** 登录限流依赖 Redis 且没有降级路径(`RedisRateLimitStore.increment` 无 try/catch)。Redis 挂了、密码错了、或 `REDIS_URL` 格式不对都会 500。排查时先看服务端日志区分是哪一种——两者响应体一样,日志不一样。
+**Redis 挂了登录仍可用,但限流会失效。** 这是有意的取舍(fail-open):`RedisRateLimitStore.increment` 在 Redis 不可用时返回 0 并写一条 ERROR 日志,登录照常放行。代价是**宕机窗口内登录端点没有暴力破解防护**,所以那条 ERROR 日志值得接告警。日志长这样:
 
-这是**待决策项**,不是待修 bug:限流组件失效时应该 fail-open(放行,可能被刷)还是 fail-closed(拒绝,当前行为)是安全取舍。背景见 `docs/superpowers/phase0-carryforward.md`。
+```
+ERROR [RedisRateLimitStore] 限流存储不可用，本次放行（登录端点暂时无限流保护）: ...
+```
+
+Redis 挂了、密码错了、`REDIS_URL` 格式不对都是这条日志,后半段的原始错误(ECONNREFUSED / NOAUTH / WRONGPASS)能区分具体是哪一种。决策背景、实测对照数据见 `docs/superpowers/phase1-notes.md` 第六节。
+
+注意 `access_token` 缓存**没有**这种降级:它是单点缓存,静默放过会让每个请求都去刷 token,撞微信调用频率限制。Redis 不可用时微信接口调用会失败,这是对的。
 
 **依赖树有 76 个 npm audit 告警。** 处置结论见 `RELEASE_CHECKLIST.md`,不要直接跑 `npm audit fix`。
 

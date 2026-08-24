@@ -60,14 +60,11 @@
 
 ## 三、本轮暴露的限制
 
-- **Redis 不可用时登录必 500**。`LoginRateLimitGuard` → `RedisRateLimitStore.increment` 没有
-  try/catch，Redis 缺失（ECONNREFUSED）或存在但需密码（NOAUTH）都会抛到统一异常层变成
-  `50000 服务异常`。本机验证：无 Redis 端口 → 21 次 ECONNREFUSED，登录 500；本机 Redis 要密码 →
-  NOAUTH，同样 500。浏览闭环本身不受影响（`/pets`、`/venues` 是 optional-auth，无 token 照常返回），
-  只有登录与收藏这类需要身份的动作被挡住。
-  **未在阶段 1 内改动**：限流失败该 fail-open（放行）还是 fail-closed（拒绝）是安全取舍，
-  当前行为等于 fail-closed，方向偏安全但错误码不透明、且 Redis 抖动会拖垮全部登录。
-  留给用户决策，见「遗留」。
+- ~~**Redis 不可用时登录必 500**~~ → **已在阶段 1 收口时修掉**，决策与证据见
+  「六、Redis 故障降级决策」。原症状：`LoginRateLimitGuard` → `RedisRateLimitStore.increment`
+  没有 try/catch，Redis 缺失（ECONNREFUSED）或存在但需密码（NOAUTH）都会抛到统一异常层变成
+  `50000 服务异常`。浏览闭环本身不受影响（`/pets`、`/venues` 是 optional-auth，无 token 照常
+  返回），被挡住的是登录与收藏这类需要身份的动作。
 - **收藏链路的演示用自签 JWT 完成**，没走真实 `wx-login`：`WX_APPID`/`WX_SECRET` 为空（正式
   AppID 与私钥按约定不入库），且上面那条 Redis 限流问题也会挡住登录。签名密钥与服务端一致，
   `AuthGuard` 只校验签名与 `sub`，因此收藏的鉴权、幂等、状态回读都是真实通路。
@@ -106,9 +103,71 @@
 
 ## 五、遗留到阶段 2
 
-- **需要用户决策**：Redis 故障时登录限流的 fail-open / fail-closed 取向，以及是否把
-  `RedisRateLimitStore` 也改成 `RedisPoiCache` 那种 null-safe 降级。
+- ~~Redis 故障时登录限流的 fail-open / fail-closed 取向~~ → 已决策并实现，见第六节。
 - 真实 `TENCENT_MAP_KEY` 下的 POI 代理端到端验证，含 Redis geohash 缓存命中。
 - 有库环境跑通 20 条门控集成用例（PostGIS 距离/半径与 InMemory 的 ±50m 一致性已写好断言）。
-- 微信开发者工具冒烟：动态模板渲染、tabBar 自定义属性、图片加载抖动的实际观感。
+- 微信开发者工具冒烟：~~动态模板渲染~~（用户已确认双列瀑布流显示正常，回退方案不启用）、
+  tabBar 自定义属性、图片加载抖动的实际观感。
 - 功能面：follow、view_history、UGC 动态、字体子集、automator 5 条主链路自动化。
+
+## 六、Redis 故障降级决策
+
+**决策（用户选定）**：`降级放行 + 告警日志`（fail-open）。Redis 不可用时 `increment` 返回 0，
+限流器视为未超限，登录照常进行，同时写一条 ERROR 日志。
+
+**取舍**：登录可用性优先于限流保护。代价明确 —— **Redis 宕机窗口内登录端点没有暴力破解防护**，
+靠 ERROR 日志告警补偿。选它的理由是阶段 2 会放大 fail-closed 的伤害：关注、发布动态、私信全部
+需要登录态，Redis 抖动会拖垮所有写操作，而浏览还能用。
+
+### 实现里比 try/catch 更要紧的一件事
+
+补 try/catch 只解决「抛不抛错」，不解决「多久才失败」。实测 ioredis 默认参数
+（`maxRetriesPerRequest` 默认 20）下，Redis 宕机时单条 `incr` 要 **10.7 秒**才抛错 ——
+那样降级放行等于把登录请求挂死 10 秒，对用户和 500 一样糟，还多占连接。
+
+对照数据（远端 Redis vs 本地不可达端口 6399）：
+
+| 配置 | 健康路径 | 宕机路径 |
+| --- | --- | --- |
+| ioredis 默认 | 554ms | **10719ms** |
+| 收紧后（现状） | 554ms | 212~2000ms |
+
+参数落在 `server/src/common/redis-client.ts`，三处 Redis 客户端（限流、POI 缓存、
+access_token 存储）共用，避免各写一份后漂移。
+
+### 走过的弯路：`enableOfflineQueue: false` 不能用
+
+它看着是正解 —— 宕机期间命令 0~2ms 立即失败。但 `lazyConnect` 下建连要约 1 秒，
+关掉离线队列后这 1 秒内的**所有命令都失败**，于是限流器收到一串 0。等于**服务启动第一秒
+不限流**，而那正是暴力破解最可能撞上的窗口；更糟的是它静默降级，不会有人发现。
+在 getter 里补 `connect()` 也救不回来，因为 `connect()` 本身是异步的（实测前 5 次命令仍全失败）。
+
+最终方案：**保留离线队列**（首条命令能等到建连），靠 `maxRetriesPerRequest: 1` +
+`retryStrategy` 退避上限 + `Promise.race` 硬超时（2s）三层限制放大。
+
+### 顺带修掉的两处同源缺陷
+
+- `RedisPoiCache`：注释写着「缓存不可用不阻断主链路」，但默认参数下它要阻断 10.7 秒。
+  已换共用参数，并把静默 catch 改成 warn 日志（原本故障完全不可观测）。
+- `RedisTokenStore`：同样的 10.7 秒问题，影响更大 —— 它是 access_token 单点缓存，
+  故障会拖死每个微信接口调用。**只换连接参数，刻意不加降级**：静默返回 null 会让每个请求
+  都去刷 token，撞微信调用频率限制并互相顶掉彼此的 token。
+- `onModuleDestroy` 统一改为 `quit()` 超时后 `disconnect(false)` 兜底。`quit()` 要等服务端
+  应答，Redis 不可达时不解析，会把优雅关闭卡住；`false` 参数同时取消重连定时器。
+
+### 验证证据
+
+单元 15 条（`test/rate-limit-degradation.spec.ts` + `test/rate-limit.spec.ts`）、
+共用模块 16 条（`test/redis-client.spec.ts`）、真实 Redis 集成 4 条
+（`test/rate-limit-degradation.integration.spec.ts`，含健康路径「计数必须是真的，不能是 0」
+这条防误降级回归）。全量 **160 passed / 26 suites**（真库 + 真 Redis），无库无 Redis 环境
+134 passed / 26 skipped。
+
+端到端（真实 HTTP，`dist/main.js`）：
+
+- **Redis 指向 6399（宕机）**：`POST /auth/wx-login` 连续 3 次全部 `code: 0`，耗时
+  1204/2298/2379ms；服务日志 2 次登录对应 2 条 `限流存储不可用，本次放行` ERROR，一一对应。
+  改动前此处是 `50000`。
+- **健康 Redis**：连打 35 次登录 → 前 30 次 `201`，第 31 次起 `429` +
+  `{"code":42900,"message":"操作太频繁，请稍后再试"}`，与配置的 30 次/60 秒吻合。
+  这条是反面证据，证明没有误降级、限流真实生效。
