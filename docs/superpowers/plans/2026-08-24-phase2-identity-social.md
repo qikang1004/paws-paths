@@ -44,12 +44,15 @@
 - [ ] 种子行数写进 `postgres.integration.spec.ts` 的计数断言，沿用阶段 1 的「只数种子前缀行」写法（`WHERE id ~ '^f-[0-9]+$'`），避免测试数据污染计数。
 - [ ] **验收**：`DATABASE_URL` 存在时集成测试全绿；`runMigrations` 二次执行仍幂等（既有幂等测试覆盖）。
 
-### Task 2: 审核状态机纯函数（`moderation/audit-state.ts`）
+### Task 2: 审核状态机 —— 补 `isVisibleTo`
 
-- [ ] **RED**：`test/audit-state.spec.ts` 覆盖 spec §4.5 全部迁移：`pending --机审通过--> approved`、`pending --机审驳回--> rejected`、`approved --举报--> pending_review`、`pending_review --人工驳回--> rejected`、`pending_review --人工通过--> approved`。非法迁移必须抛错（如 `rejected → approved` 直接跳转、`approved → approved`）。
-- [ ] **RED**：`isVisibleTo(status, isAuthor)` 的真值表 —— 仅 `approved` 对他人可见；作者本人可见全部自己的内容；`rejected` 对作者显示但带驳回原因。
-- [ ] **GREEN**：实现 `AuditStatus` 联合类型（复用 `packages/types`）、`transition(from, action)`、`isVisibleTo(status, isAuthor)`。全部纯函数，无 IO。
-- [ ] **验收**：状态字符串字面量只在这一个文件里出现（新增一条 guard 测试扫 `src/`，`posts`/`post_images` 相关文件不得手写 `'approved'` 比较）。
+**已核实**：状态机在阶段 0 就已实现于 `packages/types/src/audit.ts`（`AuditStatus`、`ALLOWED`、`canTransition`、`assertTransition`、`AuditTransitionError`、`isPubliclyVisible`），并有 `test/audit.spec.ts` 覆盖全部迁移。**不要重写，也不要新建 `moderation/audit-state.ts`。**
+
+另需修正本计划附录 B 的一处错误：既有实现允许 `rejected → pending`（作者修改重提通道，spec §6），`rejected` **不是**终态。附录 B 已更正。
+
+- [ ] **RED**：`packages/types/test/audit.spec.ts` 追加 `isVisibleTo(status, isAuthor)` 真值表（8 种组合，见附录 B）。
+- [ ] **GREEN**：在 `audit.ts` 实现 `isVisibleTo`，内部复用 `isPubliclyVisible`，不复制状态字面量。
+- [ ] **验收**：新增 guard 测试扫 `server/src/`，除 `packages/types` 外不得手写 `'approved'` / `'pending_review'` 字面量比较（spec §4.5 说这五张表共用状态机，阶段 3/4 还要加 `messages`/`pet_licenses`，散落的字面量比较迟早漏掉可见性过滤）。
 
 ### Task 3: `packages/types` 扩展 + `sync:types`
 
@@ -226,15 +229,18 @@ CREATE INDEX IF NOT EXISTS post_images_post_idx ON post_images (post_id, sort_or
 
 ## 附录 B：审核状态机迁移表（Task 2 逐字使用）
 
-| from | action | to |
-|---|---|---|
-| `pending` | `machine_pass` | `approved` |
-| `pending` | `machine_reject` | `rejected` |
-| `approved` | `report` | `pending_review` |
-| `pending_review` | `manual_pass` | `approved` |
-| `pending_review` | `manual_reject` | `rejected` |
+**这一节描述的是既有实现（`packages/types/src/audit.ts` 的 `ALLOWED`），不是待建规格。**
 
-其余组合全部非法，`transition` 抛错。`rejected` 是终态（申诉属阶段 4 的运营后台范围）。
+| from | to | 含义 |
+|---|---|---|
+| `pending` | `approved` | 机审通过 |
+| `pending` | `rejected` | 机审驳回 |
+| `approved` | `pending_review` | 被举报，撤下待人工复核 |
+| `pending_review` | `approved` | 举报不成立，恢复可见 |
+| `pending_review` | `rejected` | 人工驳回 |
+| `rejected` | `pending` | **作者修改重提**（spec §6）。`rejected` 不是终态 |
+
+其余组合非法，`assertTransition` 抛 `AuditTransitionError`。
 
 可见性真值表（`isVisibleTo`）：
 

@@ -2,7 +2,7 @@
 // 改动请改 packages/types，然后跑 npm run sync:types。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isPubliclyVisible = exports.assertTransition = exports.canTransition = exports.AuditTransitionError = void 0;
+exports.isVisibleTo = exports.isPubliclyVisible = exports.assertTransition = exports.canTransition = exports.AuditTransitionError = void 0;
 /**
  * 状态机对应 spec §4.5。
  * rejected → pending 是作者修改重提通道（spec §6）。
@@ -38,3 +38,19 @@ function isPubliclyVisible(status) {
     return status === 'approved';
 }
 exports.isPubliclyVisible = isPubliclyVisible;
+/**
+ * 可见性判定的唯一出口：状态 + 是否作者本人。
+ *
+ * 作者本人能看到自己的全部内容（`pending` 显示「审核中」角标、`rejected` 显示
+ * 驳回原因），他人只能看到 `approved`。`pending_review` 对他人立即不可见 ——
+ * 内容被举报后应先撤下再人工复核，而不是继续公开展示。
+ *
+ * 业务代码一律调这个函数，不要手写 `status === 'approved'`：spec §4.5 说
+ * `pet_photos`/`posts`/`post_images`/`messages`/`pet_licenses` 共用状态机，
+ * 散落的字面量比较迟早会在某条新路径上漏掉过滤，而「未 approved 对他人不可见」
+ * 是小程序过审的必要条件。
+ */
+function isVisibleTo(status, isAuthor) {
+    return isAuthor || isPubliclyVisible(status);
+}
+exports.isVisibleTo = isVisibleTo;
