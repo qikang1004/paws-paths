@@ -1,10 +1,12 @@
 import {
+  Body,
   Controller,
   Delete,
   Get,
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -17,7 +19,12 @@ import { OptionalAuthGuard } from '../auth/optional-auth.guard';
 import { FavoritesService } from '../favorites/favorites.service';
 import { FollowsService } from '../follows/follows.service';
 import { HistoryService } from '../history/history.service';
-import { PetsService, type PetDetail, type PetListResponse } from './pets.service';
+import {
+  PetsService,
+  type PetDetail,
+  type PetListResponse,
+  type PetPhoto,
+} from './pets.service';
 
 const VALID_SPECIES: ReadonlySet<string> = new Set(['all', 'dog', 'cat', 'other']);
 
@@ -144,5 +151,56 @@ export class PetsController {
     @CurrentUser() userId: string | null,
   ): Promise<{ isFavorite: boolean }> {
     return this.favorites.setPetFavorite(id, userId as string, false);
+  }
+
+  // ---- 写端点。归属一律在 service 里走 findOwnerId：不存在 404，不是自己的 403。----
+
+  // 这是真的创建资源，所以留 Nest 默认的 201（与上面那几个幂等的状态设置端点相反）。
+  @Post()
+  @UseGuards(AuthGuard)
+  async create(
+    @Body() body: Record<string, unknown>,
+    @CurrentUser() userId: string | null,
+  ): Promise<{ id: string }> {
+    return this.pets.create(userId as string, body ?? {});
+  }
+
+  @Patch(':id')
+  @UseGuards(AuthGuard)
+  async update(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+    @CurrentUser() userId: string | null,
+  ): Promise<PetDetail> {
+    return this.pets.update(id, userId as string, body ?? {});
+  }
+
+  @Delete(':id')
+  @UseGuards(AuthGuard)
+  async remove(
+    @Param('id') id: string,
+    @CurrentUser() userId: string | null,
+  ): Promise<{ deleted: boolean }> {
+    return this.pets.remove(id, userId as string);
+  }
+
+  @Post(':id/photos')
+  @UseGuards(AuthGuard)
+  async addPhoto(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+    @CurrentUser() userId: string | null,
+  ): Promise<PetPhoto> {
+    return this.pets.addPhoto(id, userId as string, body ?? {});
+  }
+
+  @Delete(':id/photos/:photoId')
+  @UseGuards(AuthGuard)
+  async removePhoto(
+    @Param('id') id: string,
+    @Param('photoId') photoId: string,
+    @CurrentUser() userId: string | null,
+  ): Promise<{ deleted: boolean }> {
+    return this.pets.removePhoto(id, photoId, userId as string);
   }
 }

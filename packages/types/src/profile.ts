@@ -40,3 +40,25 @@ export interface PetUpsertDto {
   lat?: number;
   lng?: number;
 }
+
+/**
+ * `PATCH /pets/:id` 的入参。字段全可省，省略表示不动这一项，
+ * 但一个都不给会得到 422 —— 静默 200 只会让写错字段名的 bug 更难查。
+ *
+ * `coverPhotoId` 只接受这只宠物自己的照片 id：封面是 `pets.cover_photo_id`
+ * 这一个指针，「一只宠物只有一张封面」由结构保证，不靠唯一索引。
+ */
+export interface PetPatchDto extends Partial<PetUpsertDto> {
+  coverPhotoId?: string;
+}
+
+/**
+ * `POST /pets/:id/photos` 的入参。宽高**非可选** —— 瀑布流要靠它在图片加载前
+ * 算出占位高度（spec §4.1）。第一张照片自动成为封面。
+ */
+export interface PetPhotoUploadDto {
+  url: string;
+  width: number;
+  height: number;
+}
+

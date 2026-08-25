@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import type { Pool } from 'pg';
 
@@ -47,6 +48,47 @@ export interface PetPhotoRow {
   height: number;
 }
 
+/**
+ * 建号入参。`breed` / `gender` / `birth_date` 在库里是 NOT NULL 且没有默认值，
+ * 所以这三项由上层（`parsePetCreate`）补齐后一定有值 —— 仓储不猜默认。
+ */
+export interface PetCreateInput {
+  ownerId: string;
+  name: string;
+  species: PetSpecies;
+  breed: string;
+  gender: PetGender;
+  /** `YYYY-MM-DD`。 */
+  birthDate: string;
+  bio: string;
+  personalityTags: string[];
+  lat?: number;
+  lng?: number;
+}
+
+/**
+ * 更新入参：只含调用方真给了的字段（同 `UserProfilePatch` 的语义，
+ * 缺字段表示不动）。坐标要么都给要么都不给，由上层校验成对。
+ */
+export interface PetPatchInput {
+  name?: string;
+  species?: PetSpecies;
+  breed?: string;
+  gender?: PetGender;
+  birthDate?: string;
+  bio?: string;
+  personalityTags?: string[];
+  lat?: number;
+  lng?: number;
+  coverPhotoId?: string;
+}
+
+export interface PetPhotoInput {
+  url: string;
+  width: number;
+  height: number;
+}
+
 export interface PetRepository {
   list(query: PetQuery): Promise<{ items: PetRow[]; hasMore: boolean }>;
   getById(id: string, coords?: { lat: number; lng: number }): Promise<{ pet: PetRow; photos: PetPhotoRow[] } | null>;
@@ -60,6 +102,22 @@ export interface PetRepository {
   findOwnerId(petId: string): Promise<string | null>;
   /** 批量按 id 取卡片投影，保持传入顺序。关注列表这类「先有 id 再要卡片」的场景用它。 */
   listByIds(petIds: string[], coords?: { lat: number; lng: number }): Promise<PetRow[]>;
+
+  /** 建号，返回新宠物 id。刚建的宠物没有照片，因此还进不了 `list` 的瀑布流。 */
+  create(input: PetCreateInput): Promise<string>;
+  /** 宠物不存在返回 false；归属校验在上层（`findOwnerId`），仓储不做鉴权。 */
+  update(petId: string, patch: PetPatchInput): Promise<boolean>;
+  /**
+   * 硬删。`pet_photos.pet_id` 是阶段 1 建的外键且**没有** ON DELETE CASCADE，
+   * 所以照片必须在同一个事务里显式删掉；`follows` / `posts` 靠自己的级联走。
+   */
+  remove(petId: string): Promise<boolean>;
+  /** 加一张照片；这是这只宠物的第一张时顺带成为封面。 */
+  addPhoto(petId: string, photo: PetPhotoInput): Promise<PetPhotoRow>;
+  /** 删照片；删掉的是封面时封面顶给剩下的第一张，一张不剩就置空。 */
+  removePhoto(petId: string, photoId: string): Promise<boolean>;
+  /** 换封面前的归属校验：这张照片是不是这只宠物的。 */
+  hasPhoto(petId: string, photoId: string): Promise<boolean>;
 }
 
 /** 球面距离（米），与 PostGIS geography ST_Distance 的球面语义一致。 */
@@ -91,9 +149,15 @@ interface PetSeedRecord {
   birthDate: string;
   personalityTags: string[];
   bio: string;
-  lat: number;
-  lng: number;
+  /** 城市模式（用户没授权定位）下建的宠物没有坐标，距离一律 null。 */
+  lat: number | null;
+  lng: number | null;
   lastActiveAt: string;
+  /**
+   * 封面指针，对应 `pets.cover_photo_id`。为 null 表示这只宠物还没有照片 ——
+   * 它进不了瀑布流（卡片是照片打底的），但详情页要打得开，主人才有地方加照片。
+   */
+  coverPhotoId?: string | null;
   coverUrl: string;
   coverWidth: number;
   coverHeight: number;
@@ -142,6 +206,12 @@ const PHOTO_SEED: PhotoSeedRecord[] = [
   { id: 'ph-17', petId: 'p-8', url: 'https://picsum.photos/seed/paws-mimi2/600/800', width: 600, height: 800, sortOrder: 1 },
 ];
 
+/** 没有坐标的宠物（城市模式下建的）距离一律 null，而不是假装 0 米。 */
+function distanceTo(seed: PetSeedRecord, coords?: { lat: number; lng: number }): number | null {
+  if (coords == null || seed.lat == null || seed.lng == null) return null;
+  return haversineMeters(coords.lat, coords.lng, seed.lat, seed.lng);
+}
+
 function toPetRow(seed: PetSeedRecord, distanceMeters: number | null): PetRow {
   return {
     id: seed.id,
@@ -164,30 +234,51 @@ function toPetRow(seed: PetSeedRecord, distanceMeters: number | null): PetRow {
 
 @Injectable()
 export class InMemoryPetRepository implements PetRepository {
+  /**
+   * 种子的**可变副本**。写端点会改这两个数组，直接改模块级常量的话，
+   * 同一进程里的下一个测试套件会看到上一个套件建的宠物。
+   */
+  private readonly pets: PetSeedRecord[] = PET_SEED.map((p) => ({
+    ...p,
+    personalityTags: [...p.personalityTags],
+    coverPhotoId: PHOTO_SEED.filter((ph) => ph.petId === p.id).sort(
+      (a, b) => a.sortOrder - b.sortOrder,
+    )[0]?.id ?? null,
+  }));
+  private readonly photos: PhotoSeedRecord[] = PHOTO_SEED.map((ph) => ({ ...ph }));
+
   async list(query: PetQuery): Promise<{ items: PetRow[]; hasMore: boolean }> {
     const hasCoords = typeof query.lat === 'number' && typeof query.lng === 'number';
-    let rows = PET_SEED.filter((p) => {
+    const rows = this.pets.filter((p) => {
       if (query.filter.species !== 'all' && p.species !== query.filter.species) return false;
       if (query.filter.breed !== 'all' && p.breed !== query.filter.breed) return false;
+      // 没有封面的宠物不进瀑布流，对应 Postgres 侧那个 JOIN pet_photos。
+      if (p.coverPhotoId == null) return false;
       return true;
     });
 
     let items: PetRow[];
     if (hasCoords) {
-      const lat = query.lat as number;
-      const lng = query.lng as number;
+      const coords = { lat: query.lat as number, lng: query.lng as number };
       items = rows
-        .map((p) => toPetRow(p, haversineMeters(lat, lng, p.lat, p.lng)))
+        .map((p) => toPetRow(p, distanceTo(p, coords)))
         .filter(
-          (r) => query.radiusMeters == null || (r.distanceMeters as number) <= query.radiusMeters,
+          (r) =>
+            query.radiusMeters == null ||
+            (r.distanceMeters != null && r.distanceMeters <= query.radiusMeters),
         )
-        .sort((a, b) => (a.distanceMeters as number) - (b.distanceMeters as number));
+        // 没坐标的排在最后（同 Postgres 的 ORDER BY ... ASC 把 NULL 放尾部）。
+        .sort(
+          (a, b) =>
+            (a.distanceMeters ?? Number.POSITIVE_INFINITY) -
+            (b.distanceMeters ?? Number.POSITIVE_INFINITY),
+        );
     } else {
       items = rows
         .map((p) => toPetRow(p, null))
         .sort((a, b) => {
-          const seedA = PET_SEED.find((s) => s.id === a.id)!;
-          const seedB = PET_SEED.find((s) => s.id === b.id)!;
+          const seedA = this.pets.find((s) => s.id === a.id)!;
+          const seedB = this.pets.find((s) => s.id === b.id)!;
           return seedB.lastActiveAt.localeCompare(seedA.lastActiveAt);
         });
     }
@@ -201,30 +292,134 @@ export class InMemoryPetRepository implements PetRepository {
     id: string,
     coords?: { lat: number; lng: number },
   ): Promise<{ pet: PetRow; photos: PetPhotoRow[] } | null> {
-    const seed = PET_SEED.find((p) => p.id === id);
+    const seed = this.pets.find((p) => p.id === id);
     if (!seed) return null;
-    const distanceMeters =
-      coords != null ? haversineMeters(coords.lat, coords.lng, seed.lat, seed.lng) : null;
-    const photos = PHOTO_SEED.filter((ph) => ph.petId === id)
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map(({ id: photoId, url, width, height }) => ({ id: photoId, url, width, height }));
-    return { pet: toPetRow(seed, distanceMeters), photos };
+    // 刻意不过滤封面：没有照片的宠物详情页也要打得开。
+    const photos = this.photosOf(id).map(({ id: photoId, url, width, height }) => ({
+      id: photoId,
+      url,
+      width,
+      height,
+    }));
+    return { pet: toPetRow(seed, distanceTo(seed, coords)), photos };
   }
 
   async findOwnerId(petId: string): Promise<string | null> {
-    return PET_SEED.find((p) => p.id === petId)?.ownerId ?? null;
+    return this.pets.find((p) => p.id === petId)?.ownerId ?? null;
   }
 
   async listByIds(petIds: string[], coords?: { lat: number; lng: number }): Promise<PetRow[]> {
     return petIds
-      .map((id) => PET_SEED.find((p) => p.id === id))
-      .filter((seed): seed is PetSeedRecord => seed != null)
-      .map((seed) =>
-        toPetRow(
-          seed,
-          coords != null ? haversineMeters(coords.lat, coords.lng, seed.lat, seed.lng) : null,
-        ),
-      );
+      .map((id) => this.pets.find((p) => p.id === id))
+      .filter((seed): seed is PetSeedRecord => seed != null && seed.coverPhotoId != null)
+      .map((seed) => toPetRow(seed, distanceTo(seed, coords)));
+  }
+
+  async create(input: PetCreateInput): Promise<string> {
+    const id = `p-${randomUUID()}`;
+    this.pets.push({
+      id,
+      ownerId: input.ownerId,
+      name: input.name,
+      species: input.species,
+      breed: input.breed,
+      gender: input.gender,
+      birthDate: input.birthDate,
+      personalityTags: [...input.personalityTags],
+      bio: input.bio,
+      lat: input.lat ?? null,
+      lng: input.lng ?? null,
+      lastActiveAt: new Date().toISOString(),
+      // 还没有照片 —— 详情页打得开，但进不了瀑布流。
+      coverPhotoId: null,
+      coverUrl: '',
+      coverWidth: 0,
+      coverHeight: 0,
+      // 无库模式下仓储看不见 users（那是另一个仓储），主人信息一律落占位值。
+      // 与 findProfile 的三个计数恒为 0 同一取向：只影响演示降级模式。
+      ownerNickname: '微信用户',
+      ownerAvatarUrl: null,
+      ownerVerified: false,
+    });
+    return id;
+  }
+
+  async update(petId: string, patch: PetPatchInput): Promise<boolean> {
+    const seed = this.pets.find((p) => p.id === petId);
+    if (!seed) return false;
+    if (patch.name !== undefined) seed.name = patch.name;
+    if (patch.species !== undefined) seed.species = patch.species;
+    if (patch.breed !== undefined) seed.breed = patch.breed;
+    if (patch.gender !== undefined) seed.gender = patch.gender;
+    if (patch.birthDate !== undefined) seed.birthDate = patch.birthDate;
+    if (patch.bio !== undefined) seed.bio = patch.bio;
+    if (patch.personalityTags !== undefined) seed.personalityTags = [...patch.personalityTags];
+    if (patch.lat !== undefined) seed.lat = patch.lat;
+    if (patch.lng !== undefined) seed.lng = patch.lng;
+    if (patch.coverPhotoId !== undefined) {
+      // 归属已在上层用 hasPhoto 校验过，这里再兜一次：换封面只认自己的照片。
+      const photo = this.photos.find((ph) => ph.id === patch.coverPhotoId && ph.petId === petId);
+      if (photo) this.setCover(seed, photo);
+    }
+    return true;
+  }
+
+  async remove(petId: string): Promise<boolean> {
+    const at = this.pets.findIndex((p) => p.id === petId);
+    if (at < 0) return false;
+    this.pets.splice(at, 1);
+    for (let i = this.photos.length - 1; i >= 0; i -= 1) {
+      if (this.photos[i].petId === petId) this.photos.splice(i, 1);
+    }
+    return true;
+  }
+
+  async addPhoto(petId: string, photo: PetPhotoInput): Promise<PetPhotoRow> {
+    const seed = this.pets.find((p) => p.id === petId);
+    if (!seed) throw new Error(`pet ${petId} not found`);
+    const existing = this.photosOf(petId);
+    const row: PhotoSeedRecord = {
+      id: `ph-${randomUUID()}`,
+      petId,
+      url: photo.url,
+      width: photo.width,
+      height: photo.height,
+      sortOrder: existing.length ? existing[existing.length - 1].sortOrder + 1 : 0,
+    };
+    this.photos.push(row);
+    // 第一张自动成封面：否则新建的宠物永远进不了广场。
+    if (seed.coverPhotoId == null) this.setCover(seed, row);
+    return { id: row.id, url: row.url, width: row.width, height: row.height };
+  }
+
+  async removePhoto(petId: string, photoId: string): Promise<boolean> {
+    const at = this.photos.findIndex((ph) => ph.id === photoId && ph.petId === petId);
+    if (at < 0) return false;
+    this.photos.splice(at, 1);
+    const seed = this.pets.find((p) => p.id === petId);
+    // 删掉的正是封面：顶给剩下的第一张，一张不剩就置空（宠物随之退出瀑布流）。
+    if (seed && seed.coverPhotoId === photoId) this.setCover(seed, this.photosOf(petId)[0] ?? null);
+    return true;
+  }
+
+  async hasPhoto(petId: string, photoId: string): Promise<boolean> {
+    return this.photos.some((ph) => ph.id === photoId && ph.petId === petId);
+  }
+
+  /** 这只宠物的照片，按 sortOrder 升序（同 Postgres 侧的 ORDER BY sort_order）。 */
+  private photosOf(petId: string): PhotoSeedRecord[] {
+    return this.photos.filter((ph) => ph.petId === petId).sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  /**
+   * 封面指针连着三个冗余字段一起挪。`coverUrl` / `coverWidth` / `coverHeight`
+   * 是卡片投影直接读的（Postgres 侧靠 JOIN 拿到），这里必须手工保持同步。
+   */
+  private setCover(seed: PetSeedRecord, photo: PhotoSeedRecord | null): void {
+    seed.coverPhotoId = photo?.id ?? null;
+    seed.coverUrl = photo?.url ?? '';
+    seed.coverWidth = photo?.width ?? 0;
+    seed.coverHeight = photo?.height ?? 0;
   }
 }
 
@@ -285,17 +480,25 @@ export class PostgresPetRepository implements PetRepository {
       rows = res.rows;
     }
 
+    // 计数必须和上面的取数用同一套过滤：没有封面的宠物被 JOIN 挡在页外，
+    // 却算进总数的话，`hasMore` 会指向一页永远取不出内容的幻影下一页。
     const count = await this.pool.query<{ c: number }>(
       `SELECT count(*)::int AS c
        FROM pets p
        WHERE p.visibility = 'public'
          AND ($1 = 'all' OR p.species = $1)
-         AND ($2 = 'all' OR p.breed = $2)`,
+         AND ($2 = 'all' OR p.breed = $2)
+         AND EXISTS (SELECT 1 FROM pet_photos ph WHERE ph.id = p.cover_photo_id)`,
       [species, breed],
     );
     return { items: rows, hasMore: offset + rows.length < count.rows[0].c };
   }
 
+  /**
+   * 详情。封面走 **LEFT** JOIN：刚建好还没传照片的宠物必须打得开详情页 ——
+   * 否则主人根本没有入口进去加第一张照片。`list` / `listByIds` 仍是 INNER JOIN，
+   * 因为卡片是照片打底的，没封面渲染不出来。
+   */
   async getById(
     id: string,
     coords?: { lat: number; lng: number },
@@ -307,10 +510,11 @@ export class PostgresPetRepository implements PetRepository {
                to_char(p.birth_date, 'YYYY-MM-DD') AS "birthDate",
                p.personality_tags AS "personalityTags", p.bio,
                ST_Distance(p.location, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS "distanceMeters",
-               ph.url AS "coverUrl", ph.width AS "coverWidth", ph.height AS "coverHeight",
+               COALESCE(ph.url, '') AS "coverUrl", COALESCE(ph.width, 0) AS "coverWidth",
+               COALESCE(ph.height, 0) AS "coverHeight",
                u.nickname AS "ownerNickname", u.avatar_url AS "ownerAvatarUrl", u.is_verified_owner AS "ownerVerified"
         FROM pets p
-        JOIN pet_photos ph ON ph.id = p.cover_photo_id
+        LEFT JOIN pet_photos ph ON ph.id = p.cover_photo_id
         JOIN users u ON u.id = p.owner_id
         WHERE p.id = $3 AND p.visibility = 'public'
         `
@@ -319,10 +523,11 @@ export class PostgresPetRepository implements PetRepository {
                to_char(p.birth_date, 'YYYY-MM-DD') AS "birthDate",
                p.personality_tags AS "personalityTags", p.bio,
                null::float8 AS "distanceMeters",
-               ph.url AS "coverUrl", ph.width AS "coverWidth", ph.height AS "coverHeight",
+               COALESCE(ph.url, '') AS "coverUrl", COALESCE(ph.width, 0) AS "coverWidth",
+               COALESCE(ph.height, 0) AS "coverHeight",
                u.nickname AS "ownerNickname", u.avatar_url AS "ownerAvatarUrl", u.is_verified_owner AS "ownerVerified"
         FROM pets p
-        JOIN pet_photos ph ON ph.id = p.cover_photo_id
+        LEFT JOIN pet_photos ph ON ph.id = p.cover_photo_id
         JOIN users u ON u.id = p.owner_id
         WHERE p.id = $1 AND p.visibility = 'public'
         `;
@@ -371,5 +576,146 @@ export class PostgresPetRepository implements PetRepository {
     const params = hasCoords ? [petIds, coords.lng, coords.lat] : [petIds];
     const { rows } = await this.pool.query<PetRow>(sql, params);
     return rows;
+  }
+
+  async create(input: PetCreateInput): Promise<string> {
+    const id = `p-${randomUUID()}`;
+    // 坐标要么都给要么都不给（上层已校验成对）；没给就落 NULL，
+    // 而不是 ST_MakePoint(0, 0) —— 几内亚湾那个点会被半径筛选当成真实位置。
+    await this.pool.query(
+      `INSERT INTO pets (id, owner_id, name, species, breed, gender, birth_date, bio, personality_tags, location)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+               CASE WHEN $10::float8 IS NULL THEN NULL
+                    ELSE ST_SetSRID(ST_MakePoint($10, $11), 4326)::geography END)`,
+      [
+        id,
+        input.ownerId,
+        input.name,
+        input.species,
+        input.breed,
+        input.gender,
+        input.birthDate,
+        input.bio,
+        input.personalityTags,
+        input.lng ?? null,
+        input.lat ?? null,
+      ],
+    );
+    return id;
+  }
+
+  async update(petId: string, patch: PetPatchInput): Promise<boolean> {
+    // 只拼调用方真给了的列（同 PostgresUserRepository.updateProfile）：
+    // 列名是这里的定值，不来自请求体，没有注入面。
+    const sets: string[] = [];
+    const values: unknown[] = [petId];
+    const set = (column: string, value: unknown): void => {
+      values.push(value);
+      sets.push(`${column} = $${values.length}`);
+    };
+    if (patch.name !== undefined) set('name', patch.name);
+    if (patch.species !== undefined) set('species', patch.species);
+    if (patch.breed !== undefined) set('breed', patch.breed);
+    if (patch.gender !== undefined) set('gender', patch.gender);
+    if (patch.birthDate !== undefined) set('birth_date', patch.birthDate);
+    if (patch.bio !== undefined) set('bio', patch.bio);
+    if (patch.personalityTags !== undefined) set('personality_tags', patch.personalityTags);
+    if (patch.coverPhotoId !== undefined) set('cover_photo_id', patch.coverPhotoId);
+    if (patch.lat !== undefined && patch.lng !== undefined) {
+      values.push(patch.lng, patch.lat);
+      sets.push(
+        `location = ST_SetSRID(ST_MakePoint($${values.length - 1}, $${values.length}), 4326)::geography`,
+      );
+    }
+    if (sets.length === 0) {
+      // 一个可改字段都没给：上层会先挡成 422，这里只保证不发一条空 UPDATE。
+      const { rowCount } = await this.pool.query(`SELECT 1 FROM pets WHERE id = $1`, [petId]);
+      return rowCount === 1;
+    }
+
+    const { rowCount } = await this.pool.query(
+      `UPDATE pets SET ${sets.join(', ')} WHERE id = $1`,
+      values,
+    );
+    return rowCount === 1;
+  }
+
+  async remove(petId: string): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      // 照片得自己删：pet_photos.pet_id 是阶段 1 建的外键，没有 ON DELETE CASCADE。
+      // follows / posts / post_images 是阶段 2 的表，带级联，不用管。
+      await client.query(`DELETE FROM pet_photos WHERE pet_id = $1`, [petId]);
+      // favorites / view_history 是多态表（target_type + target_id），target_id 上
+      // **没有**外键可挂，级联指望不上 —— 不显式删就会留下孤儿行，
+      // 一直把个人中心的 favoriteCount 撑高，指向一只已经不存在的宠物。
+      await client.query(
+        `DELETE FROM favorites WHERE target_type = 'pet' AND target_id = $1`,
+        [petId],
+      );
+      await client.query(
+        `DELETE FROM view_history WHERE target_type = 'pet' AND target_id = $1`,
+        [petId],
+      );
+      const { rowCount } = await client.query(`DELETE FROM pets WHERE id = $1`, [petId]);
+      await client.query('COMMIT');
+      return rowCount === 1;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 一条语句搞定「插照片 + 必要时设封面」。两句话拆开就要 BEGIN/COMMIT 兜原子性，
+   * 而远程库单次往返 ~200ms，一个事务四次往返 —— 数据修改型 CTE 一次就够，
+   * 且它们保证各执行一次、执行到底，不管主查询有没有读它们的输出。
+   */
+  async addPhoto(petId: string, photo: PetPhotoInput): Promise<PetPhotoRow> {
+    const id = `ph-${randomUUID()}`;
+    const { rows } = await this.pool.query<PetPhotoRow>(
+      `WITH inserted AS (
+         INSERT INTO pet_photos (id, pet_id, url, width, height, sort_order)
+         VALUES ($1, $2, $3, $4, $5,
+                 COALESCE((SELECT max(sort_order) + 1 FROM pet_photos WHERE pet_id = $2), 0))
+         RETURNING id, url, width, height
+       ), cover AS (
+         -- 第一张自动成封面：没封面的宠物进不了广场瀑布流（那边是 INNER JOIN）。
+         UPDATE pets SET cover_photo_id = $1 WHERE id = $2 AND cover_photo_id IS NULL
+       )
+       SELECT id, url, width, height FROM inserted`,
+      [id, petId, photo.url, photo.width, photo.height],
+    );
+    return rows[0];
+  }
+
+  async removePhoto(petId: string, photoId: string): Promise<boolean> {
+    const { rows } = await this.pool.query<{ c: number }>(
+      // pet_id 一起进 WHERE：别的宠物的照片 id 落到这个端点上必须删不动。
+      `WITH deleted AS (
+         DELETE FROM pet_photos WHERE id = $1 AND pet_id = $2 RETURNING id
+       ), promoted AS (
+         -- 删掉的正是封面：顶给剩下的第一张，一张不剩就置空（宠物随之退出瀑布流）。
+         -- id <> $1 不能省：CTE 里的子查询读的是语句开始时的快照，刚删的那张还在里面。
+         UPDATE pets SET cover_photo_id =
+           (SELECT id FROM pet_photos
+            WHERE pet_id = $2 AND id <> $1 ORDER BY sort_order ASC LIMIT 1)
+         WHERE id = $2 AND cover_photo_id = $1 AND EXISTS (SELECT 1 FROM deleted)
+       )
+       SELECT count(*)::int AS c FROM deleted`,
+      [photoId, petId],
+    );
+    return rows[0].c === 1;
+  }
+
+  async hasPhoto(petId: string, photoId: string): Promise<boolean> {
+    const { rowCount } = await this.pool.query(
+      `SELECT 1 FROM pet_photos WHERE id = $1 AND pet_id = $2`,
+      [photoId, petId],
+    );
+    return rowCount === 1;
   }
 }

@@ -88,3 +88,78 @@
 
 昵称长度按**码点数**（`[...nickname].length`）而不是 `String.length`：后者一个 emoji 顶两格，
 10 个 emoji 的昵称会被当成 20 字拦下。spec §5.1 说的是「20 字」。
+
+### 7. 封面是 `pets.cover_photo_id` 一个指针，不是 `pet_photos.is_cover`
+
+计划 Task 9 的 RED 写的是「`is_cover` 唯一性（一只宠物只能有一张封面）」。阶段 1 建的
+`pet_photos` 里**没有** `is_cover` 列，封面是 `pets.cover_photo_id`。加列会撞 Global
+Constraint 22（迁移只增不改），而且指针模型更强：「一只宠物只有一张封面」是结构决定的，
+不需要唯一索引维持，也不存在「两行都为 true」这种可写坏的中间态。换封面就是改指针，
+测试因此断言的是 `PATCH /pets/:id { coverPhotoId }` 的行为与「指向别人宠物的照片 → 422」。
+
+`cover_photo_id` 上刻意没挂外键：挂了就得在删照片时先解指针再删行，多一次往返，
+而 `removePhoto` 那条 CTE 已经在同一语句里把指针顶给下一张了。
+
+### 8. 没有照片的宠物：进不了广场，但详情页必须打得开
+
+广场卡片是照片打底的，没封面渲染不出来，所以 `list` / `listByIds` 保持 `INNER JOIN`
+封面照片。`getById` 反过来走 **LEFT** JOIN + `COALESCE(ph.url, '')` —— 刚建好还没传照片的
+宠物如果详情页 404，主人就再没有入口进去加第一张照片了。
+
+顺带修掉一个此前无法触发的缺陷：`list` 的 `hasMore` 计数查询原先不看封面，
+而取数那条 JOIN 会把无封面的宠物挡在页外。阶段 1 的种子每只宠物都有照片，所以这个
+不一致一直没露头；Task 9 让「建了但还没传照片」成为常态后，它会让 `hasMore` 指向
+一页永远取不出内容的幻影下一页。现在计数里补了
+`AND EXISTS (SELECT 1 FROM pet_photos ph WHERE ph.id = p.cover_photo_id)`。
+
+### 9. 硬删要手工清三张表：一张没级联，两张挂不上外键
+
+`DELETE /pets/:id` 是硬删（本阶段无审计要求）。计划写的是「硬删 + FK cascade」，
+但实际只有阶段 2 建的表能靠级联：
+
+- `pet_photos.pet_id` 是**阶段 1** 的外键，没有 `ON DELETE CASCADE` —— 不先删照片
+  直接删宠物会撞约束。
+- `favorites` / `view_history` 是多态表（`target_type` + `target_id`），`target_id`
+  上压根挂不了外键，级联无从谈起。留下的孤儿行会一直把个人中心的 `favoriteCount`
+  撑高，指向一只已经不存在的宠物。
+- `follows.target_pet_id`、`posts.*`、`post_images.post_id` 是阶段 2 的表，带级联，不用管。
+
+所以 `remove` 是一个显式 `BEGIN`/`COMMIT` 事务，按 `pet_photos` → `favorites` →
+`view_history` → `pets` 的顺序删。DB 门控的那条测试四张表各断言一次零行。
+
+### 10. 照片增删压成单条数据修改型 CTE
+
+`addPhoto`（插行 + 必要时设封面）和 `removePhoto`（删行 + 必要时顶封面）本来各是一个
+四五次往返的事务。远程库热连接单次往返实测 ~200ms，`BEGIN`+一次查询+`COMMIT` 就 ~600ms ——
+这两个方法在照片测试里被反复调用，把 `pet-write.controller.spec.ts` 顶到了 Jest 默认的
+5000ms 之外，而且超时每次随机落在不同用例上（看起来像 flaky，其实是延迟）。
+
+PostgreSQL 的 `WITH ... INSERT/UPDATE/DELETE` 子语句保证各执行一次、执行到底，
+不管主查询有没有读它们的输出，因此原子性不用事务兜。一个坑：所有子语句看的是
+**语句开始时的同一份快照**，所以 `removePhoto` 里挑「剩下的第一张」的子查询必须写
+`id <> $1` 排掉正在删的那张 —— 快照里它还在。
+
+该套件另外加了 `jest.setTimeout(30_000)`（同 `test/rate-limit-degradation.integration.spec.ts`
+既有的 `30_000` 先例）：压到 1 次往返之后余量已经够，但一个用例二三十次往返摆在那儿，
+默认值本来就不该指望。
+
+### 11. `POST /pets` 不给生日就落建号当天
+
+`pets.birth_date` 是阶段 1 的 `DATE NOT NULL` 且没有默认值，改列违反 Global Constraint 22，
+放成可空还会连带把两端的 `PetSummary.birthDate: string` 变成可空。而建号那一刻主人手上
+通常只有名字和物种，逼他填齐生日会把人挡在门外 —— 所以只有 `name` 与 `species` 必填，
+没给生日就落 `todayIso()`：年龄显示成 0，主人一眼就看得出这里要补。这是个有意留下的
+瑕疵，代码里注明了原因。
+
+写入侧的物种白名单**不含 `all`**：那是筛选用的伪物种，不是一种宠物。`PATCH` 同样不收。
+
+### 12. 无库模式下新建宠物的主人信息落占位值
+
+`InMemoryPetRepository` 看不见 `users`（那是另一个仓储），所以 `create` 落
+`ownerNickname: '微信用户'`、`ownerAvatarUrl: null`、`ownerVerified: false`。与上面第 5 条
+（三个计数恒为 0）同一取向：只影响演示降级模式，不值得为它把两个仓储耦起来。
+
+内存实现另外改成了**实例级的种子可变副本**（`PET_SEED.map(...)`）—— 写端点会改这两个
+数组，直接改模块级常量的话，同一进程里的下一个测试套件会看到上一个套件建的宠物。
+封面指针连着 `coverUrl` / `coverWidth` / `coverHeight` 三个冗余字段一起挪（Postgres 侧
+靠 JOIN 拿到，内存侧只能手工同步），这件事由私有的 `setCover` 一处负责。

@@ -101,10 +101,10 @@
 
 ### Task 9: 宠物增改 —— `POST /pets` + `PATCH /pets/:id` + 删除
 
-- [ ] **RED**：未登录 401；创建返回宠物 id；改别人的宠物 403；必填校验（名字、物种）422；物种非法 422（复用阶段 1 的 `species` 白名单）；`DELETE /pets/:id` 软删或硬删（选硬删 + FK cascade，本阶段无审计要求）。
-- [ ] **RED**：宠物照片 `pet_photos` 的增删；`is_cover` 唯一性（一只宠物只能有一张封面）。
-- [ ] **GREEN**：`PetsController` 增加写端点；`PetRepository` 补 `create`/`update`/`remove`；照片走 Task 11 的上传通道。
-- [ ] **验收**：创建的宠物立即出现在 `GET /pets`（若坐标在范围内）与 `GET /me` 的宠物数里。
+- [x] **RED**：未登录 401；创建返回宠物 id；改别人的宠物 403；必填校验（名字、物种）422；物种非法 422（复用阶段 1 的 `species` 白名单）；`DELETE /pets/:id` 软删或硬删（选硬删 + FK cascade，本阶段无审计要求）。
+- [x] **RED**：宠物照片 `pet_photos` 的增删；`is_cover` 唯一性（一只宠物只能有一张封面）。
+- [x] **GREEN**：`PetsController` 增加写端点；`PetRepository` 补 `create`/`update`/`remove`；照片走 Task 11 的上传通道。
+- [x] **验收**：创建的宠物立即出现在 `GET /pets`（若坐标在范围内）与 `GET /me` 的宠物数里。
 
 ---
 
