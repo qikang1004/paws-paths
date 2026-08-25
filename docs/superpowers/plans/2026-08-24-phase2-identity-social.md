@@ -77,10 +77,10 @@
 
 ### Task 6: View History 域 —— 幂等写入 + 列表
 
-- [ ] **RED**：`test/view-history-repository.spec.ts`：同一 `(user, target)` 重复 `record` 只更新 `viewed_at` 不新增行（Global Constraint 19）；`list` 按 `viewed_at` 倒序；`target_type` 支持 `pet`/`venue` 两种。
-- [ ] **RED**：`GET /me/history` 未登录 401；返回混合类型条目，每条带 `targetType` 与投影后的卡片数据。
-- [ ] **GREEN**：仓储双绑定 + `HistoryModule` + 控制器。写入时机：`GET /pets/:id` 与 `GET /venues/:id` 在登录态下**异步**记录（不阻塞响应，失败只写日志 —— 浏览历史丢一条不值得让详情页 500）。
-- [ ] **验收**：未登录访问详情页不写历史、不报错；写入失败时详情页仍 200（用 mock 仓储抛错断言）。
+- [x] **RED**：`test/view-history-repository.spec.ts`：同一 `(user, target)` 重复 `record` 只更新 `viewed_at` 不新增行（Global Constraint 19）；`list` 按 `viewed_at` 倒序；`target_type` 支持 `pet`/`venue` 两种。
+- [x] **RED**：`GET /me/history` 未登录 401；返回混合类型条目，每条带 `targetType` 与投影后的卡片数据。
+- [x] **GREEN**：仓储双绑定 + `HistoryModule` + 控制器。写入时机：`GET /pets/:id` 与 `GET /venues/:id` 在登录态下**异步**记录（不阻塞响应，失败只写日志 —— 浏览历史丢一条不值得让详情页 500）。
+- [x] **验收**：未登录访问详情页不写历史、不报错；写入失败时详情页仍 200（用 mock 仓储抛错断言）。
 
 ### Task 7: `GET /me/favorites` —— 收藏列表（含 favorites 表迁移）
 
