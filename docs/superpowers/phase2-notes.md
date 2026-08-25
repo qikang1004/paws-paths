@@ -288,3 +288,87 @@ Task 11 提交前的带库回归红了两条，`pets.controller.spec.ts` 那条�
 加 `jest.setTimeout(30_000)`。第二条失败没能单独复现（它落在另一个套件上，输出被
 截掉了），修完这一条之后整套 406 通过、0 失败 —— 同一类超时抖动，记在这儿以防再遇到：
 带库跑红了先看是不是超时，再看是不是断言。
+
+### 23. 可见性过滤必须写进 SQL 的 WHERE，不能取完一页再筛
+
+「未 approved 对他人不可见」（Global Constraint 16）如果实现成「按分页取一页，
+再把不可见的 `filter` 掉」，坏的是**分页本身**：一页 10 条里筛掉 7 条，客户端拿到
+3 条还被告知 `hasMore`，翻下一页又跳过了那 7 条的位置。所以过滤条件下沉到仓储：
+
+```sql
+WHERE po.pet_id = $1 AND (po.audit_status = ANY($2) OR po.author_id = $3)
+```
+
+未登录时 `$3` 传 `null`，`po.author_id = NULL` 求值为 NULL（不是 true），
+于是只剩公开的那些 —— 两种身份共用同一条语句，不必分叉出一条「匿名版」SQL。
+`$2` 那个数组是 `AUDIT_STATUSES.filter(isPubliclyVisible)`，从状态机派生而不是
+另抄一份字面量（新加的 `AUDIT_STATUSES` 就是为它而加的）。
+
+### 24. 动态和它的图片一条语句写完，外键在语句末尾才校验
+
+`create` 用数据修改型 CTE：`WITH created AS (INSERT INTO posts …), created_images AS
+(INSERT INTO post_images … FROM jsonb_to_recordset($5::jsonb) AS i(…)) SELECT … FROM created`。
+
+三个不显然的点：
+
+- **不开事务也安全**。各子语句保证各执行一次、执行到底，而外键的检查发生在整条
+  语句末尾，所以「图片那条子语句先跑」不会因为 `posts` 那行还没有就失败。
+  这一条原先只是注释里的断言，Task 12 的带库回归（30/30）真跑过了。
+- **图片 id 在应用侧生成**（`randomUUID()`），所以图片子语句不必等 `created` 的
+  `RETURNING` —— 否则就得让两条 INSERT 有先后依赖，反而回到多语句。
+- **变长的图片数组走 `jsonb_to_recordset`**，不是六个并行的 `unnest` 数组：
+  后者要求调用方保证六个数组一样长，错一个就是行错位，而错位不会报错。
+
+### 25. 机审不阻塞响应，测试用 `settleAuditChecks()` 收敛而不是 sleep
+
+发布响应恒为 `pending`：微信那两个接口正常也要几百毫秒、慢的时候是几秒，而这一刻
+的答案无论如何都是「待审」，让用户对着转圈等一个已知结果毫无意义。
+
+异步就带来「测试怎么知道机审跑完了」的问题。`sleep(200)` 这种写法在远程库上必然
+偶发红。改成服务自己攒句柄：`private readonly inFlight = new Set<Promise<void>>()`，
+公开一个 `settleAuditChecks()` 等它们排空（`while (size > 0)` 循环 —— 等待期间
+可能又发了新动态），`onModuleDestroy` 也调它，免得进程退出时把一条已经拿到裁决、
+还没写回状态的动态永久留在待审。
+### 26. 图片的审核状态按它落的存储档位反查，客户端报的 `auditStatus` 一概不读
+
+发动态时请求体里那个 `images[].auditStatus` 是**不读**的：读它等于让发布方自己声明
+「我这张图过审了」。真相是图片上传时机审给的裁决，而那个裁决已经体现在文件落在
+哪一档（第 18 条：上传不加表，档位就是状态）。于是 `UploadsService` 新增
+`laneOfUrl(url)`：剥掉 `/uploads/` 前缀 → 过 `parseImageKey` 白名单 → `storage.locate`，
+再经 `Readonly<Record<StorageLane, AuditStatus>>` 换成审核状态。
+
+外链、拼错的 key、已经删掉的文件都会拿到 `null` —— 一律落 `pending`（验不了就不放行）。
+测试里拿一个 `https://picsum.photos/...` 的地址断言了这条：作者自己看得到那张图带
+`pending`，其他人拿到的 `images` 是空数组，而**文字照常显示**。
+
+### 27. `PetRepository` 加 `findNameById`，而不是复用 `listByIds` 或改 `findOwnerId`
+
+`PostRow` 要带 `petName`（列表和详情都要显示，客户端不该为一个名字再请求一次）。
+三条路只有一条能走：
+
+- `listByIds` 不行 —— 它是封面照片的 INNER JOIN（第 8 条），刚建好还没传照片的宠物
+  在那条路径上直接取不到，而「新建宠物 → 立刻发第一条动态」正是最常见的路径。
+- 把 `findOwnerId` 改成一次返回归属 + 名字也不行 —— 三个调用方加两个 spec 文件都要跟着改，
+  而其中两个调用方只关心归属。
+- 加一个窄接口 `findNameById`。Postgres 侧读动态时名字本来就随 `JOIN pets` 免费带回来，
+  只有发布这一条路径多付一次 O(1) 查询，而它和归属查询是 `Promise.all` 并发打的。
+
+### 28. `parseListQuery` 从 `MeController` 提到 `common/list-query.ts`
+
+`GET /posts` 要同一套分页校验（page ≥ 1、pageSize 1..20）。让动态域去 import 一个
+controller 文件，等于把「当前用户的数据」那一域拖进自己的依赖里，所以直接把函数
+挪进 `common/`。纯搬移，规则一字未改，`me.controller.ts` 改成 import。
+
+（`PetsController` 里还有一份内联的同规则校验 —— 它同时解析 species/breed/radius
+等筛选项，形状不同，这次不动。）
+
+### 29. `parseDimension` 只收字符串，是有意的，所以两条通道各有一个宽高校验
+
+Task 12 的第一次 RED 之后，唯一红的那条用例红在**测试自己**调 `uploads.save()` 时
+传了数字宽高：`parseDimension` 明确只接受字符串（multipart 的字段一律是字符串，
+第 21 条的上游），数字进去就是 `null` → 422。
+
+没有把它改成「两种都收」：动态发布的宽高来自 JSON，本来就是数，`positiveInt()`
+卡的就是数。两个函数各卡各自那条通道的形状，互相将就的话，两边都会悄悄放过
+对方那种错误输入。测试改成传 `'400'` / `'300'`。
+

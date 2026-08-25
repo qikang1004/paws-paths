@@ -12,6 +12,15 @@ const ALLOWED: Record<AuditStatus, readonly AuditStatus[]> = {
   rejected: ['pending'],
 };
 
+/**
+ * 全部状态，从迁移表派生而不是另抄一份字面量数组 ——
+ * 将来往状态机加一种状态，这份清单自动跟上。
+ *
+ * SQL 侧要它：可见性过滤必须写在 WHERE 里（过滤放到 LIMIT 之后会把分页算坏），
+ * 而 `audit_status = ANY($n)` 的那个数组得先有一份完整清单可筛。
+ */
+export const AUDIT_STATUSES = Object.keys(ALLOWED) as readonly AuditStatus[];
+
 export class AuditTransitionError extends Error {
   constructor(
     readonly from: AuditStatus,

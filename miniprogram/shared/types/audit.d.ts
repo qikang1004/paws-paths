@@ -1,6 +1,14 @@
 // 由 packages/types 同步而来，禁止手改。
 // 改动请改 packages/types，然后跑 npm run sync:types。
 export type AuditStatus = 'pending' | 'approved' | 'rejected' | 'pending_review';
+/**
+ * 全部状态，从迁移表派生而不是另抄一份字面量数组 ——
+ * 将来往状态机加一种状态，这份清单自动跟上。
+ *
+ * SQL 侧要它：可见性过滤必须写在 WHERE 里（过滤放到 LIMIT 之后会把分页算坏），
+ * 而 `audit_status = ANY($n)` 的那个数组得先有一份完整清单可筛。
+ */
+export declare const AUDIT_STATUSES: readonly AuditStatus[];
 export declare class AuditTransitionError extends Error {
     readonly from: AuditStatus;
     readonly to: AuditStatus;

@@ -96,6 +96,11 @@ describe('InMemoryPetRepository', () => {
     expect(await repo.findOwnerId('nope')).toBeNull();
   });
 
+  it('findNameById 取得到名字；不存在回 null（发动态时投影 petName 用）', async () => {
+    expect(await repo.findNameById('p-1')).toBe('大黄');
+    expect(await repo.findNameById('nope')).toBeNull();
+  });
+
   it('归属不下发客户端：PetRow 上没有 ownerId', async () => {
     const found = await repo.getById('p-1');
     expect(found?.pet).not.toHaveProperty('ownerId');

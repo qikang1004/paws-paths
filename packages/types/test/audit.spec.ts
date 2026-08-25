@@ -1,5 +1,6 @@
 import {
   assertTransition,
+  AUDIT_STATUSES,
   AuditTransitionError,
   canTransition,
   isPubliclyVisible,
@@ -74,5 +75,28 @@ describe('isVisibleTo', () => {
     for (const status of ALL) {
       expect(isVisibleTo(status, false)).toBe(isPubliclyVisible(status));
     }
+  });
+});
+
+/**
+ * `AUDIT_STATUSES` 是 SQL 侧「对外可见的状态有哪些」的来源（`= ANY($n)`）。
+ * 它必须真的是全集 —— 漏一个状态，那个状态就会在可见性过滤里被静默漏掉。
+ */
+describe('AUDIT_STATUSES', () => {
+  it('是全部四个状态，不是抄来的子集', () => {
+    expect([...AUDIT_STATUSES].sort()).toEqual(
+      (['approved', 'pending', 'pending_review', 'rejected'] as AuditStatus[]).sort(),
+    );
+  });
+
+  it('每一个都能作为迁移起点被状态机识别（即真的在迁移表里登记过）', () => {
+    for (const status of AUDIT_STATUSES) {
+      // 未登记的状态会让 canTransition 读到 undefined 而抛 TypeError。
+      expect(() => canTransition(status, 'approved')).not.toThrow();
+    }
+  });
+
+  it('筛出对外可见的那些 —— 只有 approved', () => {
+    expect(AUDIT_STATUSES.filter(isPubliclyVisible)).toEqual(['approved']);
   });
 });

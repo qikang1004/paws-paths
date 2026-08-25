@@ -2,7 +2,7 @@
 // 改动请改 packages/types，然后跑 npm run sync:types。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isVisibleTo = exports.isPubliclyVisible = exports.assertTransition = exports.canTransition = exports.AuditTransitionError = void 0;
+exports.isVisibleTo = exports.isPubliclyVisible = exports.assertTransition = exports.canTransition = exports.AuditTransitionError = exports.AUDIT_STATUSES = void 0;
 /**
  * 状态机对应 spec §4.5。
  * rejected → pending 是作者修改重提通道（spec §6）。
@@ -14,6 +14,14 @@ const ALLOWED = {
     pending_review: ['approved', 'rejected'],
     rejected: ['pending'],
 };
+/**
+ * 全部状态，从迁移表派生而不是另抄一份字面量数组 ——
+ * 将来往状态机加一种状态，这份清单自动跟上。
+ *
+ * SQL 侧要它：可见性过滤必须写在 WHERE 里（过滤放到 LIMIT 之后会把分页算坏），
+ * 而 `audit_status = ANY($n)` 的那个数组得先有一份完整清单可筛。
+ */
+exports.AUDIT_STATUSES = Object.keys(ALLOWED);
 class AuditTransitionError extends Error {
     constructor(from, to) {
         super(`illegal audit transition: ${from} -> ${to}`);

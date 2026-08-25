@@ -100,6 +100,13 @@ export interface PetRepository {
    * 私密宠物的主人也要能改自己的宠物（Task 9 的 403 判定用同一个方法）。
    */
   findOwnerId(petId: string): Promise<string | null>;
+  /**
+   * 展示用的名字，宠物不存在返回 null。
+   *
+   * 发动态时要把宠物名一并落进投影（`PostRow.petName`），而 `listByIds` 走的是
+   * 封面照片的 INNER JOIN —— 刚建好还没传照片的宠物在那条路径上取不到。
+   */
+  findNameById(petId: string): Promise<string | null>;
   /** 批量按 id 取卡片投影，保持传入顺序。关注列表这类「先有 id 再要卡片」的场景用它。 */
   listByIds(petIds: string[], coords?: { lat: number; lng: number }): Promise<PetRow[]>;
 
@@ -306,6 +313,10 @@ export class InMemoryPetRepository implements PetRepository {
 
   async findOwnerId(petId: string): Promise<string | null> {
     return this.pets.find((p) => p.id === petId)?.ownerId ?? null;
+  }
+
+  async findNameById(petId: string): Promise<string | null> {
+    return this.pets.find((p) => p.id === petId)?.name ?? null;
   }
 
   async listByIds(petIds: string[], coords?: { lat: number; lng: number }): Promise<PetRow[]> {
@@ -550,6 +561,14 @@ export class PostgresPetRepository implements PetRepository {
       [petId],
     );
     return rows.length ? rows[0].owner_id : null;
+  }
+
+  async findNameById(petId: string): Promise<string | null> {
+    const { rows } = await this.pool.query<{ name: string }>(
+      `SELECT name FROM pets WHERE id = $1`,
+      [petId],
+    );
+    return rows.length ? rows[0].name : null;
   }
 
   async listByIds(petIds: string[], coords?: { lat: number; lng: number }): Promise<PetRow[]> {

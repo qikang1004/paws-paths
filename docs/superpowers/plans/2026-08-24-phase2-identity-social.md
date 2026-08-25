@@ -127,10 +127,10 @@
 
 ### Task 12: Posts 域 —— 发布 + 列表 + 详情
 
-- [ ] **RED**：`POST /posts` 未登录 401；空内容 422；内容超长 422；成功返回 `auditStatus: 'pending'`（**不是** `approved`，即使内容安全通过也要走状态机）。
-- [ ] **RED**：`GET /posts?petId=` 列表、`GET /posts/:id` 详情；分页生效；按 `published_at` 倒序。
-- [ ] **GREEN**：`PostRepository` 双绑定 + `PostsModule` + 控制器；发布流程：落 `pending` → 调内容安全 → 按状态机迁移 → 更新状态。内容安全调用**不阻塞响应**（先返回 `pending`，异步检查），失败留 `pending`。
-- [ ] **验收**：`post_images` 与 `posts` 的审核状态独立 —— 文字过审但某张图未过审时，该图不返回，文字正常显示。
+- [x] **RED**：`POST /posts` 未登录 401；空内容 422；内容超长 422；成功返回 `auditStatus: 'pending'`（**不是** `approved`，即使内容安全通过也要走状态机）。
+- [x] **RED**：`GET /posts?petId=` 列表、`GET /posts/:id` 详情；分页生效；按 `published_at` 倒序。
+- [x] **GREEN**：`PostRepository` 双绑定 + `PostsModule` + 控制器；发布流程：落 `pending` → 调内容安全 → 按状态机迁移 → 更新状态。内容安全调用**不阻塞响应**（先返回 `pending`，异步检查），失败留 `pending`。
+- [x] **验收**：`post_images` 与 `posts` 的审核状态独立 —— 文字过审但某张图未过审时，该图不返回，文字正常显示。
 
 ### Task 13: 可见性安全测试（过审必要条件）
 

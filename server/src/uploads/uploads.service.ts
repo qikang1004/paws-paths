@@ -42,6 +42,9 @@ const LANE_OF: Readonly<Record<ContentSecurityVerdict, StorageLane | null>> = {
   rejected: null,
 };
 
+/** 取图的对外 URL 前缀，与 `save()` 拼出来的那个保持一处定义。 */
+const URL_PREFIX = '/uploads/';
+
 function fail(message: string): never {
   throw new ApiException(ERROR_CODES.VALIDATION_FAILED, message, HttpStatus.UNPROCESSABLE_ENTITY);
 }
@@ -88,7 +91,21 @@ export class UploadsService {
     }
 
     const key = await this.storage.put({ lane, ownerId, ext, data });
-    return { key, url: `/uploads/${key}`, width, height, auditStatus: verdict };
+    return { key, url: `${URL_PREFIX}${key}`, width, height, auditStatus: verdict };
+  }
+
+  /**
+   * 反查一个图片地址落在哪一档。不是本服务发出的地址（外链、拼错的 key、
+   * 已经不存在的文件）一律返回 null。
+   *
+   * 发动态时用它来定图片的审核状态：客户端报的 `auditStatus` 不能信 ——
+   * 那等于让发布方自己声明「我这张图过审了」。档位是机审当时落的，是唯一的真相。
+   */
+  async laneOfUrl(url: string): Promise<StorageLane | null> {
+    if (!url.startsWith(URL_PREFIX)) return null;
+    const key = url.slice(URL_PREFIX.length);
+    if (!parseImageKey(key)) return null;
+    return this.storage.locate(key);
   }
 
   /**
