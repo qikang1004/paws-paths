@@ -134,13 +134,13 @@
 
 ### Task 13: 可见性安全测试（过审必要条件）
 
-- [ ] **RED**：这是 Global Constraint 16 的专项测试，独立成文件 `test/post-visibility.security.spec.ts`：
+- [x] **RED**：这是 Global Constraint 16 的专项测试，独立成文件 `test/post-visibility.security.spec.ts`：
   - 作者本人 `GET /posts?petId=` 能看到自己的 `pending` 与 `rejected` 动态，带 `auditStatus` 供角标使用
   - **其他登录用户**看不到（列表不含、详情 404）
   - **未登录用户**看不到（列表不含、详情 404）
   - 关注流 `GET /me/feed`（若本阶段实现）同样过滤
   - `approved` 后所有人可见
-- [ ] **验收**：这 5 条断言必须全部真跑过 Postgres（门控），不能只在 InMemory 上验 —— 可见性过滤是 SQL WHERE 子句，InMemory 实现容易与 SQL 行为不一致。
+- [x] **验收**：这 5 条断言必须全部真跑过 Postgres（门控），不能只在 InMemory 上验 —— 可见性过滤是 SQL WHERE 子句，InMemory 实现容易与 SQL 行为不一致。
 
 ### Task 14: 小程序端 API 层 + 纯函数
 
