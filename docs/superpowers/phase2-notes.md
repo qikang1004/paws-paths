@@ -163,3 +163,56 @@ PostgreSQL 的 `WITH ... INSERT/UPDATE/DELETE` 子语句保证各执行一次、
 数组，直接改模块级常量的话，同一进程里的下一个测试套件会看到上一个套件建的宠物。
 封面指针连着 `coverUrl` / `coverWidth` / `coverHeight` 三个冗余字段一起挪（Postgres 侧
 靠 JOIN 拿到，内存侧只能手工同步），这件事由私有的 `setCover` 一处负责。
+
+### 13. `src/moderation/` 装的是内容安全接缝，不是状态机
+
+Global Constraint 15 把状态机的唯一实现点写成 `server/src/moderation/audit-state.ts`。
+实际它在 `packages/types/src/audit.ts`（阶段 0 就建好了，Task 2 只补了 `isVisibleTo`）——
+小程序端也要它来决定审核角标显不显示，放进 `server/` 就得抄一份到 `miniprogram/`，
+那正是这条约束本身要禁的事。约束的意图（唯一实现、共用状态机）成立，路径不成立。
+本任务新建的 `server/src/moderation/` 目录因此只装内容安全的 DI 接缝。
+
+### 14. `ContentSecurityVerdict` 只有三态，不含 `pending_review`
+
+内容安全返回的是「机审的结论」，只可能是 `approved` / `rejected` / `pending`（没有结论）。
+`pending_review` 是**已发布内容被举报后撤下待人工复核**的状态，机审这条路径永远到不了它 ——
+让接口能返回它，调用方就得处理一个实际不会发生的分支。所以用
+`Extract<AuditStatus, 'approved' | 'rejected' | 'pending'>` 收窄，仍然从同一个 `AuditStatus`
+派生，不另立一套字面量。
+
+微信的 `suggest`（pass / risky / review）到三态的映射走一张
+`Readonly<Record<string, ContentSecurityVerdict>>` 查表，不写 `suggest === 'pass'`：
+一是 `test/audit-literal-guard.spec.ts` 会拦下 `server/src/` 里的状态字面量比较，
+二是查表天然处理「微信加了个新 suggest 值」—— 查不到就当没有结论，落 `pending`。
+
+### 15. fail-closed 要按失败形态逐个断言，不能只测一种
+
+「调用失败就留 `pending`」听起来一句话就够，但失败有七种长相：网络异常、HTTP 非 2xx、
+响应体不是 JSON、`errcode 40001`（token 失效）、`errcode 45009`（配额超限）、
+`errcode 0` 但没有 `result`、未知 `suggest`。只测其中一种，剩下六条里任何一条走进
+「拿不到结论就当通过」都测不出来 —— 而这正是 Global Constraint 18 要防的。
+所以那条测试是表驱动的，七种形态各排一遍，断言 `[label, verdict]` 全为 `pending`。
+
+`errcode 87014` 是唯一的例外：它是微信明确判定「内容含违规」的错误码，不是「调用失败」，
+落 `rejected`。取 token 本身失败时连请求都不发（断言 `calls` 为空）。
+
+### 16. `ModerationModule` 暂时没有任何 import 方
+
+它只导出 `CONTENT_SECURITY_API` 令牌，不导出两个实现本体 —— 业务代码因此拿不到
+「绕开开关直接调真微信」的路径。目前 `app.module.ts` 还没 import 它：第一个消费者是
+Task 12 的 `PostsModule`。接缝先立起来、消费者后接上，是为了让 Task 10 的测试只验接缝
+（真假切换 + fail-closed），不掺发布流程的状态迁移。
+
+`imgSecCheck` 走 `FormData` + `new Blob([data])`，**不手写 `Content-Type`**：
+multipart 的 boundary 由 fetch 自己填，手写那行 header 会让 boundary 对不上。
+
+### 17. 「没打 WARN」不能写成 `not.toHaveBeenCalled()`
+
+接线测试最初断言的是「真实现生效时一条 WARN 都没有」。无库模式下它是绿的，
+带 `--env-file=.env` 跑就红：`ModerationModule` import 了 `WechatModule`，而 `.env` 里
+`FAKE_WECHAT_LOGIN=1` 开着，邻居那个开关自己打了一条 WARN，被这条断言算到了头上。
+
+这是断言写宽了，不是被测代码的问题：测试想说的是「**这条** WARN 没打」。改成按开关名
+筛 `warn.mock.calls` 再数，两个开关各测各的，测试也不再随环境变量的顺风顺水而变色。
+教训：spy 整个 logger 时，断言必须锚定到自己那条消息 —— 模块图上任何一个邻居
+将来多打一条日志，宽断言都会红，而红的原因和被测代码无关。

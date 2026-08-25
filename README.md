@@ -54,6 +54,7 @@ REDIS_URL=redis://:你的密码@127.0.0.1:6379
 JWT_SECRET=一串足够长的随机字符
 SEED_DEMO_DATA=1
 FAKE_WECHAT_LOGIN=1
+FAKE_CONTENT_SECURITY=1
 PORT=5000
 ```
 
@@ -69,6 +70,10 @@ PORT=5000
 `FAKE_WECHAT_LOGIN=1` 让登录能在本地跑通。真登录要拿 code 去微信服务器换 openid,本地没有正式 AppID、开发者工具的 code 也只对特定 AppID 有效,所以真登录本地走不通;**填个假 AppID 也不行**,微信会回 `errcode 40013`。开着这个开关后,任何 code 都会哈希成一个稳定的 `fake-` 前缀 openid,同一 code 每次都是同一用户。
 
 同样只认字面 `1`。**部署环境必须留空或设 `0`**——开着它等于谁都能登录成任意用户。启动时会打一条 WARN 提醒。`WX_APPID` / `WX_SECRET` 这时可以留空。
+
+`FAKE_CONTENT_SECURITY=1` 跳过微信内容安全检查(`msgSecCheck` / `imgSecCheck`),原因同上:没有正式 AppID 就取不到 access_token。注意它**不放行**——所有动态与图片一律停在 `pending`,而未过审内容对他人不可见,所以本地联调时**你发的动态别人看不见,你自己能看见**(带「审核中」角标)。
+
+这是有意的:假实现若直接置 `approved`,「未 approved 内容对他人不可见」那条过审必要条件的安全测试就被测空了——它会全绿,却什么都没验到。要在本地看到别人的动态,手工改库里的 `audit_status`。同样只认字面 `1`,同样在启动时打 WARN。
 
 ### 4. 启动服务端
 
@@ -127,9 +132,10 @@ jest 不会自动读 `.env`,所以要跑数据库集成测试必须显式用 `no
 1. **环境变量由平台注入,不要上传 `.env`。** 代码里没有 dotenv,`.env` 只在本地配合 `--env-file` 用。
 2. **`SEED_DEMO_DATA` 生产必须留空或设 `0`。** 否则会把 8 只测试宠物插进生产库。
 3. **`FAKE_WECHAT_LOGIN` 生产必须留空或设 `0`。** 这是认证绕过开关,开着它任何人都能登录成任意用户。部署前确认一遍,并留意启动日志里那条 WARN。
-4. **建表自动执行,不需要单独的迁移步骤。** 迁移包在 PostgreSQL 咨询锁里,多副本同时启动也不会互相踩。
-5. `npm run build` 会把 `src/database/*.sql` 复制进 `dist/`,别只 `tsc`。
-6. Redis 和 PostgreSQL 用托管实例,连接串走平台的密钥管理。
+4. **`FAKE_CONTENT_SECURITY` 生产必须留空或设 `0`。** 开着它内容安全检查被假实现替代;它不放行(内容一律停在待审),所以不会外泄未审内容,但**没有任何内容能自动过审**,用户会以为发布坏了。同样有 WARN。
+5. **建表自动执行,不需要单独的迁移步骤。** 迁移包在 PostgreSQL 咨询锁里,多副本同时启动也不会互相踩。
+6. `npm run build` 会把 `src/database/*.sql` 复制进 `dist/`,别只 `tsc`。
+7. Redis 和 PostgreSQL 用托管实例,连接串走平台的密钥管理。
 
 ### 小程序
 
@@ -145,6 +151,8 @@ CI 已配好(`.github/workflows/ci.yml`):推 `v*` 标签触发上传体验版,�
 ## 五、已知问题
 
 **登录在本地要靠 `FAKE_WECHAT_LOGIN=1`。** 不开这个开关,`POST /auth/wx-login` 会报 `缺少环境变量 WX_APPID`;填假 AppID 则变成微信上游 `errcode 40013`,同样登录不了。原因是 `code2Session` 会真的请求微信服务器,而正式 AppID 要有小程序账号才能拿到。浏览类接口(广场、宠物详情、周边)不需要登录态,不开也能用。
+
+**本地发的动态别人看不见。** 内容安全同样要正式 AppID(要 access_token),所以本地靠 `FAKE_CONTENT_SECURITY=1` 跳过。假实现刻意**不放行**:内容停在 `pending`,作者本人能看到自己的「审核中」条目,其他人(含未登录)看不到。这不是 bug,是过审必要条件的一部分——详见上面第 3 节。提审前必须关掉开关,并用正式 AppID 真跑一次 `msgSecCheck` / `imgSecCheck`:假实现只证明了链路接得上,没证明微信那端的调用是对的。
 
 **Redis 挂了登录仍可用,但限流会失效。** 这是有意的取舍(fail-open):`RedisRateLimitStore.increment` 在 Redis 不可用时返回 0 并写一条 ERROR 日志,登录照常放行。代价是**宕机窗口内登录端点没有暴力破解防护**,所以那条 ERROR 日志值得接告警。日志长这样:
 

@@ -112,12 +112,12 @@
 
 ### Task 10: 内容安全 DI seam + 假实现开关
 
-- [ ] **RED**：`test/content-security.spec.ts`：`shouldFakeContentSecurity(raw)` 只认 `'1'`（`'true'`/`'0'`/`undefined` 全为 false，与 `shouldFakeWechatLogin` 同规格）。
-- [ ] **RED**：`test/content-security-wiring.spec.ts`：`FAKE_CONTENT_SECURITY=1` 时容器解析到假实现且启动打 WARN；未设时解析到真实现。用 `useFactory` provider（**不是**在 `@Module` 装饰器里调函数 —— 装饰器在 import 时求值，读不到测试设的 env，阶段 1 踩过这个坑）。
-- [ ] **RED**：假实现的返回值断言 —— **必须是 `pending`，不能是 `approved`**（Global Constraint 17）。这条测试是防止有人「顺手」把假实现改成放行。
-- [ ] **GREEN**：`CONTENT_SECURITY_API` 令牌 + `WechatContentSecurityApi`（真实 `msgSecCheck`/`imgSecCheck`，经 `AccessTokenService` 取 token）+ `FakeContentSecurityApi`。
-- [ ] **GREEN**：真实实现的失败路径 fail-closed（Global Constraint 18）：任何异常都返回「未通过」而非「通过」，`errcode`/`errmsg` 仅写日志（Global Constraint 5）。
-- [ ] **验收**：`RELEASE_CHECKLIST.md` 增加 `FAKE_CONTENT_SECURITY` 核对项；`README.md` 「已知问题」说明本地行为。
+- [x] **RED**：`test/content-security.spec.ts`：`shouldFakeContentSecurity(raw)` 只认 `'1'`（`'true'`/`'0'`/`undefined` 全为 false，与 `shouldFakeWechatLogin` 同规格）。
+- [x] **RED**：`test/content-security-wiring.spec.ts`：`FAKE_CONTENT_SECURITY=1` 时容器解析到假实现且启动打 WARN；未设时解析到真实现。用 `useFactory` provider（**不是**在 `@Module` 装饰器里调函数 —— 装饰器在 import 时求值，读不到测试设的 env，阶段 1 踩过这个坑）。
+- [x] **RED**：假实现的返回值断言 —— **必须是 `pending`，不能是 `approved`**（Global Constraint 17）。这条测试是防止有人「顺手」把假实现改成放行。
+- [x] **GREEN**：`CONTENT_SECURITY_API` 令牌 + `WechatContentSecurityApi`（真实 `msgSecCheck`/`imgSecCheck`，经 `AccessTokenService` 取 token）+ `FakeContentSecurityApi`。
+- [x] **GREEN**：真实实现的失败路径 fail-closed（Global Constraint 18）：任何异常都返回「未通过」而非「通过」，`errcode`/`errmsg` 仅写日志（Global Constraint 5）。
+- [x] **验收**：`RELEASE_CHECKLIST.md` 增加 `FAKE_CONTENT_SECURITY` 核对项；`README.md` 「已知问题」说明本地行为。
 
 ### Task 11: 图片上传通道
 
