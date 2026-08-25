@@ -6,3 +6,5 @@ export * from './api';
 export * from './pet';
 export * from './venue';
 export * from './filter';
+export * from './social';
+export * from './profile';

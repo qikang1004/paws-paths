@@ -13,10 +13,17 @@ export declare const ERROR_CODES: {
     readonly VALIDATION_FAILED: 42200;
     readonly AUDIT_REJECTED: 42201;
     readonly LOCATION_REQUIRED: 42202;
+    readonly FOLLOW_SELF: 42203;
     readonly RATE_LIMITED: 42900;
     readonly INTERNAL: 50000;
     readonly UPSTREAM_WECHAT: 50201;
     readonly UPSTREAM_MAP: 50202;
+    /**
+     * 内容安全接口不可用。与 `UPSTREAM_WECHAT` 分开是因为处置不同：
+     * 内容安全是 fail-closed（宁可拒发也不能放过未审内容），前端要提示「稍后重试」
+     * 而不是当成一般的微信故障静默降级。
+     */
+    readonly UPSTREAM_WECHAT_SECURITY: 50203;
 };
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
 export declare const ERROR_MESSAGES: Record<number, string>;

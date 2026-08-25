@@ -22,3 +22,5 @@ __exportStar(require("./api"), exports);
 __exportStar(require("./pet"), exports);
 __exportStar(require("./venue"), exports);
 __exportStar(require("./filter"), exports);
+__exportStar(require("./social"), exports);
+__exportStar(require("./profile"), exports);
