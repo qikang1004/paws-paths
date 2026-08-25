@@ -1,14 +1,16 @@
 import type { AuditStatus } from './audit';
+import type { PetSummary } from './pet';
 
 /**
- * 关注关系。spec §4.2：关注的目标是**宠物**，不是用户。
- * 一个用户可能养多只宠物，用户只想看其中一只的动态是常态。
+ * 关注列表条目。spec §4.2：关注的目标是**宠物**，不是用户 —— 一个用户可能养多只，
+ * 只想看其中一只的动态是常态。
+ *
+ * 直接继承 {@link PetSummary} 而不是包一层 `{ pet: PetSummary }`：小程序的宠物卡
+ * 组件吃的就是 `PetSummary`，扁平化后「我的关注」页能原样复用，不必解一层。
+ * `id` 是宠物 id（与卡片一致），关注关系自己的行 id 叫 `followId`。
  */
-export interface FollowDto {
-  id: string;
-  targetPetId: string;
-  petName: string;
-  petCoverUrl: string | null;
+export interface FollowDto extends PetSummary {
+  followId: string;
   followedAt: string;
 }
 

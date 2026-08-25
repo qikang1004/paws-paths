@@ -1,6 +1,7 @@
 import type {
   AuditStatus,
   FollowDto,
+  PetSummary,
   PostDto,
   PostImageDto,
   ViewHistoryItemDto,
@@ -11,28 +12,49 @@ import type {
 // `@ts-expect-error` 是反向断言 —— 那一行必须报错，不报错反而算失败。
 
 describe('FollowDto', () => {
-  it('关注对象是宠物，不是用户', () => {
+  const petCard: PetSummary = {
+    id: 'p-2',
+    name: '奶昔',
+    species: 'cat',
+    breed: '布偶',
+    gender: 'female',
+    birthDate: '2024-02-14',
+    coverUrl: 'https://cdn.example.com/p2.jpg',
+    coverWidth: 800,
+    coverHeight: 600,
+    personalityTags: ['温柔'],
+    distanceMeters: null,
+    ownerNickname: '阿喵',
+    ownerAvatarUrl: null,
+    ownerVerified: true,
+  };
+
+  it('是宠物卡的扁平扩展 —— 小程序的卡片组件能原样复用', () => {
     const follow: FollowDto = {
-      id: 'f-1',
-      targetPetId: 'p-2',
-      petName: '布丁',
-      petCoverUrl: 'https://cdn.example.com/p2.jpg',
+      ...petCard,
+      followId: 'f-1',
       followedAt: '2026-08-01T10:00:00.000Z',
     };
-    expect(follow.targetPetId).toBe('p-2');
+    // 关注对象是宠物：id 就是宠物 id
+    expect(follow.id).toBe('p-2');
+    expect(follow.coverWidth).toBe(800);
+  });
+
+  it('PetSummary 的必填字段一个都不能少', () => {
+    // @ts-expect-error 缺 coverWidth/coverHeight 等宠物卡字段
+    const bad: FollowDto = { id: 'p-2', followId: 'f-1', followedAt: '2026-08-01T10:00:00.000Z' };
+    expect(bad.followId).toBe('f-1');
   });
 
   it('没有 targetUserId 这种字段', () => {
     const follow: FollowDto = {
-      id: 'f-1',
-      targetPetId: 'p-2',
-      petName: '布丁',
-      petCoverUrl: null,
+      ...petCard,
+      followId: 'f-1',
       followedAt: '2026-08-01T10:00:00.000Z',
       // @ts-expect-error 关注的是宠物，不存在 targetUserId
       targetUserId: 'u-2',
     };
-    expect(follow.id).toBe('f-1');
+    expect(follow.followId).toBe('f-1');
   });
 });
 
