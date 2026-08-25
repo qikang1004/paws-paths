@@ -144,9 +144,9 @@
 
 ### Task 14: 小程序端 API 层 + 纯函数
 
-- [ ] **RED**：`miniprogram/test/` 新增用例：`api/follows.ts`、`api/posts.ts`、`api/me.ts` 的请求参数拼装；`buildPostView`（含审核角标可见性：`pending` 显示「审核中」、`rejected` 显示「未通过」+ 原因、`approved` 不显示角标）。
-- [ ] **GREEN**：API 层沿用 `api/request.ts`（Global Constraint 3，页面不得直接 `wx.request`）；`audit-badge` 组件（spec §5.3 已列出）。
-- [ ] **验收**：`wx-guard` / `style-guard` / `module-guard` / `sync-types` 全绿。
+- [x] **RED**：`miniprogram/test/` 新增用例：`api/follows.ts`、`api/posts.ts`、`api/me.ts` 的请求参数拼装；`buildPostView`（含审核角标可见性：`pending` 显示「审核中」、`rejected` 显示「未通过」+ 原因、`approved` 不显示角标）。
+- [x] **GREEN**：API 层沿用 `api/request.ts`（Global Constraint 3，页面不得直接 `wx.request`）；`audit-badge` 组件（spec §5.3 已列出）。
+- [x] **验收**：`wx-guard` / `style-guard` / `module-guard` / `sync-types` 全绿。
 
 ### Task 15: 小程序端 6 个页面
 

@@ -1,6 +1,13 @@
-import type { WxAdapter, WxRequestOptions, WxRequestResult } from '../api/wx-promise';
+import type {
+  WxAdapter,
+  WxRequestOptions,
+  WxRequestResult,
+  WxUploadOptions,
+  WxUploadResult,
+} from '../api/wx-promise';
 
 export type Responder = (opts: WxRequestOptions) => WxRequestResult<unknown>;
+export type UploadResponder = (opts: WxUploadOptions) => WxUploadResult;
 
 export class FakeWx implements WxAdapter {
   loginCalls = 0;
@@ -13,12 +20,25 @@ export class FakeWx implements WxAdapter {
   };
 
   readonly sent: WxRequestOptions[] = [];
+
+  /**
+   * 上传单独排一条队。`SessionStore.doRefresh()` 走的是 `wx.request`，
+   * 也就是说刷新令牌会占掉 `sent` 里的一格 —— 两条通道混在一个队列里，
+   * 「401 后重试上传」这种用例的下标就得跟着登录请求一起数。
+   */
+  readonly uploaded: WxUploadOptions[] = [];
+
   private readonly storage = new Map<string, string>();
   private responders: Responder[] = [];
+  private uploadResponders: UploadResponder[] = [];
 
   /** 按调用顺序排队响应；队列耗尽后重复使用最后一个。 */
   queue(...responders: Responder[]): void {
     this.responders = responders;
+  }
+
+  queueUpload(...responders: UploadResponder[]): void {
+    this.uploadResponders = responders;
   }
 
   async login(): Promise<{ code: string }> {
@@ -39,6 +59,15 @@ export class FakeWx implements WxAdapter {
       this.responders[this.sent.length - 1] ?? this.responders[this.responders.length - 1];
     if (!responder) throw new Error('FakeWx 没有排队响应');
     return responder(opts) as WxRequestResult<T>;
+  }
+
+  async uploadFile(opts: WxUploadOptions): Promise<WxUploadResult> {
+    this.uploaded.push(opts);
+    const responder =
+      this.uploadResponders[this.uploaded.length - 1] ??
+      this.uploadResponders[this.uploadResponders.length - 1];
+    if (!responder) throw new Error('FakeWx 没有排队上传响应');
+    return responder(opts);
   }
 
   getStorage(key: string): string | null {
@@ -66,4 +95,10 @@ export const fail = (
 ): WxRequestResult<unknown> => ({
   statusCode,
   data: { code, message, data: null },
+});
+
+/** 上传通道的成功响应：信封是**字符串**，和 wx.uploadFile 的真实行为一致。 */
+export const okText = <T>(data: T, statusCode = 200): WxUploadResult => ({
+  statusCode,
+  data: JSON.stringify({ code: 0, message: 'ok', data }),
 });

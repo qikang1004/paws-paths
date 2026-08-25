@@ -1,0 +1,22 @@
+.audit-badge {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+}
+
+/* 「审核中」用三级色：是提示，不是错误。 */
+.audit-badge--pending {
+  background-color: var(--color-tertiary-container);
+  color: var(--color-on-tertiary-container);
+}
+
+.audit-badge--rejected {
+  background-color: var(--color-error-container);
+  color: var(--color-on-error-container);
+}
+
+.audit-badge__reason {
+  margin-top: var(--space-xs);
+}

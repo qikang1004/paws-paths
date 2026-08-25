@@ -1,0 +1,4 @@
+<view wx:if="{{badge.visible}}" class="audit-badge audit-badge--{{badge.tone}}">
+  <text class="audit-badge__text text-label-md">{{badge.text}}</text>
+  <text wx:if="{{badge.showReason}}" class="audit-badge__reason text-body-sm">{{badge.reasonText}}</text>
+</view>

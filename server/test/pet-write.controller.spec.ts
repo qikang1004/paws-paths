@@ -325,6 +325,45 @@ describe('宠物增改（POST /pets + PATCH/DELETE /pets/:id + 照片）', () =>
     });
   });
 
+  /**
+   * `wx.request` 发不出 PATCH（method 白名单里没有），所以 `/pets/:id` 上
+   * PUT 与 PATCH 共用同一份实现。这里盯的是两个动词不许分叉。
+   */
+  describe('PUT /pets/:id（小程序端只能发 PUT）', () => {
+    it('未登录 401、改别人的 403、不存在的 404 —— 与 PATCH 一致', async () => {
+      await http().put(`/pets/${OTHERS_PET}`).send({ name: '改名' }).expect(401);
+
+      const forbidden = await auth(http().put(`/pets/${OTHERS_PET}`)).send({ name: '抢名字' });
+      expect(forbidden.status).toBe(403);
+      expect(forbidden.body.code).toBe(ERROR_CODES.FORBIDDEN);
+
+      const missing = await auth(http().put('/pets/p-nope')).send({ name: '改名' });
+      expect(missing.status).toBe(404);
+      expect(missing.body.code).toBe(ERROR_CODES.NOT_FOUND);
+    });
+
+    it('局部语义：只给 bio 时其余字段一个都没动', async () => {
+      const id = await createWithPhoto();
+      const res = await auth(http().put(`/pets/${id}`)).send({ bio: '走 PUT 改简介' });
+      expect(res.status).toBe(200);
+
+      const detail = await http().get(`/pets/${id}`).expect(200);
+      expect(detail.body.data.bio).toBe('走 PUT 改简介');
+      expect(detail.body.data.name).toBe('小新');
+      expect(detail.body.data.species).toBe('dog');
+      expect(detail.body.data.photos).toHaveLength(1);
+    });
+
+    it('校验同一份：空 body 与非法物种照样 422', async () => {
+      const id = await createWithPhoto();
+      for (const body of [{}, { species: 'all' }, { name: '' }]) {
+        const res = await auth(http().put(`/pets/${id}`)).send(body);
+        expect(res.status).toBe(422);
+        expect(res.body.code).toBe(ERROR_CODES.VALIDATION_FAILED);
+      }
+    });
+  });
+
   describe('DELETE /pets/:id', () => {
     it('未登录 401', async () => {
       await http().delete(`/pets/${OTHERS_PET}`).expect(401);

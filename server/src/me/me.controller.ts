@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Put, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { parseListQuery } from '../common/list-query';
@@ -34,10 +34,34 @@ export class MeController {
     return this.users.profile(userId as string);
   }
 
+  /**
+   * 局部更新资料。**PATCH 与 PUT 是同一个实现**：`wx.request` 的 method
+   * 白名单里没有 PATCH（只有 OPTIONS/GET/HEAD/POST/PUT/DELETE/TRACE/CONNECT），
+   * 小程序端根本发不出 PATCH。所以给同一份语义挂两个动词 ——
+   * PUT 给小程序，PATCH 留给 curl 与后续非小程序端。
+   *
+   * 两条路由必须共用 `applyPatch`：一旦各写一份校验，「清空头像」这种
+   * 靠 `'avatarUrl' in body` 判断的语义迟早只在一个动词上是对的。
+   */
   @Patch()
   async updateProfile(
     @Body() body: Record<string, unknown>,
     @CurrentUser() userId: string | null,
+  ): Promise<UserProfile> {
+    return this.applyPatch(body, userId);
+  }
+
+  @Put()
+  async putProfile(
+    @Body() body: Record<string, unknown>,
+    @CurrentUser() userId: string | null,
+  ): Promise<UserProfile> {
+    return this.applyPatch(body, userId);
+  }
+
+  private async applyPatch(
+    body: Record<string, unknown>,
+    userId: string | null,
   ): Promise<UserProfile> {
     // 校验先行：非法入参不该走到仓储去开事务。
     return this.users.updateProfile(userId as string, parseProfilePatch(body ?? {}));

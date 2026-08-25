@@ -28,6 +28,7 @@ describe('个人中心资料（GET /me + PATCH /me）', () => {
 
   const me = () => request(app.getHttpServer()).get('/me');
   const patchMe = () => request(app.getHttpServer()).patch('/me');
+  const putMe = () => request(app.getHttpServer()).put('/me');
   const auth = (req: request.Test) => req.set('Authorization', `Bearer ${token}`);
 
   /** 有库时按 openid 连带清掉这个人的关系数据（favorites 没有 ON DELETE CASCADE）。 */
@@ -181,6 +182,40 @@ describe('个人中心资料（GET /me + PATCH /me）', () => {
       }
       // 上传通道（Task 11）落的是站内路径，必须收
       await auth(patchMe().send({ avatarUrl: '/uploads/avatar/abc.jpg' })).expect(200);
+    });
+  });
+
+  /**
+   * `wx.request` 的 method 白名单里没有 PATCH，小程序端只能发 PUT，
+   * 所以 /me 上两个动词共用一份实现。这一段盯的就是「两个动词不许分叉」。
+   */
+  describe('PUT /me（小程序端只能发 PUT）', () => {
+    afterEach(reset);
+
+    it('未登录同样 401', async () => {
+      await putMe().send({ nickname: '谁' }).expect(401);
+    });
+
+    it('与 PATCH 同语义：改名落库，没动的字段不动', async () => {
+      const res = await auth(putMe().send({ nickname: '走 PUT 改名' })).expect(200);
+      expect(res.body.data.nickname).toBe('走 PUT 改名');
+      const after = await auth(me()).expect(200);
+      expect(after.body.data.nickname).toBe('走 PUT 改名');
+      expect(after.body.data.avatarUrl).toBeNull();
+    });
+
+    it('avatarUrl: null 走 PUT 也能清空头像', async () => {
+      await auth(putMe().send({ avatarUrl: '/uploads/avatar/abc.jpg' })).expect(200);
+      const cleared = await auth(putMe().send({ avatarUrl: null })).expect(200);
+      expect(cleared.body.data.avatarUrl).toBeNull();
+    });
+
+    it('校验也是同一份：空 body 与非法头像照样 422', async () => {
+      for (const body of [{}, { avatarUrl: 'javascript:alert(1)' }, { nickname: '   ' }]) {
+        const res = await auth(putMe().send(body));
+        expect(res.status).toBe(422);
+        expect(res.body.code).toBe(ERROR_CODES.VALIDATION_FAILED);
+      }
     });
   });
 

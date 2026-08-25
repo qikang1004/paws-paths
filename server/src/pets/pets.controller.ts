@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -165,9 +166,23 @@ export class PetsController {
     return this.pets.create(userId as string, body ?? {});
   }
 
+  /**
+   * 局部更新。同 `MeController.updateProfile`：PATCH 与 PUT 两个动词共用一份
+   * 实现，因为 `wx.request` 的 method 白名单里没有 PATCH，小程序端只能发 PUT。
+   */
   @Patch(':id')
   @UseGuards(AuthGuard)
   async update(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+    @CurrentUser() userId: string | null,
+  ): Promise<PetDetail> {
+    return this.pets.update(id, userId as string, body ?? {});
+  }
+
+  @Put(':id')
+  @UseGuards(AuthGuard)
+  async put(
     @Param('id') id: string,
     @Body() body: Record<string, unknown>,
     @CurrentUser() userId: string | null,

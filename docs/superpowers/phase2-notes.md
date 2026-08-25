@@ -418,3 +418,38 @@ Task 12 的第一次 RED 之后，唯一红的那条用例红在**测试自己**
 还是 true —— 客户端看到一个永远取不出内容的幻影下一页。这条只有真库能证，
 内存实现是另一份代码。
 
+### 33. `wx.request` 发不出 PATCH —— 服务端给 `/me` 与 `/pets/:id` 各加了一个 PUT 别名
+
+小程序端的 `updateProfile` / `updatePet` 原本写 `method: 'PATCH'`（服务端就是
+`@Patch()`），`tsc` 直接红：`miniprogram-api-typings` 里 `wx.request` 的 method
+白名单是 `OPTIONS | GET | HEAD | POST | PUT | DELETE | TRACE | CONNECT`，
+**没有 PATCH**。这不是类型定义漏了，是基础库真的不支持 —— 把客户端的联合类型
+拓宽成 `'PATCH'` 只会把红移到 `wxAdapter.request` 里的 `wx.request({ method })`，
+而且真机上会被基础库拦掉。
+
+所以改的是服务端：`MeController` 与 `PetsController` 各多一个 `@Put()` 路由，
+和原来的 `@Patch()` 共用同一份实现（`MeController.applyPatch` / `PetsService.update`），
+语义仍然是**局部更新**（只改调用方真给了的字段）。小程序端一律发 PUT，
+PATCH 留给 curl 与后续非小程序端。
+
+两个动词绝不能各写一份校验：`/me` 的「清空头像」靠 `'avatarUrl' in body` 区分
+「不动」与「清空」，分两份实现的话这个语义迟早只在一个动词上是对的。
+`test/profile.controller.spec.ts` 与 `test/pet-write.controller.spec.ts` 因此各加了
+一段 PUT 的等价性断言（401/403/404、局部语义、422 校验），无库与真库都跑过。
+
+Nest 的路由装饰器不能叠：`@Patch()` 与 `@Put()` 写在同一个方法上时后生效的那个会
+覆盖 `METHOD_METADATA`，所以必须是两个方法委托到一处。
+
+### 34. `PageParams` / `PagedResponse<T>` 放在 `api/paged.ts`，不进 `shared/types`
+
+`miniprogram/shared/types/` 是 `npm run sync:types` 从 `packages/types/src` 生成的，
+手改会被 sync-types 守卫判红。而分页参数是**客户端拼请求**的形状（服务端那边是
+`parseListQuery` 收 query string），本来也不属于跨端共享的 DTO。放在 api 层，
+四个列表包装（following / favorites / history / posts）共用同一份。
+
+### 35. `formatPostTime` 的「刚刚」是严格小于一分钟
+
+第一版测试把「60 秒前」也断言成「刚刚」，实现返回「1分钟前」—— 是**测试错了**：
+`diff < MINUTE` 的边界上，60 秒前确实该显示「1分钟前」。改成用 `now - 30_000`
+测「刚刚」，另加一条边界断言把「整一分钟 → 1分钟前」钉住。
+`at(y, m, d, h, min)` 这个本地日历构造器只到分钟，所以亚分钟的用例直接减毫秒。

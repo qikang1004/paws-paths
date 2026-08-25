@@ -7,7 +7,7 @@ const TOKENS = readFileSync(join(ROOT, 'styles/tokens.wxss'), 'utf8');
 
 const read = (rel: string): string => readFileSync(join(ROOT, rel), 'utf8');
 
-describe.each(['sq-button', 'empty-state'])('%s 组件配置', (name) => {
+describe.each(['sq-button', 'empty-state', 'audit-badge'])('%s 组件配置', (name) => {
   const dir = `components/${name}`;
 
   it('json 声明为组件并开启 apply-shared（语义类与 token 才进得来）', () => {
@@ -59,5 +59,32 @@ describe('empty-state', () => {
       usingComponents?: Record<string, string>;
     };
     expect(json.usingComponents?.['wf-icon']).toBeTruthy();
+  });
+});
+
+/**
+ * 角标组件不许自己判状态：文案与显不显示全由 `buildAuditBadge` 算好，
+ * 组件只负责把结果画出来。散落的 `status === 'approved'` 正是 spec §4.5
+ * 要禁的东西（服务端有 audit-literal-guard 拦，小程序侧靠这条守住）。
+ */
+describe('audit-badge', () => {
+  it('wxml 只读预算好的 badge 字段，不比状态字面量', () => {
+    const wxml = read('components/audit-badge/index.wxml');
+    expect(wxml).toContain('{{badge.visible}}');
+    expect(wxml).toContain('{{badge.text}}');
+    expect(wxml).toContain('{{badge.reasonText}}');
+    expect(wxml).not.toMatch(/approved|pending|rejected/);
+  });
+
+  it('状态判定走 buildAuditBadge，组件里没有字面量比较', () => {
+    const ts = read('components/audit-badge/index.ts');
+    expect(ts).toContain('buildAuditBadge');
+    expect(ts).not.toMatch(/===\s*'(approved|pending|pending_review|rejected)'/);
+  });
+
+  it('两种 tone 各有一套样式', () => {
+    const css = read('components/audit-badge/index.wxss');
+    expect(css).toContain('.audit-badge--pending');
+    expect(css).toContain('.audit-badge--rejected');
   });
 });
