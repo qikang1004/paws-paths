@@ -89,4 +89,36 @@ describe('InMemoryPetRepository', () => {
     expect((found?.photos.length ?? 0)).toBeGreaterThanOrEqual(2);
     expect(await repo.getById('nope')).toBeNull();
   });
+
+  it('findOwnerId 与 seed.sql 的归属一致；不存在回 null', async () => {
+    expect(await repo.findOwnerId('p-1')).toBe('u-1');
+    expect(await repo.findOwnerId('p-5')).toBe('u-5');
+    expect(await repo.findOwnerId('nope')).toBeNull();
+  });
+
+  it('归属不下发客户端：PetRow 上没有 ownerId', async () => {
+    const found = await repo.getById('p-1');
+    expect(found?.pet).not.toHaveProperty('ownerId');
+  });
+
+  it('listByIds 保持传入顺序，不是 id 的字典序', async () => {
+    const rows = await repo.listByIds(['p-3', 'p-1', 'p-2']);
+    expect(rows.map((r) => r.id)).toEqual(['p-3', 'p-1', 'p-2']);
+  });
+
+  it('listByIds 静默跳过不存在的 id —— 关注的宠物被删了，列表少一条而不是 500', async () => {
+    const rows = await repo.listByIds(['p-1', 'nope', 'p-2']);
+    expect(rows.map((r) => r.id)).toEqual(['p-1', 'p-2']);
+  });
+
+  it('listByIds 空数组回空，不打库', async () => {
+    expect(await repo.listByIds([])).toEqual([]);
+  });
+
+  it('listByIds 带坐标算距离，不带则 null', async () => {
+    const withCoords = await repo.listByIds(['p-1'], center);
+    expect(withCoords[0].distanceMeters).not.toBeNull();
+    const without = await repo.listByIds(['p-1']);
+    expect(without[0].distanceMeters).toBeNull();
+  });
 });

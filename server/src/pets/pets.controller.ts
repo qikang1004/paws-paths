@@ -1,7 +1,20 @@
-import { Controller, Get, HttpStatus, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ERROR_CODES } from '@paws/types';
 import { ApiException } from '../common/api.exception';
+import { AuthGuard } from '../auth/auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { OptionalAuthGuard } from '../auth/optional-auth.guard';
+import { FollowsService } from '../follows/follows.service';
 import { PetsService, type PetDetail, type PetListResponse } from './pets.service';
 
 const VALID_SPECIES: ReadonlySet<string> = new Set(['all', 'dog', 'cat', 'other']);
@@ -18,11 +31,17 @@ function optionalNumber(raw: string | undefined): number | undefined {
 
 @Controller('pets')
 export class PetsController {
-  constructor(private readonly pets: PetsService) {}
+  constructor(
+    private readonly pets: PetsService,
+    private readonly follows: FollowsService,
+  ) {}
 
   @Get()
   @UseGuards(OptionalAuthGuard)
-  async list(@Query() q: Record<string, string | undefined>): Promise<PetListResponse> {
+  async list(
+    @Query() q: Record<string, string | undefined>,
+    @CurrentUser() userId: string | null,
+  ): Promise<PetListResponse> {
     const species = q.species ?? 'all';
     if (!VALID_SPECIES.has(species)) fail('非法的物种筛选');
 
@@ -47,7 +66,16 @@ export class PetsController {
       fail('非法的搜索半径');
     }
 
-    return this.pets.list({ filter: { species, breed }, page, pageSize, lat, lng, radiusMeters });
+    const res = await this.pets.list({
+      filter: { species, breed },
+      page,
+      pageSize,
+      lat,
+      lng,
+      radiusMeters,
+    });
+    // 批量标记，一次查询覆盖整页；未登录时 markFollowing 直接返回不打库。
+    return { ...res, items: await this.follows.markFollowing(res.items, userId) };
   }
 
   @Get(':id')
@@ -55,6 +83,7 @@ export class PetsController {
   async detail(
     @Param('id') id: string,
     @Query() q: Record<string, string | undefined>,
+    @CurrentUser() userId: string | null,
   ): Promise<PetDetail> {
     const lat = optionalNumber(q.lat);
     const lng = optionalNumber(q.lng);
@@ -63,6 +92,28 @@ export class PetsController {
     if (!detail) {
       throw new ApiException(ERROR_CODES.NOT_FOUND, '宠物不存在', HttpStatus.NOT_FOUND);
     }
-    return detail;
+    const [marked] = await this.follows.markFollowing([detail], userId);
+    return marked;
+  }
+
+  // 关注是幂等的状态设置，不是创建资源：显式 200 而非 Nest 默认的 201
+  // （与 venues 的收藏端点一致）。
+  @Post(':id/follow')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  async follow(
+    @Param('id') id: string,
+    @CurrentUser() userId: string | null,
+  ): Promise<{ isFollowing: boolean }> {
+    return this.follows.setFollow(id, userId as string, true);
+  }
+
+  @Delete(':id/follow')
+  @UseGuards(AuthGuard)
+  async unfollow(
+    @Param('id') id: string,
+    @CurrentUser() userId: string | null,
+  ): Promise<{ isFollowing: boolean }> {
+    return this.follows.setFollow(id, userId as string, false);
   }
 }

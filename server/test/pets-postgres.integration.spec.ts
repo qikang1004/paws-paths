@@ -70,4 +70,29 @@ describeDb('pets postgres integration', () => {
     // 交叉验证：InMemory 的 haversine 独立实现
     expect(memDist).toBeCloseTo(haversineMeters(center.lat, center.lng, 39.915, 116.418), 0);
   });
+
+  it('findOwnerId：与 seed.sql 一致，不存在回 null', async () => {
+    const repo = new PostgresPetRepository(pool);
+    expect(await repo.findOwnerId('p-1')).toBe('u-1');
+    expect(await repo.findOwnerId('nope')).toBeNull();
+  });
+
+  it('listByIds：array_position 保持传入顺序（不是主键序）', async () => {
+    const repo = new PostgresPetRepository(pool);
+    const rows = await repo.listByIds(['p-5', 'p-1', 'p-3']);
+    expect(rows.map((r) => r.id)).toEqual(['p-5', 'p-1', 'p-3']);
+  });
+
+  it('listByIds：不存在的 id 静默跳过；空数组不打库', async () => {
+    const repo = new PostgresPetRepository(pool);
+    expect((await repo.listByIds(['p-1', 'nope'])).map((r) => r.id)).toEqual(['p-1']);
+    expect(await repo.listByIds([])).toEqual([]);
+  });
+
+  it('listByIds：带坐标算距离，与 getById 的同一坐标结果一致', async () => {
+    const repo = new PostgresPetRepository(pool);
+    const [row] = await repo.listByIds(['p-7'], center);
+    const single = await repo.getById('p-7', center);
+    expect(row.distanceMeters).toBeCloseTo(single?.pet.distanceMeters as number, 5);
+  });
 });

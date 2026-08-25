@@ -27,14 +27,11 @@ describe('FollowDto', () => {
     ownerNickname: '阿喵',
     ownerAvatarUrl: null,
     ownerVerified: true,
+    isFollowing: true,
   };
 
   it('是宠物卡的扁平扩展 —— 小程序的卡片组件能原样复用', () => {
-    const follow: FollowDto = {
-      ...petCard,
-      followId: 'f-1',
-      followedAt: '2026-08-01T10:00:00.000Z',
-    };
+    const follow: FollowDto = { ...petCard, followedAt: '2026-08-01T10:00:00.000Z' };
     // 关注对象是宠物：id 就是宠物 id
     expect(follow.id).toBe('p-2');
     expect(follow.coverWidth).toBe(800);
@@ -42,19 +39,51 @@ describe('FollowDto', () => {
 
   it('PetSummary 的必填字段一个都不能少', () => {
     // @ts-expect-error 缺 coverWidth/coverHeight 等宠物卡字段
-    const bad: FollowDto = { id: 'p-2', followId: 'f-1', followedAt: '2026-08-01T10:00:00.000Z' };
-    expect(bad.followId).toBe('f-1');
+    const bad: FollowDto = { id: 'p-2', followedAt: '2026-08-01T10:00:00.000Z' };
+    expect(bad.id).toBe('p-2');
+  });
+
+  it('不下发 follows 表的行 id —— 取消关注按 (userId, petId) 定位，没人用得上', () => {
+    const follow: FollowDto = {
+      ...petCard,
+      followedAt: '2026-08-01T10:00:00.000Z',
+      // @ts-expect-error 关注关系自己的行 id 不下发
+      followId: 'f-1',
+    };
+    expect(follow.id).toBe('p-2');
   });
 
   it('没有 targetUserId 这种字段', () => {
     const follow: FollowDto = {
       ...petCard,
-      followId: 'f-1',
       followedAt: '2026-08-01T10:00:00.000Z',
       // @ts-expect-error 关注的是宠物，不存在 targetUserId
       targetUserId: 'u-2',
     };
-    expect(follow.followId).toBe('f-1');
+    expect(follow.id).toBe('p-2');
+  });
+});
+
+describe('PetSummary.isFollowing', () => {
+  it('是必填的 —— 可选会让页面到处写 ?? false', () => {
+    // @ts-expect-error 缺 isFollowing
+    const bad: PetSummary = {
+      id: 'p-1',
+      name: '奶糖',
+      species: 'cat',
+      breed: '布偶',
+      gender: 'female',
+      birthDate: '2024-02-14',
+      coverUrl: 'https://cdn.example.com/1.jpg',
+      coverWidth: 800,
+      coverHeight: 600,
+      personalityTags: [],
+      distanceMeters: null,
+      ownerNickname: '阿喵',
+      ownerAvatarUrl: null,
+      ownerVerified: false,
+    };
+    expect(bad.id).toBe('p-1');
   });
 });
 

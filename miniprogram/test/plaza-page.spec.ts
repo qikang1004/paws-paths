@@ -29,6 +29,7 @@ const pet = (over: Partial<PetSummary> = {}): PetSummary => ({
   ownerNickname: '小鱼',
   ownerAvatarUrl: null,
   ownerVerified: true,
+  isFollowing: false,
   ...over,
 });
 

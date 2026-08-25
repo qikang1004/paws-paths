@@ -7,10 +7,12 @@ import type { PetSummary } from './pet';
  *
  * 直接继承 {@link PetSummary} 而不是包一层 `{ pet: PetSummary }`：小程序的宠物卡
  * 组件吃的就是 `PetSummary`，扁平化后「我的关注」页能原样复用，不必解一层。
- * `id` 是宠物 id（与卡片一致），关注关系自己的行 id 叫 `followId`。
+ * `id` 是宠物 id（与卡片一致，也是列表的 wx:key）。
+ *
+ * 刻意不带 `follows` 表的行 id：取消关注按 `(userId, petId)` 定位，列表 key 用 `id`，
+ * 没有消费者，下发只会诱导客户端拿它当句柄用。
  */
 export interface FollowDto extends PetSummary {
-  followId: string;
   followedAt: string;
 }
 

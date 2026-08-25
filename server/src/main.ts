@@ -28,6 +28,10 @@ async function bootstrap(): Promise<void> {
   app.useGlobalInterceptors(new ResponseInterceptor());
   app.useGlobalFilters(new AllExceptionsFilter());
 
+  // 不开这个，SIGTERM 时 OnModuleDestroy / OnApplicationShutdown 一个都不会跑：
+  // Redis 客户端与 pg 连接池都不会收尾，云托管滚动发布时旧实例要挂到超时被 kill。
+  app.enableShutdownHooks();
+
   // 迁移失败就不要开始收流量：带着空库对外服务只会把错误推给用户。
   await migrate(app.get<Pool | null>(PG_POOL), new Logger('Migrations'));
 

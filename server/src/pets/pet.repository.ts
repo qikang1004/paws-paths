@@ -50,6 +50,16 @@ export interface PetPhotoRow {
 export interface PetRepository {
   list(query: PetQuery): Promise<{ items: PetRow[]; hasMore: boolean }>;
   getById(id: string, coords?: { lat: number; lng: number }): Promise<{ pet: PetRow; photos: PetPhotoRow[] } | null>;
+  /**
+   * 归属查询：宠物不存在返回 null。
+   *
+   * 单独一个窄方法而不是往 PetRow 加 ownerId：ownerId 不下发到客户端，
+   * 混进展示投影里容易被顺手带进响应。且这里**不过滤 visibility** ——
+   * 私密宠物的主人也要能改自己的宠物（Task 9 的 403 判定用同一个方法）。
+   */
+  findOwnerId(petId: string): Promise<string | null>;
+  /** 批量按 id 取卡片投影，保持传入顺序。关注列表这类「先有 id 再要卡片」的场景用它。 */
+  listByIds(petIds: string[], coords?: { lat: number; lng: number }): Promise<PetRow[]>;
 }
 
 /** 球面距离（米），与 PostGIS geography ST_Distance 的球面语义一致。 */
@@ -72,6 +82,8 @@ export function haversineMeters(
 /** 演示种子（与 server/src/database/seed.sql 一一对应）：8 只宠物 + 17 张照片。 */
 interface PetSeedRecord {
   id: string;
+  /** 与 seed.sql 的 pets.owner_id 一致；不进 PetRow，不下发客户端。 */
+  ownerId: string;
   name: string;
   species: PetSpecies;
   breed: string;
@@ -100,14 +112,14 @@ interface PhotoSeedRecord {
 }
 
 const PET_SEED: PetSeedRecord[] = [
-  { id: 'p-1', name: '大黄', species: 'dog', breed: '金毛', gender: 'male', birthDate: '2022-05-01', personalityTags: ['黏人', '爱玩水'], bio: '爱玩水的暖男，见到谁都摇尾巴。', lat: 39.906, lng: 116.404, lastActiveAt: '2026-08-20T10:00:00Z', coverUrl: 'https://picsum.photos/seed/paws-huang/600/800', coverWidth: 600, coverHeight: 800, ownerNickname: '小陈', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u1/120/120', ownerVerified: true },
-  { id: 'p-2', name: '奶昔', species: 'cat', breed: '布偶', gender: 'female', birthDate: '2024-02-14', personalityTags: ['温柔', '爱睡觉'], bio: '蓝眼睛的小公主，喜欢被摸下巴。', lat: 39.902, lng: 116.41, lastActiveAt: '2026-08-21T08:30:00Z', coverUrl: 'https://picsum.photos/seed/paws-naixi/800/600', coverWidth: 800, coverHeight: 600, ownerNickname: '阿喵', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u2/120/120', ownerVerified: true },
-  { id: 'p-3', name: '可乐', species: 'dog', breed: '柯基', gender: 'male', birthDate: '2023-08-20', personalityTags: ['活泼', '贪吃'], bio: '小短腿大嗓门，对零食毫无抵抗力。', lat: 39.91, lng: 116.4, lastActiveAt: '2026-08-19T18:00:00Z', coverUrl: 'https://picsum.photos/seed/paws-kele/600/800', coverWidth: 600, coverHeight: 800, ownerNickname: '老王', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u3/120/120', ownerVerified: false },
-  { id: 'p-4', name: '豆包', species: 'dog', breed: '柴犬', gender: 'female', birthDate: '2021-11-11', personalityTags: ['高冷', '独立'], bio: '高冷柴，出门必带围巾。', lat: 39.9, lng: 116.415, lastActiveAt: '2026-08-18T09:00:00Z', coverUrl: 'https://picsum.photos/seed/paws-doubao/900/600', coverWidth: 900, coverHeight: 600, ownerNickname: '小周', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u4/120/120', ownerVerified: false },
-  { id: 'p-5', name: '花花', species: 'cat', breed: '中华田园猫', gender: 'female', birthDate: '2023-03-08', personalityTags: ['粘人', '怕生'], bio: '小区明星，尾巴上有朵花。', lat: 39.908, lng: 116.412, lastActiveAt: '2026-08-17T15:00:00Z', coverUrl: 'https://picsum.photos/seed/paws-huahua/600/800', coverWidth: 600, coverHeight: 800, ownerNickname: '安安', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u5/120/120', ownerVerified: true },
-  { id: 'p-6', name: '团子', species: 'cat', breed: '英国短毛猫', gender: 'male', birthDate: '2024-06-01', personalityTags: ['安静', '圆脸'], bio: '圆脸橘白，站着都能睡着。', lat: 39.895, lng: 116.4, lastActiveAt: '2026-08-16T12:00:00Z', coverUrl: 'https://picsum.photos/seed/paws-tuanzi/800/800', coverWidth: 800, coverHeight: 800, ownerNickname: '七七', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u6/120/120', ownerVerified: false },
-  { id: 'p-7', name: '旺财', species: 'dog', breed: '边牧', gender: 'male', birthDate: '2022-12-25', personalityTags: ['聪明', '精力旺盛'], bio: '智商担当，会开门会拿快递。', lat: 39.915, lng: 116.418, lastActiveAt: '2026-08-22T07:00:00Z', coverUrl: 'https://picsum.photos/seed/paws-wangcai/600/900', coverWidth: 600, coverHeight: 900, ownerNickname: '老李', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u7/120/120', ownerVerified: true },
-  { id: 'p-8', name: '咪咪', species: 'cat', breed: '美国短毛猫', gender: 'female', birthDate: '2024-09-10', personalityTags: ['好奇', '活泼'], bio: '好奇心旺盛，家里的探索者。', lat: 39.899, lng: 116.406, lastActiveAt: '2026-08-15T20:00:00Z', coverUrl: 'https://picsum.photos/seed/paws-mimi/700/700', coverWidth: 700, coverHeight: 700, ownerNickname: '点点', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u8/120/120', ownerVerified: false },
+  { id: 'p-1', ownerId: 'u-1', name: '大黄', species: 'dog', breed: '金毛', gender: 'male', birthDate: '2022-05-01', personalityTags: ['黏人', '爱玩水'], bio: '爱玩水的暖男，见到谁都摇尾巴。', lat: 39.906, lng: 116.404, lastActiveAt: '2026-08-20T10:00:00Z', coverUrl: 'https://picsum.photos/seed/paws-huang/600/800', coverWidth: 600, coverHeight: 800, ownerNickname: '小陈', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u1/120/120', ownerVerified: true },
+  { id: 'p-2', ownerId: 'u-2', name: '奶昔', species: 'cat', breed: '布偶', gender: 'female', birthDate: '2024-02-14', personalityTags: ['温柔', '爱睡觉'], bio: '蓝眼睛的小公主，喜欢被摸下巴。', lat: 39.902, lng: 116.41, lastActiveAt: '2026-08-21T08:30:00Z', coverUrl: 'https://picsum.photos/seed/paws-naixi/800/600', coverWidth: 800, coverHeight: 600, ownerNickname: '阿喵', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u2/120/120', ownerVerified: true },
+  { id: 'p-3', ownerId: 'u-3', name: '可乐', species: 'dog', breed: '柯基', gender: 'male', birthDate: '2023-08-20', personalityTags: ['活泼', '贪吃'], bio: '小短腿大嗓门，对零食毫无抵抗力。', lat: 39.91, lng: 116.4, lastActiveAt: '2026-08-19T18:00:00Z', coverUrl: 'https://picsum.photos/seed/paws-kele/600/800', coverWidth: 600, coverHeight: 800, ownerNickname: '老王', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u3/120/120', ownerVerified: false },
+  { id: 'p-4', ownerId: 'u-4', name: '豆包', species: 'dog', breed: '柴犬', gender: 'female', birthDate: '2021-11-11', personalityTags: ['高冷', '独立'], bio: '高冷柴，出门必带围巾。', lat: 39.9, lng: 116.415, lastActiveAt: '2026-08-18T09:00:00Z', coverUrl: 'https://picsum.photos/seed/paws-doubao/900/600', coverWidth: 900, coverHeight: 600, ownerNickname: '小周', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u4/120/120', ownerVerified: false },
+  { id: 'p-5', ownerId: 'u-5', name: '花花', species: 'cat', breed: '中华田园猫', gender: 'female', birthDate: '2023-03-08', personalityTags: ['粘人', '怕生'], bio: '小区明星，尾巴上有朵花。', lat: 39.908, lng: 116.412, lastActiveAt: '2026-08-17T15:00:00Z', coverUrl: 'https://picsum.photos/seed/paws-huahua/600/800', coverWidth: 600, coverHeight: 800, ownerNickname: '安安', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u5/120/120', ownerVerified: true },
+  { id: 'p-6', ownerId: 'u-6', name: '团子', species: 'cat', breed: '英国短毛猫', gender: 'male', birthDate: '2024-06-01', personalityTags: ['安静', '圆脸'], bio: '圆脸橘白，站着都能睡着。', lat: 39.895, lng: 116.4, lastActiveAt: '2026-08-16T12:00:00Z', coverUrl: 'https://picsum.photos/seed/paws-tuanzi/800/800', coverWidth: 800, coverHeight: 800, ownerNickname: '七七', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u6/120/120', ownerVerified: false },
+  { id: 'p-7', ownerId: 'u-7', name: '旺财', species: 'dog', breed: '边牧', gender: 'male', birthDate: '2022-12-25', personalityTags: ['聪明', '精力旺盛'], bio: '智商担当，会开门会拿快递。', lat: 39.915, lng: 116.418, lastActiveAt: '2026-08-22T07:00:00Z', coverUrl: 'https://picsum.photos/seed/paws-wangcai/600/900', coverWidth: 600, coverHeight: 900, ownerNickname: '老李', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u7/120/120', ownerVerified: true },
+  { id: 'p-8', ownerId: 'u-8', name: '咪咪', species: 'cat', breed: '美国短毛猫', gender: 'female', birthDate: '2024-09-10', personalityTags: ['好奇', '活泼'], bio: '好奇心旺盛，家里的探索者。', lat: 39.899, lng: 116.406, lastActiveAt: '2026-08-15T20:00:00Z', coverUrl: 'https://picsum.photos/seed/paws-mimi/700/700', coverWidth: 700, coverHeight: 700, ownerNickname: '点点', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u8/120/120', ownerVerified: false },
 ];
 
 const PHOTO_SEED: PhotoSeedRecord[] = [
@@ -197,6 +209,22 @@ export class InMemoryPetRepository implements PetRepository {
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map(({ id: photoId, url, width, height }) => ({ id: photoId, url, width, height }));
     return { pet: toPetRow(seed, distanceMeters), photos };
+  }
+
+  async findOwnerId(petId: string): Promise<string | null> {
+    return PET_SEED.find((p) => p.id === petId)?.ownerId ?? null;
+  }
+
+  async listByIds(petIds: string[], coords?: { lat: number; lng: number }): Promise<PetRow[]> {
+    return petIds
+      .map((id) => PET_SEED.find((p) => p.id === id))
+      .filter((seed): seed is PetSeedRecord => seed != null)
+      .map((seed) =>
+        toPetRow(
+          seed,
+          coords != null ? haversineMeters(coords.lat, coords.lng, seed.lat, seed.lng) : null,
+        ),
+      );
   }
 }
 
@@ -308,5 +336,40 @@ export class PostgresPetRepository implements PetRepository {
       [id],
     );
     return { pet: petRes.rows[0], photos: photoRes.rows };
+  }
+
+  async findOwnerId(petId: string): Promise<string | null> {
+    // 不带 visibility 过滤：私密宠物的主人也要能操作自己的宠物。
+    const { rows } = await this.pool.query<{ owner_id: string }>(
+      `SELECT owner_id FROM pets WHERE id = $1`,
+      [petId],
+    );
+    return rows.length ? rows[0].owner_id : null;
+  }
+
+  async listByIds(petIds: string[], coords?: { lat: number; lng: number }): Promise<PetRow[]> {
+    if (petIds.length === 0) return [];
+    const hasCoords = coords != null;
+    // 按传入顺序返回：array_position 让库层排序，免得回来再排一遍。
+    const distanceExpr = hasCoords
+      ? `ST_Distance(p.location, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography)`
+      : `null::float8`;
+    const sql = `
+      SELECT p.id, p.name, p.species, p.breed, p.gender,
+             to_char(p.birth_date, 'YYYY-MM-DD') AS "birthDate",
+             p.personality_tags AS "personalityTags", p.bio,
+             ${distanceExpr} AS "distanceMeters",
+             ph.url AS "coverUrl", ph.width AS "coverWidth", ph.height AS "coverHeight",
+             u.nickname AS "ownerNickname", u.avatar_url AS "ownerAvatarUrl",
+             u.is_verified_owner AS "ownerVerified"
+      FROM pets p
+      JOIN pet_photos ph ON ph.id = p.cover_photo_id
+      JOIN users u ON u.id = p.owner_id
+      WHERE p.id = ANY($1) AND p.visibility = 'public'
+      ORDER BY array_position($1::text[], p.id)
+    `;
+    const params = hasCoords ? [petIds, coords.lng, coords.lat] : [petIds];
+    const { rows } = await this.pool.query<PetRow>(sql, params);
+    return rows;
   }
 }

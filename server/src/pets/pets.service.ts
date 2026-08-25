@@ -24,6 +24,7 @@ export interface PetSummary {
   ownerNickname: string;
   ownerAvatarUrl: string | null;
   ownerVerified: boolean;
+  isFollowing: boolean;
 }
 
 export interface PetPhoto {
@@ -45,6 +46,7 @@ export interface PetDetail {
   distanceMeters: number | null;
   owner: { nickname: string; avatarUrl: string | null; ownerVerified: boolean };
   photos: PetPhoto[];
+  isFollowing: boolean;
 }
 
 export interface PetListResponse {
@@ -109,12 +111,22 @@ export class PetsService {
         ownerVerified: pet.ownerVerified,
       },
       photos,
+      // 同 toSummary：这里拿不到登录态，由 FollowsService.markFollowing 覆盖。
+      isFollowing: false,
     };
   }
 }
 
-function toSummary(row: PetRow): PetSummary {
+/**
+ * 卡片投影。导出给 FollowsService 复用 —— 关注列表和广场页必须是同一形状，
+ * 各写一份迟早漂移。
+ *
+ * `isFollowing` 一律先给 `false`，由 `FollowsService.markFollowing` 批量覆盖：
+ * 投影层拿不到登录态，也不该为每张卡去查一次关注关系（N+1）。
+ */
+export function toSummary(row: PetRow): PetSummary {
   return {
+    isFollowing: false,
     id: row.id,
     name: row.name,
     species: row.species,

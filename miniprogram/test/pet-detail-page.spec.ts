@@ -24,6 +24,7 @@ const detail = (over: Partial<PetDetail> = {}): PetDetail => ({
     { id: 'ph-1', url: 'https://picsum.photos/id/237/600/800', width: 600, height: 800 },
     { id: 'ph-2', url: 'https://picsum.photos/id/238/800/600', width: 800, height: 600 },
   ],
+  isFollowing: false,
   ...over,
 });
 
