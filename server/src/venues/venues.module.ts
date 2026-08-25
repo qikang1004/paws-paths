@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { Pool } from 'pg';
 import { AuthModule } from '../auth/auth.module';
 import { DatabaseModule, PG_POOL } from '../database/database.module';
+import { HistoryModule } from '../history/history.module';
 import {
   FAVORITES_REPOSITORY,
   InMemoryFavoritesRepository,
@@ -9,24 +10,14 @@ import {
 } from './favorites.repository';
 import { PoiProxyModule } from './poi-proxy.module';
 import { PoiProxyService } from './poi-proxy.service';
-import {
-  InMemoryVenueRepository,
-  PostgresVenueRepository,
-  VENUE_REPOSITORY,
-} from './venue.repository';
+import { VenueRepositoryModule } from './venue-repository.module';
 import { VenuesController } from './venues.controller';
 import { POI_PROXY, VenuesService } from './venues.service';
 
 @Module({
-  imports: [AuthModule, DatabaseModule, PoiProxyModule],
+  imports: [AuthModule, DatabaseModule, PoiProxyModule, VenueRepositoryModule, HistoryModule],
   controllers: [VenuesController],
   providers: [
-    {
-      provide: VENUE_REPOSITORY,
-      useFactory: (pool: Pool | null) =>
-        pool ? new PostgresVenueRepository(pool) : new InMemoryVenueRepository(),
-      inject: [PG_POOL],
-    },
     {
       provide: FAVORITES_REPOSITORY,
       useFactory: (pool: Pool | null) =>

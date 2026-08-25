@@ -38,4 +38,10 @@ describe('InMemoryVenueRepository', () => {
     expect((await repo.getById('v-1'))?.name).toBe('宠福康宠物医院');
     expect(await repo.getById('nope')).toBeNull();
   });
+
+  it('listByIds 只回命中的行，不存在的 id 静默丢掉', async () => {
+    const rows = await repo.listByIds(['v-3', 'nope', 'v-1']);
+    expect(new Set(rows.map((r) => r.poiId))).toEqual(new Set(['v-1', 'v-3']));
+    expect(await repo.listByIds([])).toEqual([]);
+  });
 });

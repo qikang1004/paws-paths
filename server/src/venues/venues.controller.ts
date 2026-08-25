@@ -14,6 +14,7 @@ import { ApiException } from '../common/api.exception';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { OptionalAuthGuard } from '../auth/optional-auth.guard';
+import { HistoryService } from '../history/history.service';
 import type { VenueCategory } from './venue.repository';
 import { VenuesService, type Venue } from './venues.service';
 
@@ -41,7 +42,10 @@ function optionalNumber(raw: string | undefined): number | undefined {
 
 @Controller('venues')
 export class VenuesController {
-  constructor(private readonly venues: VenuesService) {}
+  constructor(
+    private readonly venues: VenuesService,
+    private readonly history: HistoryService,
+  ) {}
 
   @Get()
   @UseGuards(OptionalAuthGuard)
@@ -87,6 +91,8 @@ export class VenuesController {
     if (!venue) {
       throw new ApiException(ERROR_CODES.NOT_FOUND, '场所不存在', HttpStatus.NOT_FOUND);
     }
+    // 与宠物详情同款：404 之后才记，且不 await（失败只写日志）。
+    this.history.recordSafely(userId, 'venue', poiId);
     return venue;
   }
 

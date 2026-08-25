@@ -44,6 +44,19 @@ describeDb('venues postgres integration', () => {
     expect(found?.name).toBe('宠福康宠物医院');
   });
 
+  it('listByIds：批量取行，与 InMemory 同集合', async () => {
+    const ids = ['v-9', 'v-1', 'v-不存在'];
+    const pg = await new PostgresVenueRepository(pool).listByIds(ids);
+    const mem = await new InMemoryVenueRepository().listByIds(ids);
+    // 不保证顺序（接口如此声明），比集合
+    expect(new Set(pg.map((r) => r.poiId))).toEqual(new Set(['v-1', 'v-9']));
+    expect(new Set(pg.map((r) => r.name))).toEqual(new Set(mem.map((r) => r.name)));
+  });
+
+  it('listByIds：空数组不打库，直接回空', async () => {
+    expect(await new PostgresVenueRepository(pool).listByIds([])).toEqual([]);
+  });
+
   it('距离与 InMemory haversine 一致（±50m）', async () => {
     // getById 无坐标时 distance 为 null（附录 D），距离一致性经 search 对比
     const pg = new PostgresVenueRepository(pool);

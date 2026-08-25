@@ -32,6 +32,11 @@ export interface VenueSearchQuery {
 export interface VenueRepository {
   search(q: VenueSearchQuery): Promise<VenueExtrasRow[]>;
   getById(poiId: string): Promise<VenueExtrasRow | null>;
+  /**
+   * 批量按 poiId 取行。不保证顺序，调用方自己按 poiId 建索引 ——
+   * 「先有 id 再要卡片」的场景（浏览历史、收藏列表）用它，别 N 次 getById。
+   */
+  listByIds(poiIds: string[]): Promise<VenueExtrasRow[]>;
 }
 
 /** 球面距离（米），与 PostGIS geography ST_Distance 的球面语义一致（pet.repository 同款）。 */
@@ -135,6 +140,11 @@ export class InMemoryVenueRepository implements VenueRepository {
     const seed = VENUE_SEED.find((v) => v.poiId === poiId);
     return seed ? toRow(seed, null) : null;
   }
+
+  async listByIds(poiIds: string[]): Promise<VenueExtrasRow[]> {
+    const wanted = new Set(poiIds);
+    return VENUE_SEED.filter((v) => wanted.has(v.poiId)).map((v) => toRow(v, null));
+  }
 }
 
 /** PostgreSQL + PostGIS 实现（DATABASE_URL 存在时经 VenuesModule 工厂注入）。SQL 见计划附录 D。 */
@@ -194,5 +204,21 @@ export class PostgresVenueRepository implements VenueRepository {
       [poiId],
     );
     return res.rows[0] ?? null;
+  }
+
+  async listByIds(poiIds: string[]): Promise<VenueExtrasRow[]> {
+    if (poiIds.length === 0) return [];
+    const res = await this.pool.query<VenueExtrasRow>(
+      `
+      SELECT poi_id AS "poiId", name, address, category, rating::float8 AS rating,
+             avg_price AS "avgPrice", tags, curated_photo AS "curatedPhoto",
+             ST_X(location::geometry) AS lat, ST_Y(location::geometry) AS lng,
+             null::float8 AS "distanceMeters"
+      FROM venue_extras
+      WHERE poi_id = ANY($1)
+      `,
+      [poiIds],
+    );
+    return res.rows;
   }
 }

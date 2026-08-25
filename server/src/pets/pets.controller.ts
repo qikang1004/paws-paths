@@ -15,6 +15,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { OptionalAuthGuard } from '../auth/optional-auth.guard';
 import { FollowsService } from '../follows/follows.service';
+import { HistoryService } from '../history/history.service';
 import { PetsService, type PetDetail, type PetListResponse } from './pets.service';
 
 const VALID_SPECIES: ReadonlySet<string> = new Set(['all', 'dog', 'cat', 'other']);
@@ -34,6 +35,7 @@ export class PetsController {
   constructor(
     private readonly pets: PetsService,
     private readonly follows: FollowsService,
+    private readonly history: HistoryService,
   ) {}
 
   @Get()
@@ -92,6 +94,9 @@ export class PetsController {
     if (!detail) {
       throw new ApiException(ERROR_CODES.NOT_FOUND, '宠物不存在', HttpStatus.NOT_FOUND);
     }
+    // 404 之后才记：不存在的 id 进历史只会在列表里被投影时丢掉，白占一行。
+    // 不 await —— 详情页的延迟与成功率不该绑在浏览历史上。
+    this.history.recordSafely(userId, 'pet', id);
     const [marked] = await this.follows.markFollowing([detail], userId);
     return marked;
   }

@@ -4,6 +4,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ApiException } from '../common/api.exception';
 import { FollowsService, type FollowListResponse } from '../follows/follows.service';
+import { HistoryService, type ViewHistoryListResponse } from '../history/history.service';
 
 function fail(message: string): never {
   throw new ApiException(ERROR_CODES.VALIDATION_FAILED, message, HttpStatus.UNPROCESSABLE_ENTITY);
@@ -44,7 +45,10 @@ export function parseListQuery(q: Record<string, string | undefined>): {
 @Controller('me')
 @UseGuards(AuthGuard)
 export class MeController {
-  constructor(private readonly follows: FollowsService) {}
+  constructor(
+    private readonly follows: FollowsService,
+    private readonly history: HistoryService,
+  ) {}
 
   @Get('following')
   async following(
@@ -52,5 +56,15 @@ export class MeController {
     @CurrentUser() userId: string | null,
   ): Promise<FollowListResponse> {
     return this.follows.listFollowing(userId as string, parseListQuery(q));
+  }
+
+  @Get('history')
+  async viewHistory(
+    @Query() q: Record<string, string | undefined>,
+    @CurrentUser() userId: string | null,
+  ): Promise<ViewHistoryListResponse> {
+    // 历史列表不吃坐标（不显示距离），但分页规则与其他列表一致，复用同一套校验。
+    const { page, pageSize } = parseListQuery(q);
+    return this.history.list(userId as string, { page, pageSize });
   }
 }
