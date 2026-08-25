@@ -38,11 +38,11 @@
 
 ### Task 1: 数据库迁移 —— 4 张新表 + 索引 + 种子
 
-- [ ] **RED**：`test/migrations-phase2.spec.ts` 断言 `schema.sql` 含 `follows`/`view_history`/`posts`/`post_images` 四张表；`test/postgres.integration.spec.ts` 追加断言（门控）：四表存在、`follows` 有 `(follower_id, target_pet_id)` 唯一约束、`view_history` 有 `(user_id, target_type, target_id)` 唯一约束、`posts.audit_status` 有 CHECK 约束限定四个状态值。
-- [ ] **GREEN**：`server/src/database/schema.sql` 追加建表语句（逐字见附录 A）。只追加，不改动既有 5 张表。
-- [ ] 追加 `seed.sql` 种子：3 条 `follows`（`u-1` 关注 `p-2`/`p-3`/`p-5`）、4 条 `view_history`、5 条 `posts`（其中 1 条 `pending` 用于第 16 条安全测试、1 条 `rejected`）、6 条 `post_images`。全部 `ON CONFLICT DO NOTHING` 保证幂等。
-- [ ] 种子行数写进 `postgres.integration.spec.ts` 的计数断言，沿用阶段 1 的「只数种子前缀行」写法（`WHERE id ~ '^f-[0-9]+$'`），避免测试数据污染计数。
-- [ ] **验收**：`DATABASE_URL` 存在时集成测试全绿；`runMigrations` 二次执行仍幂等（既有幂等测试覆盖）。
+- [x] **RED**：`test/migrations-phase2.spec.ts` 断言 `schema.sql` 含 `follows`/`view_history`/`posts`/`post_images` 四张表；`test/postgres.integration.spec.ts` 追加断言（门控）：四表存在、`follows` 有 `(follower_id, target_pet_id)` 唯一约束、`view_history` 有 `(user_id, target_type, target_id)` 唯一约束、`posts.audit_status` 有 CHECK 约束限定四个状态值。
+- [x] **GREEN**：`server/src/database/schema.sql` 追加建表语句（逐字见附录 A）。只追加，不改动既有 5 张表。
+- [x] 追加 `seed.sql` 种子：3 条 `follows`（`u-1` 关注 `p-2`/`p-3`/`p-5`）、4 条 `view_history`、5 条 `posts`（其中 1 条 `pending` 用于第 16 条安全测试、1 条 `rejected`）、6 条 `post_images`。全部 `ON CONFLICT DO NOTHING` 保证幂等。
+- [x] 种子行数写进 `postgres.integration.spec.ts` 的计数断言，沿用阶段 1 的「只数种子前缀行」写法（`WHERE id ~ '^f-[0-9]+$'`），避免测试数据污染计数。
+- [x] **验收**：`DATABASE_URL` 存在时集成测试全绿；`runMigrations` 二次执行仍幂等（既有幂等测试覆盖）。
 
 ### Task 2: 审核状态机 —— 补 `isVisibleTo`
 
@@ -50,30 +50,30 @@
 
 另需修正本计划附录 B 的一处错误：既有实现允许 `rejected → pending`（作者修改重提通道，spec §6），`rejected` **不是**终态。附录 B 已更正。
 
-- [ ] **RED**：`packages/types/test/audit.spec.ts` 追加 `isVisibleTo(status, isAuthor)` 真值表（8 种组合，见附录 B）。
-- [ ] **GREEN**：在 `audit.ts` 实现 `isVisibleTo`，内部复用 `isPubliclyVisible`，不复制状态字面量。
-- [ ] **验收**：新增 guard 测试扫 `server/src/`，除 `packages/types` 外不得手写 `'approved'` / `'pending_review'` 字面量比较（spec §4.5 说这五张表共用状态机，阶段 3/4 还要加 `messages`/`pet_licenses`，散落的字面量比较迟早漏掉可见性过滤）。
+- [x] **RED**：`packages/types/test/audit.spec.ts` 追加 `isVisibleTo(status, isAuthor)` 真值表（8 种组合，见附录 B）。
+- [x] **GREEN**：在 `audit.ts` 实现 `isVisibleTo`，内部复用 `isPubliclyVisible`，不复制状态字面量。
+- [x] **验收**：新增 guard 测试扫 `server/src/`，除 `packages/types` 外不得手写 `'approved'` / `'pending_review'` 字面量比较（spec §4.5 说这五张表共用状态机，阶段 3/4 还要加 `messages`/`pet_licenses`，散落的字面量比较迟早漏掉可见性过滤）。
 
 ### Task 3: `packages/types` 扩展 + `sync:types`
 
-- [ ] **RED**：`packages/types` 测试断言新增 DTO 形状：`FollowDto`、`ViewHistoryItemDto`、`PostDto`（含 `auditStatus`、`images`）、`PostImageDto`（含必填 `width`/`height`）、`ProfileDto`、`PetUpsertDto`。
-- [ ] **GREEN**：新增类型 + 新错误码。**先核对已占用的**：`AUDIT_REJECTED:42201` 与 `LOCATION_REQUIRED:42202` 已存在，内容被审核驳回**复用 `AUDIT_REJECTED`**，不要新造 `CONTENT_REJECTED`。本阶段只新增 `FOLLOW_SELF:42203`（关注自己的宠物）与 `UPSTREAM_WECHAT_SECURITY:50203`（内容安全接口不可用）。
-- [ ] 跑 `npm run sync:types` 同步到 `miniprogram/shared/types`，`sync-types` guard 保持绿。
-- [ ] **验收**：`npm run build -w @paws/types` 通过；两端 `tsc --noEmit` 干净。
+- [x] **RED**：`packages/types` 测试断言新增 DTO 形状：`FollowDto`、`ViewHistoryItemDto`、`PostDto`（含 `auditStatus`、`images`）、`PostImageDto`（含必填 `width`/`height`）、`ProfileDto`、`PetUpsertDto`。
+- [x] **GREEN**：新增类型 + 新错误码。**先核对已占用的**：`AUDIT_REJECTED:42201` 与 `LOCATION_REQUIRED:42202` 已存在，内容被审核驳回**复用 `AUDIT_REJECTED`**，不要新造 `CONTENT_REJECTED`。本阶段只新增 `FOLLOW_SELF:42203`（关注自己的宠物）与 `UPSTREAM_WECHAT_SECURITY:50203`（内容安全接口不可用）。
+- [x] 跑 `npm run sync:types` 同步到 `miniprogram/shared/types`，`sync-types` guard 保持绿。
+- [x] **验收**：`npm run build -w @paws/types` 通过；两端 `tsc --noEmit` 干净。
 
 ### Task 4: Follows 域 —— 仓储 + 服务 + 控制器
 
-- [ ] **RED**：`test/follow-repository.spec.ts`（InMemory + 门控 Postgres 双跑）：`follow` 幂等（重复关注仍返回 true，不产生第二行）、`unfollow` 幂等、`listFollowing(userId)` 按关注时间倒序、`isFollowing` 批量查询。
-- [ ] **RED**：`test/follows.controller.spec.ts`：`POST /pets/:id/follow` 未登录 401；已登录返回 `{ isFollowing: true }`；重复 POST 仍 200（幂等，非 201）；`DELETE` 返回 `{ isFollowing: false }`；关注自己的宠物返回 422 `42203`；关注不存在的宠物 404。
-- [ ] **GREEN**：`FollowRepository` 接口 + `InMemoryFollowRepository` + `PostgresFollowRepository`（`INSERT ... ON CONFLICT DO NOTHING`）；`FollowsModule` 用 `useFactory` + `inject: [PG_POOL]` 双绑定。
-- [ ] `GET /pets/:id` 与 `GET /pets` 的响应追加 `isFollowing` 字段（登录态才有值，未登录为 `false`），沿用 `favorites` 的 `isFavorite` 批量查询写法避免 N+1。
-- [ ] **验收**：`follows` 的外键要求宠物与用户真实存在 —— 集成测试断言 FK 生效（这条在阶段 1 的 `PostgresUserRepository` 缺失时踩过坑）。
+- [x] **RED**：`test/follow-repository.spec.ts`（InMemory + 门控 Postgres 双跑）：`follow` 幂等（重复关注仍返回 true，不产生第二行）、`unfollow` 幂等、`listFollowing(userId)` 按关注时间倒序、`isFollowing` 批量查询。
+- [x] **RED**：`test/follows.controller.spec.ts`：`POST /pets/:id/follow` 未登录 401；已登录返回 `{ isFollowing: true }`；重复 POST 仍 200（幂等，非 201）；`DELETE` 返回 `{ isFollowing: false }`；关注自己的宠物返回 422 `42203`；关注不存在的宠物 404。
+- [x] **GREEN**：`FollowRepository` 接口 + `InMemoryFollowRepository` + `PostgresFollowRepository`（`INSERT ... ON CONFLICT DO NOTHING`）；`FollowsModule` 用 `useFactory` + `inject: [PG_POOL]` 双绑定。
+- [x] `GET /pets/:id` 与 `GET /pets` 的响应追加 `isFollowing` 字段（登录态才有值，未登录为 `false`），沿用 `favorites` 的 `isFavorite` 批量查询写法避免 N+1。
+- [x] **验收**：`follows` 的外键要求宠物与用户真实存在 —— 集成测试断言 FK 生效（这条在阶段 1 的 `PostgresUserRepository` 缺失时踩过坑）。
 
 ### Task 5: `GET /me/following` —— 我关注的宠物列表
 
-- [ ] **RED**：未登录 401；已登录返回宠物卡数组（含封面、宽高、距离可选）、`hasMore`、按关注时间倒序；分页 `page`/`pageSize` 生效。
-- [ ] **GREEN**：`FollowsController` 增加端点，复用 `PetsService` 的卡片投影逻辑（不复制 SQL）。
-- [ ] **验收**：无坐标时 `distanceMeters: null`（沿用阶段 1 城市模式约定）。
+- [x] **RED**：未登录 401；已登录返回宠物卡数组（含封面、宽高、距离可选）、`hasMore`、按关注时间倒序；分页 `page`/`pageSize` 生效。
+- [x] **GREEN**：`FollowsController` 增加端点，复用 `PetsService` 的卡片投影逻辑（不复制 SQL）。
+- [x] **验收**：无坐标时 `distanceMeters: null`（沿用阶段 1 城市模式约定）。
 
 ### Task 6: View History 域 —— 幂等写入 + 列表
 
@@ -86,12 +86,12 @@
 
 **已核实的既有偏差**：spec §4.2 要求 `favorites` 有 `target_type`(pet/venue) + `target_id`，但阶段 1 实际建的是 `(user_id TEXT, poi_id TEXT)` 复合主键，**只支持场所收藏**。宠物详情页的收藏心标（spec `_2`）在阶段 1 没有真正落地。这是本任务必须先处理的前置项。
 
-- [ ] **RED**：迁移测试 —— 新增 `target_type`/`target_id` 列，既有 `poi_id` 数据迁为 `('venue', poi_id)`，唯一约束改为 `(user_id, target_type, target_id)`。迁移必须幂等（`runMigrations` 会重复执行）。
-- [ ] **GREEN**：迁移语句用 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` + 数据回填 + 换主键。**这违反 Global Constraint 22「只增不改」**——属有意例外，因为不改就无法满足 spec §4.2，且阶段 1 的表结构本身是偏差。在 `phase2-notes.md` 的「与计划的偏差」里记录。
-- [ ] **GREEN**：`FavoriteRepository` 的 `isFavorite`/`add`/`remove` 签名加 `targetType` 参数，既有 venues 调用点全部更新；补 `listByUser`（阶段 1 只有 `isFavorite`/`add`/`remove`）。
-- [ ] **RED**：`GET /me/favorites` 未登录 401；返回 pet 与 venue 两类收藏，按收藏时间倒序；分页生效。
-- [ ] **RED**：`POST /pets/:id/favorite` / `DELETE`（宠物收藏，阶段 1 缺失）。
-- [ ] **验收**：阶段 1 的场所收藏用例全部仍绿（迁移不能破坏既有行为）；两类卡片投影都正确。
+- [x] **RED**：迁移测试 —— 新增 `target_type`/`target_id` 列，既有 `poi_id` 数据迁为 `('venue', poi_id)`，唯一约束改为 `(user_id, target_type, target_id)`。迁移必须幂等（`runMigrations` 会重复执行）。
+- [x] **GREEN**：迁移语句用 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` + 数据回填 + 换主键。**这违反 Global Constraint 22「只增不改」**——属有意例外，因为不改就无法满足 spec §4.2，且阶段 1 的表结构本身是偏差。在 `phase2-notes.md` 的「与计划的偏差」里记录。
+- [x] **GREEN**：`FavoriteRepository` 的 `isFavorite`/`add`/`remove` 签名加 `targetType` 参数，既有 venues 调用点全部更新；补 `listByUser`（阶段 1 只有 `isFavorite`/`add`/`remove`）。
+- [x] **RED**：`GET /me/favorites` 未登录 401；返回 pet 与 venue 两类收藏，按收藏时间倒序；分页生效。
+- [x] **RED**：`POST /pets/:id/favorite` / `DELETE`（宠物收藏，阶段 1 缺失）。
+- [x] **验收**：阶段 1 的场所收藏用例全部仍绿（迁移不能破坏既有行为）；两类卡片投影都正确。
 
 ### Task 8: `GET /me` + `PATCH /me` —— 个人中心资料
 
