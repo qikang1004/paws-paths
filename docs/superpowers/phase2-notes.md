@@ -54,3 +54,37 @@
 `view_history` 是 `ON CONFLICT DO UPDATE SET viewed_at = now()`（再看一次要顶到最前），
 `favorites` 是 `ON CONFLICT DO NOTHING`（再点一次心标**不该**让它在收藏列表里重排）。
 两个仓储的内存实现也照此分叉，双跑契约测试里各有一条专门断言这件事。
+
+### 4. `GET /me` + `PATCH /me` 挂在 `MeController` 上，没有新开 `UsersController`
+
+计划 Task 8 的 GREEN 写的是「`UsersController`（当前只有 service）」。实际把两个端点
+加在了既有的 `MeController` 上：路径本来就是 `/me`，与同文件的 `/me/following`、
+`/me/history`、`/me/favorites` 同属「当前用户的数据」，共用类级 `@UseGuards(AuthGuard)`。
+拆成两个 controller 会让同一个前缀的鉴权与路由散在两处，且第二个 controller 里
+一定要把那句「这里没有一个端点能匿名访问」的约定再抄一遍 —— 抄漏就是越权。
+
+`UsersService` 因此多了 `profile()` / `updateProfile()`，`MeModule` 多 import 一个
+`UsersModule`。校验函数 `parseProfilePatch` 放在 `users.service.ts` 而不是 controller 里：
+它是纯函数，和 `MeController` 里的 `parseListQuery` 一样能单独测，但它属于用户域的规则。
+
+### 5. 无库模式下个人中心的三个计数恒为 0
+
+`InMemoryUserRepository` 看不见 `pets` / `follows` / `favorites` —— 那是另外三个仓储。
+要算真数就得把三者注进 `UsersModule`，即给内存实现加 6 个方法（其中 3 个在有库模式下
+是死代码），只为让**演示降级模式**的计数好看。这不值那个耦合，所以 `findProfile`
+直接返回 `petCount: 0 / followingCount: 0 / favoriteCount: 0`，并在代码里注明是有意的。
+
+`test/profile.controller.spec.ts` 的「计数是真查出来的」一段因此用 `DATABASE_URL` 门控，
+只在真库下跑；它插一只宠物、一条关注、两条收藏，断言 `1 / 1 / 2`，
+并额外断言种子用户 `u-1` 的 1 只宠物 + 3 条关注不会漏进我的资料里。
+
+### 6. `PATCH /me` 的「缺字段」与「显式 null」是两种语义
+
+`COALESCE($2, nickname)` 那种写法分不出这两者 —— 客户端不传 `avatarUrl` 会被当成清空头像。
+所以 `PostgresUserRepository.updateProfile` 按调用方真给了的字段动态拼 SET 列表
+（列名是代码里的定值，不来自请求体，没有注入面），`parseProfilePatch` 也用
+`'avatarUrl' in body` 而不是 `body.avatarUrl != null` 来判断。一个可改字段都没给 → 422：
+静默 200 只会让客户端把字段名写错这种 bug 更难查。
+
+昵称长度按**码点数**（`[...nickname].length`）而不是 `String.length`：后者一个 emoji 顶两格，
+10 个 emoji 的昵称会被当成 20 字拦下。spec §5.1 说的是「20 字」。

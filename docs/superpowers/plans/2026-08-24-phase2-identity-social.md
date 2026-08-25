@@ -95,9 +95,9 @@
 
 ### Task 8: `GET /me` + `PATCH /me` —— 个人中心资料
 
-- [ ] **RED**：`GET /me` 未登录 401；已登录返回昵称、头像、宠物数、关注数、收藏数聚合计数。`PATCH /me` 可改昵称与头像；昵称空串或超 20 字 422。
-- [ ] **GREEN**：`UsersController`（当前只有 service）+ 聚合计数查询（单条 SQL 用子查询，不要 4 次往返）。
-- [ ] **验收**：昵称为阶段 1 占位值「微信用户」的用户能正常改名（`PostgresUserRepository.create` 落的就是这个占位值）。
+- [x] **RED**：`GET /me` 未登录 401；已登录返回昵称、头像、宠物数、关注数、收藏数聚合计数。`PATCH /me` 可改昵称与头像；昵称空串或超 20 字 422。
+- [x] **GREEN**：`UsersController`（当前只有 service）+ 聚合计数查询（单条 SQL 用子查询，不要 4 次往返）。
+- [x] **验收**：昵称为阶段 1 占位值「微信用户」的用户能正常改名（`PostgresUserRepository.create` 落的就是这个占位值）。
 
 ### Task 9: 宠物增改 —— `POST /pets` + `PATCH /pets/:id` + 删除
 
