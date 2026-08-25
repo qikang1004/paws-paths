@@ -1,6 +1,8 @@
 import type {
   AuditStatus,
+  FavoriteItemDto,
   FollowDto,
+  PetDetail,
   PetSummary,
   PostDto,
   PostImageDto,
@@ -87,6 +89,57 @@ describe('PetSummary.isFollowing', () => {
   });
 });
 
+describe('PetDetail.isFavorite', () => {
+  const base = {
+    id: 'p-1',
+    name: '奶糖',
+    species: 'cat' as const,
+    breed: '布偶',
+    gender: 'female' as const,
+    birthDate: '2024-02-14',
+    bio: '爱睡觉',
+    personalityTags: [],
+    distanceMeters: null,
+    owner: { nickname: '阿喵', avatarUrl: null, ownerVerified: false },
+    photos: [],
+    isFollowing: false,
+  };
+
+  it('详情页有收藏心标（原型 _2），关注与收藏是两个独立状态', () => {
+    const detail: PetDetail = { ...base, isFavorite: true };
+    expect([detail.isFollowing, detail.isFavorite]).toEqual([false, true]);
+  });
+
+  it('是必填的 —— 与 isFollowing 同款，可选会让页面到处写 ?? false', () => {
+    // @ts-expect-error 缺 isFavorite
+    const bad: PetDetail = base;
+    expect(bad.id).toBe('p-1');
+  });
+
+  it('卡片上没有收藏心标 —— PetSummary 不带这个字段', () => {
+    const card: PetSummary = {
+      id: 'p-1',
+      name: '奶糖',
+      species: 'cat',
+      breed: '布偶',
+      gender: 'female',
+      birthDate: '2024-02-14',
+      coverUrl: 'https://cdn.example.com/1.jpg',
+      coverWidth: 800,
+      coverHeight: 600,
+      personalityTags: [],
+      distanceMeters: null,
+      ownerNickname: '阿喵',
+      ownerAvatarUrl: null,
+      ownerVerified: false,
+      isFollowing: false,
+      // @ts-expect-error 广场页卡片只有关注，没有收藏
+      isFavorite: false,
+    };
+    expect(card.id).toBe('p-1');
+  });
+});
+
 describe('ViewHistoryItemDto', () => {
   it('可以是宠物也可以是场所', () => {
     const pet: ViewHistoryItemDto = {
@@ -116,6 +169,54 @@ describe('ViewHistoryItemDto', () => {
       viewedAt: '2026-08-15T10:00:00.000Z',
     };
     expect(bad.targetId).toBe('po-1');
+  });
+});
+
+describe('FavoriteItemDto', () => {
+  it('与浏览历史条目同形状，只有时间字段名不同 —— 同一个列表项组件喂两份数据', () => {
+    const history: ViewHistoryItemDto = {
+      targetType: 'pet',
+      targetId: 'p-1',
+      title: '奶糖',
+      coverUrl: null,
+      viewedAt: '2026-08-15T09:00:00.000Z',
+    };
+    const { viewedAt, ...shared } = history;
+    const favorite: FavoriteItemDto = { ...shared, favoritedAt: viewedAt };
+    expect(favorite.title).toBe('奶糖');
+  });
+
+  it('可以是宠物也可以是场所（spec §4.2 的多态收藏）', () => {
+    const items: FavoriteItemDto[] = [
+      {
+        targetType: 'pet',
+        targetId: 'p-1',
+        title: '奶糖',
+        coverUrl: 'https://cdn.example.com/p1.jpg',
+        favoritedAt: '2026-08-15T09:00:00.000Z',
+      },
+      {
+        targetType: 'venue',
+        targetId: 'gh-abc',
+        title: '爱心宠物医院',
+        coverUrl: null,
+        favoritedAt: '2026-08-15T10:00:00.000Z',
+      },
+    ];
+    expect(items.map((i) => i.targetType)).toEqual(['pet', 'venue']);
+  });
+
+  it('不下发 poi_id 这种阶段 1 的遗留字段 —— 场所收藏的目标 id 就是 targetId', () => {
+    const bad: FavoriteItemDto = {
+      targetType: 'venue',
+      targetId: 'gh-abc',
+      title: '爱心宠物医院',
+      coverUrl: null,
+      favoritedAt: '2026-08-15T10:00:00.000Z',
+      // @ts-expect-error favorites 表已迁为多态，poi_id 不再是接口的一部分
+      poiId: 'gh-abc',
+    };
+    expect(bad.targetId).toBe('gh-abc');
   });
 });
 

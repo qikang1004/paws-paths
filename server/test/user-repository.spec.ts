@@ -57,8 +57,10 @@ describeDb('PostgresUserRepository', () => {
 
   it('落库的用户能被 favorites 的外键接受', async () => {
     const user = await repo.findByOpenid(openid);
+    // favorites 在阶段 2 迁成多态：(user_id, target_type, target_id)，不再有 poi_id。
     await pool.query(
-      `INSERT INTO favorites (user_id, poi_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      `INSERT INTO favorites (user_id, target_type, target_id) VALUES ($1, 'venue', $2)
+       ON CONFLICT DO NOTHING`,
       [user!.id, 'v-3'],
     );
     const { rows } = await pool.query(`SELECT count(*)::int c FROM favorites WHERE user_id = $1`, [

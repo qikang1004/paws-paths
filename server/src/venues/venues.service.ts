@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { CATEGORY_LABELS, mapPoiCategory } from './poi-category.mapper';
 import type { MapPlace } from './poi-client';
 import type { PoiProxyService } from './poi-proxy.service';
-import { FAVORITES_REPOSITORY, type FavoritesRepository } from './favorites.repository';
+import { FAVORITES_REPOSITORY, type FavoritesRepository } from '../favorites/favorite.repository';
 import {
   haversineMeters,
   VENUE_REPOSITORY,
@@ -138,9 +138,9 @@ export class VenuesService {
     favorite: boolean,
   ): Promise<{ isFavorite: boolean }> {
     if (favorite) {
-      await this.favs.add(userId, poiId);
+      await this.favs.add(userId, 'venue', poiId);
     } else {
-      await this.favs.remove(userId, poiId);
+      await this.favs.remove(userId, 'venue', poiId);
     }
     return { isFavorite: favorite };
   }
@@ -166,8 +166,14 @@ export class VenuesService {
   }
 
   private async applyFavorites(venues: Venue[], userId: string | null): Promise<Venue[]> {
-    if (!userId) return venues;
-    const favorites = new Set(await this.favs.list(userId));
+    if (!userId || venues.length === 0) return venues;
+    // 只查这一页的 id（favoriteIds 而不是「取全部收藏」）：给 20 张卡片打心标
+    // 不该把用户整个收藏夹拉进内存。
+    const favorites = await this.favs.favoriteIds(
+      userId,
+      'venue',
+      venues.map((v) => v.poiId),
+    );
     return venues.map((v) => ({ ...v, isFavorite: favorites.has(v.poiId) }));
   }
 }

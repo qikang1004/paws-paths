@@ -14,6 +14,7 @@ import { ApiException } from '../common/api.exception';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { OptionalAuthGuard } from '../auth/optional-auth.guard';
+import { FavoritesService } from '../favorites/favorites.service';
 import { FollowsService } from '../follows/follows.service';
 import { HistoryService } from '../history/history.service';
 import { PetsService, type PetDetail, type PetListResponse } from './pets.service';
@@ -36,6 +37,7 @@ export class PetsController {
     private readonly pets: PetsService,
     private readonly follows: FollowsService,
     private readonly history: HistoryService,
+    private readonly favorites: FavoritesService,
   ) {}
 
   @Get()
@@ -98,7 +100,8 @@ export class PetsController {
     // 不 await —— 详情页的延迟与成功率不该绑在浏览历史上。
     this.history.recordSafely(userId, 'pet', id);
     const [marked] = await this.follows.markFollowing([detail], userId);
-    return marked;
+    // 收藏心标（原型 _2）：未登录时 isFavorite 直接 false，不打库。
+    return { ...marked, isFavorite: await this.favorites.isFavorite(userId, 'pet', id) };
   }
 
   // 关注是幂等的状态设置，不是创建资源：显式 200 而非 Nest 默认的 201
@@ -120,5 +123,26 @@ export class PetsController {
     @CurrentUser() userId: string | null,
   ): Promise<{ isFollowing: boolean }> {
     return this.follows.setFollow(id, userId as string, false);
+  }
+
+  // 收藏同样是幂等的状态设置：显式 200。与关注的区别是**允许收藏自己的宠物** ——
+  // 收藏是个人书签，没有 FOLLOW_SELF 那种「这条关系本来就不该存在」的问题。
+  @Post(':id/favorite')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  async favorite(
+    @Param('id') id: string,
+    @CurrentUser() userId: string | null,
+  ): Promise<{ isFavorite: boolean }> {
+    return this.favorites.setPetFavorite(id, userId as string, true);
+  }
+
+  @Delete(':id/favorite')
+  @UseGuards(AuthGuard)
+  async unfavorite(
+    @Param('id') id: string,
+    @CurrentUser() userId: string | null,
+  ): Promise<{ isFavorite: boolean }> {
+    return this.favorites.setPetFavorite(id, userId as string, false);
   }
 }

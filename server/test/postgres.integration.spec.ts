@@ -43,12 +43,20 @@ describeDb('postgres integration', () => {
 
   describe('阶段 2 新表的约束（真库层面）', () => {
     it('follows 的 (follower_id, target_pet_id) 唯一约束真实生效', async () => {
-      // 幂等关注依赖它兜底：ON CONFLICT DO NOTHING 需要这个约束才有落点
+      // 幂等关注依赖它兜底：ON CONFLICT DO NOTHING 需要这个约束才有落点。
+      // 基线自带，不借种子的 f-1：万一别的套件把它清了，这条会「插入成功」，
+      // 于是探针行永久占住 (u-1,p-2)，后面每次 seed.sql 都撞唯一约束。
+      await pool.query(
+        `INSERT INTO follows (id, follower_id, target_pet_id) VALUES ('f-uniq-base','u-1','p-2')
+         ON CONFLICT DO NOTHING`,
+      );
       const dup = pool.query(
         `INSERT INTO follows (id, follower_id, target_pet_id) VALUES ($1,'u-1','p-2')`,
         ['f-dup-probe'],
       );
       await expect(dup).rejects.toThrow(/duplicate key|unique/i);
+      // 种子行在时上面是空操作，这里也就删不到东西；表回到进来时的样子。
+      await pool.query(`DELETE FROM follows WHERE id = 'f-uniq-base'`);
     });
 
     it('view_history 的 (user_id, target_type, target_id) 唯一约束支撑幂等更新', async () => {
@@ -111,6 +119,51 @@ describeDb('postgres integration', () => {
           ['po-fk-probe'],
         ),
       ).rejects.toThrow(/foreign key/i);
+    });
+  });
+
+  // favorites 是阶段 1 建的表，阶段 2 迁成多态（spec §4.2）。「只增不改」的有意例外，
+  // 所以这里在真库上确认迁移落地了 —— 单元测试只能证明 SQL 文本长什么样。
+  describe('favorites 多态化迁移（真库层面）', () => {
+    it('列变成 target_type/target_id，poi_id 已删除', async () => {
+      const { rows } = await pool.query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'favorites'`,
+      );
+      const names = rows.map((r) => r.column_name);
+      expect(names).toContain('target_type');
+      expect(names).toContain('target_id');
+      // 值已经进 target_id，留着就是第二份真相。
+      expect(names).not.toContain('poi_id');
+    });
+
+    it('主键换成三元组 (user_id, target_type, target_id)', async () => {
+      // 阶段 1 是 (user_id, poi_id)：那个主键既挡着 DROP COLUMN，
+      // 也让「同名的 pet 和 venue」互相覆盖。
+      // attname 是 name 类型，node-pg 没有 name[] 的解析器（会原样回字符串），
+      // 所以在 SQL 里就 ::text 掉。
+      const { rows } = await pool.query<{ cols: string[] }>(
+        `SELECT array_agg(a.attname::text ORDER BY k.ord) AS cols
+         FROM pg_constraint c
+         JOIN unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord) ON true
+         JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+         WHERE c.conrelid = 'favorites'::regclass AND c.contype = 'p'`,
+      );
+      expect(rows[0].cols).toEqual(['user_id', 'target_type', 'target_id']);
+    });
+
+    it('target_type 的 CHECK 拦下 pet/venue 之外的值', async () => {
+      const bad = pool.query(
+        `INSERT INTO favorites (user_id, target_type, target_id) VALUES ('u-1','post','po-1')`,
+      );
+      await expect(bad).rejects.toThrow(/check constraint|violates/i);
+    });
+
+    it('列表查询路径有 (user_id, created_at DESC) 索引', async () => {
+      const { rows } = await pool.query(
+        `SELECT 1 FROM pg_indexes WHERE tablename = 'favorites' AND indexname = 'favorites_user_idx'`,
+      );
+      expect(rows.length).toBe(1);
     });
   });
 

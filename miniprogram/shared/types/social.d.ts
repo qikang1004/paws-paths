@@ -25,6 +25,21 @@ export interface ViewHistoryItemDto {
     viewedAt: string;
 }
 /**
+ * 收藏条目。spec §4.2：`favorites` 是多态的（`_2` 宠物详情的收藏心标、
+ * `_3` 场所收藏），所以收藏列表是 pet/venue 混排。
+ *
+ * 字段刻意与 {@link ViewHistoryItemDto} 保持一致（只有时间字段名不同）：
+ * 「收藏」和「浏览历史」两个页面都是混排的缩略图 + 标题 + 时间，同一个列表项
+ * 组件能同时喂两份数据；形状分叉只会让客户端多写一个分支。
+ */
+export interface FavoriteItemDto {
+    targetType: 'pet' | 'venue';
+    targetId: string;
+    title: string;
+    coverUrl: string | null;
+    favoritedAt: string;
+}
+/**
  * 动态配图。`width`/`height` 必填：瀑布流要靠它在图片加载前算占位高度，
  * 缺了会跳版。`auditStatus` 与所属动态**独立** —— 文字过审不代表每张图都过审，
  * 单张图被驳回时其余图仍可展示。

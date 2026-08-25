@@ -44,6 +44,13 @@ export interface PetDetail {
   photos: PetPhoto[];
   /** 同 {@link PetSummary.isFollowing}。 */
   isFollowing: boolean;
+  /**
+   * 是否已收藏（原型 `_2` 的心标）。只在详情页出现 —— 广场页的卡片上只有关注，
+   * 所以 {@link PetSummary} 刻意没有这个字段。
+   *
+   * 与 `isFollowing` 同款：必填、未登录一律 `false`，免得页面到处写 `?? false`。
+   */
+  isFavorite: boolean;
 }
 
 export interface PetListResponse {

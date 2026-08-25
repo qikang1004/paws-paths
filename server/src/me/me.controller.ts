@@ -4,6 +4,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ApiException } from '../common/api.exception';
 import { FollowsService, type FollowListResponse } from '../follows/follows.service';
+import { FavoritesService, type FavoriteListResponse } from '../favorites/favorites.service';
 import { HistoryService, type ViewHistoryListResponse } from '../history/history.service';
 
 function fail(message: string): never {
@@ -48,6 +49,7 @@ export class MeController {
   constructor(
     private readonly follows: FollowsService,
     private readonly history: HistoryService,
+    private readonly favorites: FavoritesService,
   ) {}
 
   @Get('following')
@@ -66,5 +68,15 @@ export class MeController {
     // 历史列表不吃坐标（不显示距离），但分页规则与其他列表一致，复用同一套校验。
     const { page, pageSize } = parseListQuery(q);
     return this.history.list(userId as string, { page, pageSize });
+  }
+
+  @Get('favorites')
+  async favoriteList(
+    @Query() q: Record<string, string | undefined>,
+    @CurrentUser() userId: string | null,
+  ): Promise<FavoriteListResponse> {
+    // 与历史列表同理：pet/venue 混排的列表项不显示距离，坐标用不上。
+    const { page, pageSize } = parseListQuery(q);
+    return this.favorites.list(userId as string, { page, pageSize });
   }
 }

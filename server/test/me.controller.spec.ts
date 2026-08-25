@@ -147,15 +147,20 @@ describe('MeController', () => {
 
     it('不串号：别人的关注不出现在我的列表里', async () => {
       const otherToken = sign({ openid: 'openid-huang' }, 'test-secret', { subject: 'u-1' });
-      // u-1 关注 p-2（p-2 属 u-2，合法）
+      // 借 u-1 造一条别人的关注。目标只能挑「种子里 u-1 还没关注过」的宠物 ——
+      // 种子的 f-1/f-2/f-3 是 u-1→p-2/p-3/p-5，拿那三只当目标的话，收尾的
+      // unfollow 会连种子行一起删掉，之后 seed.sql 想补回 f-1 就会撞
+      // follows 的 (follower_id, target_pet_id) 唯一约束，整个 globalSetup 起不来。
+      // p-4 属 u-4（不是自己的宠物，关注合法），且不在种子的关注里。
+      const target = 'p-4';
       await request(app.getHttpServer())
-        .post(followUrl('p-2'))
+        .post(followUrl(target))
         .set('Authorization', `Bearer ${otherToken}`);
       const mine = await auth(request(app.getHttpServer()).get('/me/following')).expect(200);
       expect(mine.body.data.items).toEqual([]);
-      // 清理 u-1 的痕迹
+      // 只清自己造的那一条
       await request(app.getHttpServer())
-        .delete(followUrl('p-2'))
+        .delete(followUrl(target))
         .set('Authorization', `Bearer ${otherToken}`);
     });
   });

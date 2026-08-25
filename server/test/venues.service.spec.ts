@@ -1,4 +1,4 @@
-import { InMemoryFavoritesRepository } from '../src/venues/favorites.repository';
+import { InMemoryFavoritesRepository } from '../src/favorites/favorite.repository';
 import { InMemoryVenueRepository } from '../src/venues/venue.repository';
 import { VenuesService } from '../src/venues/venues.service';
 import type { PoiProxyService } from '../src/venues/poi-proxy.service';

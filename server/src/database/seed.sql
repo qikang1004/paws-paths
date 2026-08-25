@@ -1,3 +1,8 @@
+-- 种子数据：每次启动都重跑，只补缺失、从不覆盖。
+-- 有两个唯一约束的表（users 的 id/openid、follows 的 id 与 (follower_id,target_pet_id)、
+-- view_history 的 id 与 (user_id,target_type,target_id)）一律用不带列名的
+-- ON CONFLICT DO NOTHING：写死 ON CONFLICT (id) 时，只要有别的行占了另一个约束，
+-- 这条 INSERT 就会抛错 —— 而 seed 跑在 globalSetup 里，一抛错整个测试套件都起不来。
 INSERT INTO users (id, openid, nickname, avatar_url, is_verified_owner) VALUES
   ('u-1','openid-huang','小陈','https://picsum.photos/seed/paw-u1/120/120',true),
   ('u-2','openid-naixi','阿喵','https://picsum.photos/seed/paw-u2/120/120',true),
@@ -7,7 +12,7 @@ INSERT INTO users (id, openid, nickname, avatar_url, is_verified_owner) VALUES
   ('u-6','openid-tuanzi','七七','https://picsum.photos/seed/paw-u6/120/120',false),
   ('u-7','openid-wangcai','老李','https://picsum.photos/seed/paw-u7/120/120',true),
   ('u-8','openid-mimi','点点','https://picsum.photos/seed/paw-u8/120/120',false)
-ON CONFLICT (openid) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO pets (id, owner_id, name, species, breed, gender, birth_date, bio, personality_tags, location, last_active_at) VALUES
   ('p-1','u-1','大黄','dog','金毛','male','2022-05-01','爱玩水的暖男，见到谁都摇尾巴。','{"黏人","爱玩水"}',ST_SetSRID(ST_MakePoint(116.4040,39.9060),4326),'2026-08-20T10:00:00Z'),
@@ -69,7 +74,7 @@ INSERT INTO follows (id, follower_id, target_pet_id, created_at) VALUES
   ('f-1','u-1','p-2', now() - interval '3 day'),
   ('f-2','u-1','p-3', now() - interval '2 day'),
   ('f-3','u-1','p-5', now() - interval '1 day')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- 浏览历史混两种 target_type，供「按 viewed_at 倒序」与混排投影用。
 INSERT INTO view_history (id, user_id, target_type, target_id, viewed_at) VALUES
@@ -77,7 +82,7 @@ INSERT INTO view_history (id, user_id, target_type, target_id, viewed_at) VALUES
   ('vh-2','u-1','venue','v-1', now() - interval '3 hour'),
   ('vh-3','u-1','pet','p-5', now() - interval '2 hour'),
   ('vh-4','u-1','venue','v-9', now() - interval '1 hour')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- 动态覆盖审核状态机的三种可见性情形：
 --   po-1/po-2/po-3 approved  → 所有人可见

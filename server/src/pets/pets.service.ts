@@ -47,6 +47,7 @@ export interface PetDetail {
   owner: { nickname: string; avatarUrl: string | null; ownerVerified: boolean };
   photos: PetPhoto[];
   isFollowing: boolean;
+  isFavorite: boolean;
 }
 
 export interface PetListResponse {
@@ -113,6 +114,8 @@ export class PetsService {
       photos,
       // 同 toSummary：这里拿不到登录态，由 FollowsService.markFollowing 覆盖。
       isFollowing: false,
+      // 同理，由 PetsController 用 FavoritesService.isFavorite 覆盖。
+      isFavorite: false,
     };
   }
 }

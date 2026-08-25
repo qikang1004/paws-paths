@@ -106,6 +106,42 @@ describe('runMigrations', () => {
     expect(schema).toContain('height INTEGER NOT NULL CHECK (height > 0)');
   });
 
+  // favorites 是阶段 1 建的表，阶段 2 要把它从「只支持场所」改成多态
+  // （spec §4.2）。这是「只增不改」的有意例外，所以约束写得比别的表细：
+  // 新库直接建成多态形状，旧库靠 DO 块迁移，两条路都要在 SQL 里看得见。
+  it('favorites 建成多态形状（target_type/target_id），且不再有 poi_id', async () => {
+    const { pool, queries } = fakePool();
+    await runMigrations(pool);
+    const schema = businessSql(queries)[0];
+    const create = schema.slice(schema.indexOf('CREATE TABLE IF NOT EXISTS favorites'));
+    const body = create.slice(0, create.indexOf(');'));
+    expect(body).toContain("target_type TEXT NOT NULL CHECK (target_type IN ('pet','venue'))");
+    expect(body).toContain('target_id TEXT NOT NULL');
+    expect(body).toContain('PRIMARY KEY (user_id, target_type, target_id)');
+    expect(body).not.toContain('poi_id');
+  });
+
+  it('旧库的 favorites 迁移可反复执行：先回填再上约束，最后才丢 poi_id', async () => {
+    const { pool, queries } = fakePool();
+    await runMigrations(pool);
+    const schema = businessSql(queries)[0];
+    const migration = schema.slice(schema.indexOf('-- favorites 多态化'));
+
+    // 整段包在「poi_id 还在吗」的判断里：新库根本没这列，进去就会因为
+    // UPDATE ... = poi_id 解析不到列而炸。
+    expect(migration).toContain("column_name = 'poi_id'");
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS target_type');
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS target_id');
+
+    // 顺序是硬要求：回填 → SET NOT NULL → 换主键 → DROP COLUMN。
+    // 反了任何一步，有数据的旧库都会迁移失败。
+    const at = (needle: string): number => migration.indexOf(needle);
+    expect(at("SET target_type = 'venue'")).toBeGreaterThan(-1);
+    expect(at("SET target_type = 'venue'")).toBeLessThan(at('SET NOT NULL'));
+    expect(at('SET NOT NULL')).toBeLessThan(at('ADD PRIMARY KEY'));
+    expect(at('ADD PRIMARY KEY')).toBeLessThan(at('DROP COLUMN poi_id'));
+  });
+
   // 多副本部署时每个副本都会跑迁移，并发建表/灌种子会互相踩（远程库上表现为
   // Connection terminated unexpectedly）。用会话级咨询锁把迁移串行化。
   it('迁移包在咨询锁里，且顺序是 加锁 → 业务 SQL → 解锁', async () => {
