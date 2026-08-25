@@ -4,10 +4,11 @@ import { DatabaseModule } from './database/database.module';
 import { HealthController } from './health/health.controller';
 import { MeModule } from './me/me.module';
 import { PetsModule } from './pets/pets.module';
+import { UploadsModule } from './uploads/uploads.module';
 import { VenuesModule } from './venues/venues.module';
 
 @Module({
-  imports: [AuthModule, DatabaseModule, PetsModule, VenuesModule, MeModule],
+  imports: [AuthModule, DatabaseModule, PetsModule, VenuesModule, MeModule, UploadsModule],
   controllers: [HealthController],
 })
 export class AppModule {}

@@ -4,6 +4,10 @@ dist/
 server/.env
 project.private.config.json
 
+# 上传落盘目录（本地磁盘存储的默认根，见 server/src/uploads/uploads.module.ts）。
+# 用户上传的图片不是交付物；部署时用 UPLOAD_ROOT 指向挂载卷。
+var/
+
 # 微信上传私钥，只从 CI Secret 注入
 private.key
 private.*.key

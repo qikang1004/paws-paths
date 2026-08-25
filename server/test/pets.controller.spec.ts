@@ -9,6 +9,11 @@ import { ResponseInterceptor } from '../src/common/response.interceptor';
 import { PetsModule } from '../src/pets/pets.module';
 
 describe('PetsController', () => {
+  // 有库时每个用例是真往返远程 Postgres，关注那几条一条要三四次（读详情 → 关注 → 再读，
+  // 外加 afterEach 的取消关注）。Jest 默认的 5000ms 兜不住，超时会随机落在不同用例上 ——
+  // 同 pet-write.controller.spec.ts 与 rate-limit-degradation.integration.spec.ts 的 30_000。
+  jest.setTimeout(30_000);
+
   let app: INestApplication;
   let token: string;
 
