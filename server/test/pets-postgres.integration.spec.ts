@@ -22,19 +22,46 @@ describeDb('pets postgres integration', () => {
     await pool.end();
   });
 
-  it('list：无过滤返回 8 只、按距离升序、距离非 null', async () => {
+  /**
+   * 不写死「8 只」：`POST /pets` 上线后 pets 表会长 —— 走查脚本每跑一遍加一只，
+   * `pet-write` 那几个套件跑的时候也在建自己的。全表行数一写死，这条断言就变成
+   * 「谁都别往这个库里建宠物」（同 48fab02 对种子计数那条的处理）。
+   *
+   * 总数要和取数用同一套过滤（public + 有封面），否则 `items.length` 对不上：
+   * 没有封面的宠物被 `JOIN pet_photos` 挡在页外，而用户新建的宠物在传第一张照片
+   * 之前正是这种状态。
+   *
+   * 距离那半段也不能要求「全部非 null」：用户建宠物时可以不带坐标（偏差 #38），
+   * 这些行的 `location` 是 NULL。要证的是它们排在最后（NULLS LAST），
+   * 有距离的那截升序。
+   */
+  it('list：一页装得下时全量返回，种子 8 只都在、有距离的升序在前、没位置的排最后', async () => {
+    const { rows } = await pool.query<{ c: number }>(
+      `SELECT count(*)::int AS c FROM pets p
+       JOIN pet_photos ph ON ph.id = p.cover_photo_id
+       WHERE p.visibility = 'public'`,
+    );
+    const total = rows[0].c;
     const repo = new PostgresPetRepository(pool);
     const { items, hasMore } = await repo.list({
       filter: { species: 'all', breed: 'all' },
       page: 1,
-      pageSize: 20,
+      pageSize: total + 10, // 一页装得下全表，才谈得上「种子 8 只都在结果里」
       ...center,
     });
-    expect(items.length).toBe(8);
+    expect(items.length).toBe(total);
     expect(hasMore).toBe(false);
-    expect(items.every((i) => i.distanceMeters != null)).toBe(true);
-    const ds = items.map((i) => i.distanceMeters as number);
-    expect([...ds].sort((a, b) => a - b)).toEqual(ds);
+    const ids = items.map((i) => i.id);
+    for (let n = 1; n <= 8; n += 1) {
+      expect(ids).toContain(`p-${n}`);
+    }
+    const ds = items.map((i) => i.distanceMeters);
+    const firstNull = ds.findIndex((d) => d == null);
+    const withDistance = (firstNull === -1 ? ds : ds.slice(0, firstNull)) as number[];
+    // 种子那 8 只都有坐标，所以有距离的那截至少有 8 项。
+    expect(withDistance.length).toBeGreaterThanOrEqual(8);
+    expect(ds.slice(withDistance.length).every((d) => d == null)).toBe(true);
+    expect([...withDistance].sort((a, b) => a - b)).toEqual(withDistance);
   });
 
   it('list：物种过滤只回猫', async () => {

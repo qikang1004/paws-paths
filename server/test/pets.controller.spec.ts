@@ -56,13 +56,23 @@ describe('PetsController', () => {
     }
   });
 
-  it('GET /pets → 8 只、page=1、首项距离最近', async () => {
+  /**
+   * 断言的是端点契约，不是「库里正好 8 只」：`POST /pets` 上线后真库的 pets 表会长
+   * —— 用户建的、走查脚本建的都在里面，默认 pageSize 是 10，这条曾因此收到 10 只而红。
+   * 不给坐标时距离一律为 null（排序退回 `last_active_at`），所以这里也不该断言
+   * 「首项距离最近」：全是 null 的数组永远「有序」，那是句空话。带坐标的排序由下面
+   * 那条与 pets-postgres.integration 覆盖。
+   */
+  it('GET /pets 不给坐标 → page=1、不超过一页、距离一律 null', async () => {
     const res = await request(app.getHttpServer()).get('/pets').expect(200);
     expect(res.body.code).toBe(0);
-    expect(res.body.data.items.length).toBe(8);
     expect(res.body.data.page).toBe(1);
-    const ds = res.body.data.items.map((i: { distanceMeters: number }) => i.distanceMeters);
-    expect([...ds].sort((a: number, b: number) => a - b)).toEqual(ds);
+    expect(res.body.data.items.length).toBeGreaterThanOrEqual(8); // 种子那 8 只至少撑得起一页
+    expect(res.body.data.items.length).toBeLessThanOrEqual(10); // 默认 pageSize
+    const ds = res.body.data.items.map(
+      (i: { distanceMeters: number | null }) => i.distanceMeters,
+    );
+    expect(ds.every((d: number | null) => d == null)).toBe(true);
   });
 
   it('GET /pets?species=cat → 只回猫', async () => {
@@ -78,11 +88,24 @@ describe('PetsController', () => {
     expect(res.body.data.hasMore).toBe(true);
   });
 
-  it('GET /pets?lat=39.9&lng=116.4 → 带坐标，首项距离非 null', async () => {
+  /**
+   * 带坐标才有距离，排序契约也只在这条上成立：有位置的按距离升序在前，
+   * 没位置的排最后（Postgres `ORDER BY ... ASC` 的 NULLS LAST，InMemory 用
+   * `?? +Infinity` 对齐）。用户建宠物时可以不带坐标（偏差 #38：填资料的路上不弹
+   * 定位授权框），真库里因此一定有 `location IS NULL` 的行 —— 它们不该插到中间。
+   */
+  it('GET /pets?lat=39.9&lng=116.4 → 有距离的升序在前，没位置的排最后', async () => {
     const res = await request(app.getHttpServer())
       .get('/pets?lat=39.9&lng=116.4')
       .expect(200);
     expect(res.body.data.items[0].distanceMeters).not.toBeNull();
+    const ds: (number | null)[] = res.body.data.items.map(
+      (i: { distanceMeters: number | null }) => i.distanceMeters,
+    );
+    const firstNull = ds.findIndex((d) => d == null);
+    const withDistance = (firstNull === -1 ? ds : ds.slice(0, firstNull)) as number[];
+    expect(ds.slice(withDistance.length).every((d) => d == null)).toBe(true);
+    expect([...withDistance].sort((a, b) => a - b)).toEqual(withDistance);
   });
 
   it('GET /pets?species=alien → 422 + VALIDATION_FAILED', async () => {

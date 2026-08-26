@@ -7,6 +7,10 @@
  *
  * 服务端需要的环境：DATABASE_URL / REDIS_URL / FAKE_WECHAT_LOGIN=1 /
  * FAKE_CONTENT_SECURITY=1。两个开关都是本地联调用的，部署环境必须关掉。
+ *
+ * 跑完会在库里留下一个用户、一只宠物（带一张照片）、一条动态、两次收藏与三条历史 ——
+ * 有意不清理，跑完可以直接在小程序里翻。代价是**测试断言不能写死全表行数**：
+ * 「全库正好 8 只宠物」那两条就是这么红的（见 phase2-notes 第一节第 4 条）。
  */
 const BASE = process.env.WALKTHROUGH_BASE ?? 'http://127.0.0.1:3100';
 
