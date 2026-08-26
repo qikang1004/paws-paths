@@ -17,6 +17,14 @@ export default async function globalSetup(): Promise<void> {
   try {
     // 集成用例断言种子行数（8 宠物 / 10 场所 / 8 用户），测试环境固定灌种子，
     // 不受 SEED_DEMO_DATA 影响；该开关只管生产启动。
+    //
+    // 跑两遍，第二遍就是「迁移幂等」的证据：不报错（DDL 全是 IF NOT EXISTS、
+    // 种子全是 ON CONFLICT DO NOTHING），且种子行数不变（由 postgres.integration
+    // 的计数断言接着证）。这件事只能在这里做 —— 这是整轮里唯一没有并发的时刻。
+    // 放在某个用例里再跑一次会 deadlock：schema 的 DDL 要 ACCESS EXCLUSIVE 锁，
+    // 而 Jest 并行跑的邻居套件正在同几张表上开事务，两边等成环（真红过）。
+    // 迁移里的咨询锁只让「多次迁移」互相排队，管不住普通业务流量。
+    await runMigrations(pool, { seed: true });
     await runMigrations(pool, { seed: true });
   } finally {
     await pool.end();

@@ -1,5 +1,4 @@
 import { Pool } from 'pg';
-import { runMigrations } from '../src/database/migrations';
 
 /**
  * PostGIS 集成测试：以 DATABASE_URL 存在为门控（与 REDIS_INTEGRATION 同款）。
@@ -10,6 +9,11 @@ const DB_URL = process.env.DATABASE_URL;
 const describeDb = DB_URL ? describe : describe.skip;
 
 describeDb('postgres integration', () => {
+  // 远程库下默认的 5000ms 兜不住多往返的用例（notes #22）：外键探针那条一个用例
+  // 要插三次、回滚三次，单次热连接 ~600ms 起。jest.config.js 里已经把 testTimeout
+  // 提到 30s，这里留着是为了单独 `-t` 跑这个文件时也有同样的余量。
+  jest.setTimeout(30_000);
+
   let pool: Pool;
 
   beforeAll(() => {
@@ -202,9 +206,36 @@ describeDb('postgres integration', () => {
     }
   });
 
-  it('迁移幂等：重复执行不报错、计数不变', async () => {
-    await runMigrations(pool, { seed: true });
-    const { rows } = await pool.query(`SELECT count(*)::int AS c FROM pets`);
-    expect(rows[0].c).toBe(8);
+  /**
+   * 幂等的证据分两半，都不在这个用例里再跑一遍迁移。
+   *
+   * 「重复执行不报错」由 `test/global-setup.ts` 承担：那里连着跑两遍 `runMigrations`，
+   * 报错就是全局 setup 失败，整轮红得比这里更响。之所以必须放在那儿 —— 那是整轮
+   * 唯一没有并发的时刻：schema 的 DDL 要 ACCESS EXCLUSIVE 锁，在用例里跑会和
+   * Jest 并行的邻居套件的事务等成环，`deadlock detected`（真库回归上复现过两次，
+   * 单跑本套件永远绿）。迁移里的咨询锁只让多次迁移互相排队，管不住普通业务流量。
+   *
+   * 「种子不会被灌重」由上一条计数断言与这里的 id 集合断言承担：种子已经跑过两遍，
+   * 行数与 id 都还对得上，就说明 ON CONFLICT 那层真的兜住了。用 id 集合而不是
+   * 行数，是因为「插重」在带唯一约束的表上会先变成 id 冲突 —— 集合对得上，
+   * 顺带证明没有 f-1 被顶成别的行。
+   */
+  it('迁移跑过两遍，种子没有被灌重', async () => {
+    const follows = await pool.query<{ id: string }>(
+      `SELECT id FROM follows WHERE id ~ '^f-[0-9]+$' ORDER BY id`,
+    );
+    expect(follows.rows.map((r) => r.id)).toEqual(['f-1', 'f-2', 'f-3']);
+
+    const images = await pool.query<{ id: string }>(
+      `SELECT id FROM post_images WHERE id ~ '^pi-[0-9]+$' ORDER BY id`,
+    );
+    expect(images.rows.map((r) => r.id)).toEqual([
+      'pi-1',
+      'pi-2',
+      'pi-3',
+      'pi-4',
+      'pi-5',
+      'pi-6',
+    ]);
   });
 });
