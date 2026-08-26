@@ -13,6 +13,7 @@ import { formatPetAge, type PetSummary } from '../shared/types/index';
 const ROOT = resolve(__dirname, '..');
 const TOKENS = readFileSync(join(ROOT, 'styles/tokens.wxss'), 'utf8');
 const read = (rel: string): string => readFileSync(join(ROOT, rel), 'utf8');
+const BASE = 'https://api.example.com';
 
 const pet = (over: Partial<PetSummary> = {}): PetSummary => ({
   id: 'p-1',
@@ -62,6 +63,23 @@ describe('buildFeedItem', () => {
     const item = buildFeedItem(pet({ coverWidth: 0, coverHeight: 0 }));
     expect(item.width).toBeGreaterThan(0);
     expect(item.height).toBeGreaterThan(0);
+  });
+
+  it('相对路径的封面与头像补成绝对地址（服务端存的就是相对路径）', () => {
+    const item = buildFeedItem(
+      pet({ coverUrl: '/uploads/u-1/a.jpg', ownerAvatarUrl: '/uploads/u-1/avatar.jpg' }),
+      undefined,
+      BASE,
+    );
+    expect(item.coverUrl).toBe(`${BASE}/uploads/u-1/a.jpg`);
+    expect(item.ownerAvatarUrl).toBe(`${BASE}/uploads/u-1/avatar.jpg`);
+  });
+
+  it('已是绝对地址的原样用；没有封面/头像回空串让模板整块不渲染', () => {
+    const item = buildFeedItem(pet(), undefined, BASE);
+    expect(item.coverUrl).toBe('https://picsum.photos/id/237/600/800');
+    expect(item.ownerAvatarUrl).toBe('');
+    expect(buildFeedItem(pet({ coverUrl: '' }), undefined, BASE).coverUrl).toBe('');
   });
 });
 

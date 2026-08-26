@@ -150,15 +150,15 @@
 
 ### Task 15: 小程序端 6 个页面
 
-- [ ] **RED**：每页各自的 markup 与数据装配测试（沿用阶段 1 的页面测试写法）。
-- [ ] **GREEN** 按顺序填实：
+- [x] **RED**：每页各自的 markup 与数据装配测试（沿用阶段 1 的页面测试写法）。
+- [x] **GREEN** 按顺序填实：
   - `pages/profile/index`（tabBar 页，8 行 → 资料头 + 计数 + 入口列表）
   - `packages/profile/pages/pet-edit/index`（宠物增改表单 + 图片上传）
   - `packages/profile/pages/following/index`（关注列表，复用 wf-list）
   - `packages/profile/pages/favorites/index`（收藏列表，pet/venue 混排）
   - `packages/profile/pages/history/index`（浏览历史，按日期分组）
   - `packages/profile/pages/my-posts/index` + `packages/post/pages/compose/index`（我的动态 + 发布）
-- [ ] **验收**：`app.json` 分包声明与实际路径一致（`app-json` guard 覆盖）；发布页的图片选择走 `wx.chooseMedia` 并拿到真实宽高（Global Constraint 21）。
+- [x] **验收**：`app.json` 分包声明与实际路径一致（`app-json` guard 覆盖）；发布页的图片选择走 `wx.chooseMedia` 并拿到真实宽高（Global Constraint 21）。
 
 ### Task 16: 全量回归 + 阶段 2 验收
 

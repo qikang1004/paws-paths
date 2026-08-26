@@ -1,3 +1,7 @@
 {
-  "usingComponents": {}
+  "navigationBarTitleText": "宠物资料",
+  "usingComponents": {
+    "sq-button": "/components/sq-button/index",
+    "media-picker": "/components/media-picker/index"
+  }
 }

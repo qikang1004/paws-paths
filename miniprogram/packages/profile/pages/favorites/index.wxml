@@ -1,1 +1,50 @@
-<view class="page-gutter">占位页，后续阶段填充。</view>
+<view class="favorites page-gutter">
+  <view wx:if="{{rows.length}}" class="favorites__list card">
+    <view
+      class="favorites__row"
+      wx:for="{{rows}}"
+      wx:key="id"
+      data-url="{{item.url}}"
+      bindtap="onRowTap"
+    >
+      <image
+        wx:if="{{item.coverUrl}}"
+        class="favorites__cover"
+        src="{{item.coverUrl}}"
+        mode="aspectFill"
+      />
+      <view wx:else class="favorites__cover favorites__cover--blank">
+        <wf-icon name="{{item.targetType === 'pet' ? 'paw' : 'place'}}" role="on-surface-variant" size="48rpx" />
+      </view>
+
+      <view class="favorites__body">
+        <text class="favorites__title text-body-md">{{item.title}}</text>
+        <view class="favorites__meta">
+          <text class="chip chip--sm">{{item.typeLabel}}</text>
+          <text class="text-body-sm c-on-surface-variant">{{item.timeText}}</text>
+        </view>
+      </view>
+
+      <view
+        class="favorites__action"
+        data-id="{{item.id}}"
+        catchtap="onUnfavorite"
+        aria-role="button"
+        aria-label="取消收藏{{item.title}}"
+      >
+        <text class="text-label-md c-on-surface-variant">取消</text>
+      </view>
+    </view>
+  </view>
+
+  <empty-state
+    wx:elif="{{!loading}}"
+    icon="paw"
+    title="收藏夹还是空的"
+    hint="看到喜欢的毛孩子或宠物友好场所，点个心就存这儿"
+  />
+
+  <view class="favorites__footer safe-bottom" wx:if="{{rows.length && !hasMore}}">
+    <text class="text-body-sm c-on-surface-variant">没有更多了</text>
+  </view>
+</view>

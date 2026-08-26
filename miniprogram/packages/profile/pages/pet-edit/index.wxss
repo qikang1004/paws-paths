@@ -1,0 +1,48 @@
+.pet-edit {
+  padding-top: var(--space-md);
+}
+
+.pet-edit__error {
+  margin-bottom: var(--space-md);
+}
+
+/* 一行一个字段：标签在上、输入在下，比左右对齐的表单在窄屏上更好读。 */
+.pet-edit__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-lg);
+}
+
+.pet-edit__label {
+  padding-left: var(--space-sm);
+}
+
+.pet-edit__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+/* picker 只是个 view，得自己撑到和 input 一样高，不然这一行会矮一截。 */
+.pet-edit__picker {
+  display: flex;
+  align-items: center;
+  min-height: 96rpx;
+  box-sizing: border-box;
+}
+
+/* 多行输入用圆角矩形：.field 的全圆角会把首尾两行的文字压到弧线里。 */
+.pet-edit__textarea {
+  width: 100%;
+  height: 200rpx;
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+}
+
+.pet-edit__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin-top: var(--space-xl);
+}

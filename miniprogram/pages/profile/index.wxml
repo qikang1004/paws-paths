@@ -1,1 +1,67 @@
-<view class="page-gutter">占位页，后续阶段填充。</view>
+<view class="me page-gutter">
+  <view class="me__head">
+    <view class="me__avatar-wrap" bindtap="onChangeAvatar">
+      <image wx:if="{{view.avatarUrl}}" class="me__avatar avatar" src="{{view.avatarUrl}}" mode="aspectFill" />
+      <view wx:else class="me__avatar me__avatar--blank avatar">
+        <wf-icon name="person" role="on-surface-variant" size="64rpx" />
+      </view>
+      <text class="me__avatar-hint text-label-md">换头像</text>
+    </view>
+
+    <view class="me__id">
+      <view class="me__name-row" bindtap="onEditNickname">
+        <text class="me__name text-headline-md">{{view.nickname}}</text>
+        <text class="me__edit text-label-md c-primary">编辑</text>
+      </view>
+      <text wx:if="{{view.showVerified}}" class="chip chip--sm">已认证主人</text>
+    </view>
+  </view>
+
+  <view class="me__counts card">
+    <view class="me__count" wx:for="{{view.counts}}" wx:key="key">
+      <text class="me__count-value text-headline-md">{{item.value}}</text>
+      <text class="me__count-label text-label-md c-on-surface-variant">{{item.label}}</text>
+    </view>
+  </view>
+
+  <view class="me__section section-gap">
+    <text class="me__section-title text-body-lg">我的宠物</text>
+    <scroll-view class="me__pets" scroll-x="{{true}}" enable-flex="{{true}}">
+      <view
+        class="me__pet"
+        wx:for="{{pets}}"
+        wx:key="id"
+        data-url="{{item.url}}"
+        bindtap="onPetTap"
+      >
+        <image wx:if="{{item.coverUrl}}" class="me__pet-cover" src="{{item.coverUrl}}" mode="aspectFill" />
+        <view wx:else class="me__pet-cover me__pet-cover--blank">
+          <wf-icon name="paw" role="on-surface-variant" size="48rpx" />
+        </view>
+        <text class="me__pet-name text-label-md">{{item.name}}</text>
+      </view>
+
+      <view class="me__pet me__pet--add" bindtap="onCreatePet">
+        <view class="me__pet-cover me__pet-cover--blank">
+          <wf-icon name="paw" role="primary" size="48rpx" />
+        </view>
+        <text class="me__pet-name text-label-md c-primary">新建</text>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view class="me__entries card section-gap">
+    <view
+      class="me__entry"
+      wx:for="{{entries}}"
+      wx:key="key"
+      data-url="{{item.url}}"
+      bindtap="onEntryTap"
+    >
+      <text class="me__entry-label text-body-md">{{item.label}}</text>
+      <text class="me__entry-arrow c-on-surface-variant">›</text>
+    </view>
+  </view>
+
+  <view class="me__foot safe-bottom"></view>
+</view>

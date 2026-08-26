@@ -1,0 +1,73 @@
+.history {
+  padding-top: var(--space-md);
+}
+
+.history__section {
+  margin-bottom: var(--space-lg);
+}
+
+/* 日期标题贴在卡片上方，靠内缩一点对齐行内文字。 */
+.history__day {
+  display: block;
+  padding-left: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+
+.history__list {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.history__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) 0;
+  border-bottom: 2rpx solid var(--color-outline-variant);
+}
+
+.history__row:last-child {
+  border-bottom: none;
+}
+
+.history__cover {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-container);
+  flex-shrink: 0;
+}
+
+.history__cover--blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* min-width: 0 才能让标题在 flex 行里正常省略。 */
+.history__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.history__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.history__footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: var(--space-md);
+}

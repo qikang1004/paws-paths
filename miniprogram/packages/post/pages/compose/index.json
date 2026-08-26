@@ -1,3 +1,8 @@
 {
-  "usingComponents": {}
+  "navigationBarTitleText": "发动态",
+  "usingComponents": {
+    "sq-button": "/components/sq-button/index",
+    "media-picker": "/components/media-picker/index",
+    "empty-state": "/components/empty-state/index"
+  }
 }

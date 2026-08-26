@@ -1,0 +1,10 @@
+.following {
+  padding-top: var(--space-sm);
+}
+
+.following__footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: var(--space-md);
+}

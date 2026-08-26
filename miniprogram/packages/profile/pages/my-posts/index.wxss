@@ -1,0 +1,58 @@
+.my-posts {
+  padding-top: var(--space-md);
+}
+
+/* 宠物切换条：横向排，超出就换行 —— 一个人的宠物不会多到需要横滑。 */
+.my-posts__pets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.my-posts__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.my-posts__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.my-posts__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+/* 正文不截断，让卡片跟着内容长；长串不留空隙地断行。 */
+.my-posts__text {
+  word-break: break-all;
+}
+
+.my-posts__photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.my-posts__photo {
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-container);
+}
+
+.my-posts__footer {
+  display: flex;
+  justify-content: center;
+  padding-top: var(--space-md);
+}
+
+.my-posts__bar {
+  padding-top: var(--space-lg);
+}

@@ -1,0 +1,69 @@
+.favorites {
+  padding-top: var(--space-md);
+}
+
+/* 整个清单一张卡，行与行之间用细线分隔（同个人中心的入口列表）。 */
+.favorites__list {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.favorites__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) 0;
+  border-bottom: 2rpx solid var(--color-outline-variant);
+}
+
+.favorites__row:last-child {
+  border-bottom: none;
+}
+
+.favorites__cover {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-container);
+  flex-shrink: 0;
+}
+
+.favorites__cover--blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* min-width: 0 才能让标题在 flex 行里正常省略。 */
+.favorites__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.favorites__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.favorites__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* 取消是个小动作，给足点击面积但不抢视觉。 */
+.favorites__action {
+  padding: var(--space-xs) var(--space-sm);
+  flex-shrink: 0;
+}
+
+.favorites__footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: var(--space-md);
+}

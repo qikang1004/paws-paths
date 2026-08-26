@@ -1,0 +1,125 @@
+.me {
+  padding-top: var(--space-md);
+}
+
+.me__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.me__avatar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.me__avatar {
+  width: 160rpx;
+  height: 160rpx;
+}
+
+/* 没头像时画个占位图标，而不是留一个碎图。 */
+.me__avatar--blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-surface-container);
+}
+
+.me__avatar-hint {
+  color: var(--color-primary);
+}
+
+.me__id {
+  flex: 1;
+  min-width: 0;
+}
+
+.me__name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.me__name {
+  max-width: 400rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 三个计数等宽平分，数字在上标签在下。 */
+.me__counts {
+  display: flex;
+  margin-top: var(--space-md);
+}
+
+.me__count {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.me__section-title {
+  display: block;
+  margin-bottom: var(--space-sm);
+}
+
+/* 横向滑动的宠物条：宠物少的时候不该占满一屏高度。 */
+.me__pets {
+  display: flex;
+  flex-direction: row;
+  white-space: nowrap;
+}
+
+.me__pet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-right: var(--space-md);
+}
+
+.me__pet-cover {
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: var(--radius-default);
+  background-color: var(--color-surface-container);
+}
+
+.me__pet-cover--blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2rpx dashed var(--color-outline-variant);
+  box-sizing: border-box;
+}
+
+.me__pet-name {
+  max-width: 140rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.me__entries {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.me__entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) 0;
+  border-bottom: 2rpx solid var(--color-outline-variant);
+}
+
+/* 最后一行不要下边框，不然卡片底部会多一条线。 */
+.me__entry:last-child {
+  border-bottom: none;
+}

@@ -1,1 +1,23 @@
-<view class="page-gutter">占位页，后续阶段填充。</view>
+<view class="following page-gutter">
+  <wf-list
+    wx:if="{{items.length}}"
+    items="{{items}}"
+    itemTemplate="pet-card-tpl"
+    bind:item-tap="onPetTap"
+  />
+  <empty-state
+    wx:elif="{{!loading}}"
+    icon="paw"
+    title="还没关注谁"
+    hint="去广场逛逛，点个关注就会出现在这儿"
+  >
+    <sq-button type="primary" size="md" bind:tap="onGoPlaza">去广场</sq-button>
+  </empty-state>
+
+  <view class="following__footer safe-bottom" wx:if="{{loading}}">
+    <sq-button type="plain" loading="{{loading}}">加载中…</sq-button>
+  </view>
+  <view class="following__footer safe-bottom" wx:elif="{{items.length && !hasMore}}">
+    <text class="following__end text-body-sm c-on-surface-variant">没有更多了</text>
+  </view>
+</view>
