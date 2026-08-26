@@ -1,0 +1,28 @@
+<view class="media-picker">
+  <view wx:for="{{images}}" wx:key="index" class="media-picker__cell">
+    <image class="media-picker__img" src="{{item.url}}" mode="aspectFill" />
+    <view
+      wx:if="{{!uploading}}"
+      class="media-picker__del"
+      data-index="{{index}}"
+      bindtap="onRemove"
+      aria-role="button"
+      aria-label="删除第{{index + 1}}张图片"
+    >
+      <text class="media-picker__del-mark text-label-md">×</text>
+    </view>
+  </view>
+
+  <view
+    wx:if="{{canAdd}}"
+    class="media-picker__add {{uploading ? 'media-picker__add--busy' : ''}}"
+    bindtap="onPick"
+    aria-role="button"
+    aria-label="添加图片"
+  >
+    <wf-icon name="paw" role="on-surface-variant" size="64rpx" />
+    <text class="media-picker__hint text-label-md c-on-surface-variant">
+      {{uploading ? '上传中' : images.length + '/' + max}}
+    </text>
+  </view>
+</view>

@@ -3,11 +3,18 @@ import { api } from './client';
 import type { PagedResponse, PageParams } from './paged';
 import type { ApiClient } from './request';
 
+/** 发布时带的一张图。宽高必填（Global Constraint 21），由 `api/media.ts` 从选图结果原样带过来。 */
+export interface PostImageInput {
+  url: string;
+  width: number;
+  height: number;
+}
+
 /** 发布入参。图片可省 —— 只发文字是最常见的用法。 */
 export interface PublishPostBody {
   petId: string;
   content: string;
-  images?: { url: string; width: number; height: number }[];
+  images?: PostImageInput[];
 }
 
 export interface FetchPostsParams extends PageParams {

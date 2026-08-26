@@ -1,0 +1,55 @@
+.media-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+/* 正方形格子：宽度按三列算（两条 gap 摊在 100% 里），高度靠 aspect-ratio 跟上。 */
+.media-picker__cell,
+.media-picker__add {
+  position: relative;
+  width: 180rpx;
+  height: 180rpx;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.media-picker__img {
+  width: 100%;
+  height: 100%;
+}
+
+/* 删除键压在右上角。命中区做到 48rpx，比图标本身大一圈才点得中。 */
+.media-picker__del {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-inverse-surface);
+  border-bottom-left-radius: var(--radius-sm);
+}
+
+.media-picker__del-mark {
+  color: var(--color-inverse-on-surface);
+}
+
+.media-picker__add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  background-color: var(--color-surface-container);
+  /* 虚线边框区分「还能加」与「已经有图」，不用额外文案。 */
+  border: 2rpx dashed var(--color-outline-variant);
+  box-sizing: border-box;
+}
+
+/* 上传中不禁用点击（组件里 return 掉了），只把状态画出来。 */
+.media-picker__add--busy {
+  opacity: 0.5;
+}

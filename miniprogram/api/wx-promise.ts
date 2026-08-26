@@ -31,6 +31,18 @@ export interface WxUploadResult {
   data: string;
 }
 
+/**
+ * `wx.chooseMedia` 选出来的一张图。**宽高必须从这里拿**：
+ * `post_images.width/height` 是非可选列（Global Constraint 21），
+ * 服务端缺宽高直接 422，而客户端估不出真实尺寸。
+ */
+export interface WxMediaFile {
+  tempFilePath: string;
+  width: number;
+  height: number;
+  size: number;
+}
+
 /** 收口所有用到的 wx 接口，页面与 store 只依赖这个接口。 */
 export interface WxAdapter {
   login(): Promise<{ code: string }>;
@@ -40,6 +52,7 @@ export interface WxAdapter {
   setStorage(key: string, value: string): void;
   removeStorage(key: string): void;
   getLocation(): Promise<{ latitude: number; longitude: number }>;
+  chooseMedia(count: number): Promise<WxMediaFile[]>;
 }
 
 export const wxAdapter: WxAdapter = {
@@ -84,6 +97,29 @@ export const wxAdapter: WxAdapter = {
       wx.getLocation({
         type: 'gcj02',
         success: (res) => resolve({ latitude: res.latitude, longitude: res.longitude }),
+        fail: reject,
+      });
+    }),
+
+  chooseMedia: (count: number) =>
+    new Promise((resolve, reject) => {
+      wx.chooseMedia({
+        count,
+        mediaType: ['image'],
+        // 相册与相机都给：发布动态两条路都要走得通。
+        sourceType: ['album', 'camera'],
+        // 压缩图仍带真实宽高（wx 返回的是压缩后的尺寸），瀑布流要的就是这个比例。
+        sizeType: ['compressed'],
+        success: (res) =>
+          resolve(
+            res.tempFiles.map((file) => ({
+              tempFilePath: file.tempFilePath,
+              width: file.width ?? 0,
+              height: file.height ?? 0,
+              size: file.size,
+            })),
+          ),
+        // 用户点「取消」也走 fail。调用方（api/media.ts）负责把它归成「没选图」。
         fail: reject,
       });
     }),
