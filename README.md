@@ -75,6 +75,8 @@ PORT=5000
 
 这是有意的:假实现若直接置 `approved`,「未 approved 内容对他人不可见」那条过审必要条件的安全测试就被测空了——它会全绿,却什么都没验到。要在本地看到别人的动态,手工改库里的 `audit_status`。同样只认字面 `1`,同样在启动时打 WARN。
 
+上传的图片落在 `server/var/uploads/`(已 gitignore),不用配。要换位置就设 `UPLOAD_ROOT`。目录分两条道:`private/` 是待审图,只有作者本人取得到(响应头 `Cache-Control: private, no-store`,他人一律 404);过审后挪进 `public/`,所有人可见。**目录本身就是审核状态**,没有第二份真相。
+
 ### 4. 启动服务端
 
 ```bash
@@ -115,11 +117,14 @@ curl "http://127.0.0.1:5000/venues?lat=39.9042&lng=116.4074"
 ```bash
 npm test                                    # 全部（server 的集成测试会 skip）
 cd server && node --env-file=.env ../node_modules/jest/bin/jest.js   # 带真库跑
+REDIS_INTEGRATION=1 node --env-file=.env ../node_modules/jest/bin/jest.js   # 再加上 Redis 集成
 ```
 
-jest 不会自动读 `.env`,所以要跑数据库集成测试必须显式用 `node --env-file=.env` 启动它。不带的话那 6 个集成用例会 skip——它们是唯一能验证 PostGIS 空间查询的测试,别长期让它们 skip。
+jest 不会自动读 `.env`,所以要跑数据库集成测试必须显式用 `node --env-file=.env` 启动它。不带的话有 **6 个套件 / 102 条用例**会 skip(Postgres 与 Redis 集成用例)——它们是唯一能验证 PostGIS 空间查询、真库约束与 Redis 行为的测试,别长期让它们 skip。Redis 那几个还额外要 `REDIS_INTEGRATION=1`:它们会真的写键、真的断连,不该在只想跑单测的时候被顺带触发。
 
-建表和种子由 `server/test/global-setup.ts` 全局跑一次,不在各套件的 `beforeAll` 里。
+建表和种子由 `server/test/global-setup.ts` 全局跑一次,不在各套件的 `beforeAll` 里(那里连跑两遍,第二遍就是「迁移幂等」的证据)。
+
+`jest.config.js` 把 `testTimeout` 提到 30s:远程库单次热连接 ~600ms,一个 `beforeEach` 建号 + 建宠物就四五次往返,默认 5000ms 兜不住。本机库用不上这个余量,但它是环境属性,不写在套件里。
 
 ## 四、部署上线
 
@@ -134,8 +139,10 @@ jest 不会自动读 `.env`,所以要跑数据库集成测试必须显式用 `no
 3. **`FAKE_WECHAT_LOGIN` 生产必须留空或设 `0`。** 这是认证绕过开关,开着它任何人都能登录成任意用户。部署前确认一遍,并留意启动日志里那条 WARN。
 4. **`FAKE_CONTENT_SECURITY` 生产必须留空或设 `0`。** 开着它内容安全检查被假实现替代;它不放行(内容一律停在待审),所以不会外泄未审内容,但**没有任何内容能自动过审**,用户会以为发布坏了。同样有 WARN。
 5. **建表自动执行,不需要单独的迁移步骤。** 迁移包在 PostgreSQL 咨询锁里,多副本同时启动也不会互相踩。
-6. `npm run build` 会把 `src/database/*.sql` 复制进 `dist/`,别只 `tsc`。
-7. Redis 和 PostgreSQL 用托管实例,连接串走平台的密钥管理。
+6. **`UPLOAD_ROOT` 要指向持久卷,并且只适用于单实例。** 默认的 `server/var/uploads` 在容器里随实例销毁;更要紧的是本地磁盘存储是单机限定的——A 实例上传的图在 B 实例上就是 404。**上多副本之前必须换对象存储**(`ImageStorage` 接口留着就是为了只换一个 provider)。
+7. **反向代理 / CDN 不能缓存 `Cache-Control: private, no-store`。** 待审图片只对作者可见的前提就是这行响应头,中间层缓存一层等于把未过审内容公开了。
+8. `npm run build` 会把 `src/database/*.sql` 复制进 `dist/`,别只 `tsc`。
+9. Redis 和 PostgreSQL 用托管实例,连接串走平台的密钥管理。
 
 ### 小程序
 
@@ -163,6 +170,8 @@ ERROR [RedisRateLimitStore] 限流存储不可用，本次放行（登录端点�
 Redis 挂了、密码错了、`REDIS_URL` 格式不对都是这条日志,后半段的原始错误(ECONNREFUSED / NOAUTH / WRONGPASS)能区分具体是哪一种。决策背景、实测对照数据见 `docs/superpowers/phase1-notes.md` 第六节。
 
 注意 `access_token` 缓存**没有**这种降级:它是单点缓存,静默放过会让每个请求都去刷 token,撞微信调用频率限制。Redis 不可用时微信接口调用会失败,这是对的。
+
+**图片存的是本地磁盘,只能单实例跑。** `LocalDiskImageStorage` 把图落在 `UPLOAD_ROOT`(默认 `server/var/uploads`),多副本部署时每个实例只看得见自己那块盘,于是 A 实例上传的图在 B 实例上是 404。spec §10 要求对象存储,`ImageStorage` 接口留在那儿就是为了替换只动一个 provider。同一个原因,「待审图片有多少张」目前只能递归列目录——档位就是状态,没有表。
 
 **依赖树有 76 个 npm audit 告警。** 处置结论见 `RELEASE_CHECKLIST.md`,不要直接跑 `npm audit fix`。
 

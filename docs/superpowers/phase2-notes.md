@@ -2,10 +2,136 @@
 
 计划：`docs/superpowers/plans/2026-08-24-phase2-identity-social.md`（16 任务）
 分支：`db-integration`　执行方式：inline TDD（每任务 RED → GREEN → 提交）
+本轮模式：**带真库真 Redis**。远程 PostgreSQL 16 + PostGIS 与 Redis 全程可用，
+阶段 1 里按门控跳过的集成用例这轮全部真跑；无库无 Redis 的降级模式另跑一遍。
 
-本文件在阶段 2 执行过程中逐步补写；完整的回归结果与演示走查在 Task 16 收尾时补齐。
+## 一、自动化回归
 
-## 与计划的偏差（全部有意）
+| 包 / 环境 | 结果 |
+| --- | --- |
+| server（真库 + 真 Redis） | **44 suites / 485 tests 全绿**（117.9s） |
+| server（无库 + 无 Redis） | **38 suites / 383 tests 绿，6 suites / 102 tests 按门控 skip** |
+| miniprogram | **37 suites / 421 tests 绿** |
+| `@paws/types` | **5 suites / 56 tests 绿** |
+| `tsc --noEmit` | server / miniprogram / `@paws/types` 三处干净 |
+| `npm run build` | 通过（`@paws/types` → `dist`，server → `dist` 含 `*.sql` 拷贝） |
+| guard suites | miniprogram 侧 style-guard / module-guard / wx-guard / app-json / sync-types，server 侧 audit-literal-guard 与 `post-visibility.security` 末尾那条 feed 路由守卫，全绿 |
+
+跳过的 102 条全部是 Postgres / Redis 集成用例，走的是 `describeDb = DB_URL ? describe : describe.skip`
+门控，无库时不产出任何断言 —— 不是失败，也不是假绿。
+
+**带库回归暴露了三处只在并发 + 远程延迟下才出现的问题**，都不是被测代码的缺陷，
+但都会让回归随机变红，所以一并修在了测试基础设施里（提交 `48fab02`）：
+
+1. **默认 5000ms 兜不住多往返的用例。** 远程库单次热连接 ~600ms，一个 `beforeEach`
+   建号 + 建宠物就四五次往返。原先靠各套件自己写 `jest.setTimeout(30_000)`，
+   碰库的套件漏一个就在带库回归里红一次（第一遍带库跑就是这么红的，一片钩子超时）。
+   这是**环境属性不是套件属性**，收进 `server/jest.config.js` 的 `testTimeout`。
+2. **全表计数断言会随并行邻居起伏。** 「种子后 8 只宠物」那类断言只能数种子前缀行
+   （`WHERE id ~ '^p-[0-9]+$'`）—— `pet-write` / `my-pets` 那几个套件正在建自己的
+   测试宠物，写死全表行数就是让断言依赖别人的进度。
+3. **「迁移幂等」不能在用例里重跑迁移。** `schema.sql` 的 DDL 要 ACCESS EXCLUSIVE 锁，
+   而 43 个邻居套件正在同几张表上开事务，两边等成环 → `error: deadlock detected`
+   （两轮全量回归都复现，单跑该套件永远绿）。迁移里的咨询锁只让**多次迁移**互相排队，
+   管不住普通业务流量。证据因此拆成两半：「重复执行不报错」搬到 `test/global-setup.ts`
+   连跑两遍（整轮唯一没有并发的时刻，报错就是全局 setup 失败），「种子没被灌重」
+   留在套件里按 id 集合断言。
+
+## 二、演示走查（真库 + 真 Redis，实际 HTTP）
+
+服务以 `PORT=3100` + `.env`（真 `DATABASE_URL` / `REDIS_URL`）+ `FAKE_WECHAT_LOGIN=1`
++ `FAKE_CONTENT_SECURITY=1` 启动。走查脚本 `server/test/manual/phase2-walkthrough.mjs`
+按用户真实路线串 31 步，每步打印真实响应，关键处内联断言（失败即中断）。
+每轮用带时间戳的 code 换一对新用户 —— 走查会改昵称、建宠物、发动态，复用同一个用户
+跑第二遍时「新用户昵称是占位值」这类断言必然假红。
+
+**登录 → 个人中心**
+两个 code 换到两个 `isNewUser: true` 的用户。未登录 `GET /me` → 401 `40100`。
+改名前昵称是占位值「微信用户」、三个计数全 0。`PUT /me` 改昵称 + 头像后回读生效；
+昵称 21 字 → 422「昵称最多 20 个字」；一个可改字段都不给 → 422「没有需要更新的字段」。
+
+**建宠物**
+`POST /pets` 只给名字与物种（外加可选的品种/性别/简介）→ 返回 `p-<uuid>`；
+不给生日落建号当天（`birthDate: 2026-08-26`，年龄显示 0，主人一眼看得出要补）。
+`species=all` → 422「物种只能是 dog / cat / other」（`all` 是筛选用的伪物种）。
+`GET /me/pets` 回来的清单**没有 `hasMore`**（刻意不分页）且**含这只没有封面的新宠物**；
+`GET /pets/:id` 对它 200、`photos: 0` —— 详情页必须打得开，否则主人没有入口传第一张照片。
+
+**传图**
+`POST /uploads`（multipart + `width=800`/`height=600`）→ `{key, url, width, height,
+auditStatus: 'pending'}`。**`pending` 不是 `approved`** —— 假实现刻意不放行。
+不给宽高 → 422「必须提供图片的真实宽高」；把 shell 脚本改名成 `.png` → 422
+「只能上传 JPG / PNG / GIF / WEBP 图片」（按魔数嗅探，不听客户端报的 MIME）。
+
+**待审图片的三种身份**（过审必要条件，这条最关键）
+作者本人 200 且响应头是 `Cache-Control: private, no-store`；其他登录用户 404 `40400`；
+未登录 404 `40400`。403 与 404 不分开是有意的：分得开，这个差别本身就把
+「这个 key 有东西」告诉了探测者。
+
+`POST /pets/:id/photos` 把这张图挂上宠物 → 详情 `photos: 1`（800×600），
+`GET /me/pets` 的封面指针同步指向它（第一张自动成为封面）。
+
+**关注**
+关注自己的宠物 → 422 `42203`「不能关注自己的宠物」。`POST /pets/p-2/follow` 两次都
+200 `{isFollowing: true}`（幂等，不是 201、不是第二次报错）。关注不存在的宠物 → 404。
+`GET /pets/p-2` 带登录态回读 `isFollowing: true`。`GET /me/following` → 1 只「奶昔」、
+`hasMore: false`。
+
+**收藏与浏览历史**
+收藏一只宠物 + 一家场所 → `GET /me/favorites` 混排两条、按收藏时间倒序
+（`venue:宠福康宠物医院`、`pet:可乐`）。看两个详情页后 `GET /me/history` 回三条
+（`venue:有猫咖啡`、`pet:花花`、`pet:奶昔`），按 `viewed_at` 倒序 —— 「奶昔」是关注那步
+顺带看的详情，历史是异步写的（不阻塞详情响应），所以走查里等了 600ms 再读。
+
+**发动态**
+空内容（三个空格）→ 422「说点什么再发吧」。正常发布 → `auditStatus: 'pending'`、
+图片也是 `pending`、带 `petName`。拿别人的宠物发 → 403 `40300`「只能为自己的宠物发动态」。
+
+**可见性（Global Constraint 16 的现场验证）**
+`GET /posts?petId=<我的宠物>`：作者本人 1 条（`auditStatus: pending`，供角标用）、
+其他登录用户 0 条、未登录 0 条，三者 `hasMore` 均为 `false`（过滤在 SQL 的 WHERE 里，
+不是取完一页再筛，否则 `hasMore` 会指向一页永远取不出内容的幻影下一页）。
+`GET /posts/:id`：作者 200（含 1 张图）、他人 404 `40400`「动态不存在」、未登录同样 404。
+
+陌生人看种子数据 `GET /posts?petId=p-5` → 只回 `po-3:approved:1图`：
+`po-5`（rejected）整条不可见，而 `po-3` 挂的两张图里 `pi-6`（pending）不返回、
+`pi-4`（approved）与**文字照常显示** —— 图片与动态的审核状态各自独立。
+
+**聚合计数**
+走查末尾 `GET /me` → `petCount: 1 / followingCount: 1 / favoriteCount: 2`，与上面的动作对得上
+（真库模式下是一条子查询算出来的，不是四次往返）。
+
+## 三、本轮暴露的限制
+
+1. **本地磁盘存储是单机限定的。** 多副本部署时每个实例只看得见自己那块盘，A 实例上传的
+   图到 B 实例就是 404。`UPLOAD_ROOT` 默认落 `server/var/uploads`（已 gitignore），
+   容器里随实例销毁。正式环境必须换对象存储（spec §10），`ImageStorage` 接口留在那儿
+   就是为了这次替换只动一个 provider。
+2. **待审图片没有表，统计只能扫盘。** 档位（`public`/`private` 目录）就是审核状态
+   （偏差 #18），所以「待审图片有多少张」得递归列目录。阶段 4 换对象存储时状态会挪进
+   `post_images`，那时才有表。
+3. **机审只证明了链路接得上。** `FAKE_CONTENT_SECURITY=1` 跳过了真实的 `msgSecCheck` /
+   `imgSecCheck`，微信那端的调用是否正确**没有验证过**。见下面第六节。
+4. **没有人工复核入口。** 状态机的 `approved → pending_review`（已公开内容被举报后撤下）与
+   `pending_review → approved/rejected` 三条边都在 `packages/types/src/audit.ts` 里定义、
+   有单测覆盖，可见性侧也已经把 `pending_review` 当作对他人不可见来处理 ——
+   缺的只是触发它的端点。举报与后台复核是阶段 3。
+5. **没有关注流。** 动态只有「某只宠物的列表」与「详情」两条读路径。`GET /me/feed`
+   不在 spec §8 阶段 2 的完成标志里，且本阶段无消费者。有一条静态守卫盯着：谁加出
+   feed 路由，那条会红并把人指回可见性断言（偏差 #30）。
+6. **无库降级模式下三处失真**：个人中心的三个计数恒为 0（偏差 #5）、新建宠物的主人
+   信息落占位值（#12）、收藏/关注/历史各自只在自己的内存仓储里。只影响演示，
+   代价是不把四个仓储耦到一起。
+7. **`POST /pets` 不给生日会落建号当天**（#11）。`pets.birth_date` 是阶段 1 的
+   `DATE NOT NULL`，改列违反「迁移只增不改」，放成可空又要把两端的
+   `PetSummary.birthDate` 变成可空。有意留下的瑕疵。
+8. **`wx.request` 发不出 PATCH**，所以 `/me` 与 `/pets/:id` 各有一个 PUT 别名
+   （#33）。语义仍是局部更新，两个动词共用同一份实现 —— 分两份实现的话
+   「清空头像 vs 不动头像」这个语义迟早只在一个动词上是对的。
+9. **远程库下的回归慢且对并发敏感**：全量带库跑 117.9s，`testTimeout` 要 30s；
+   「迁移幂等」的证据只能在 `global-setup` 里取（见第一节第 3 条）。
+
+## 四、与计划的偏差（全部有意）
 
 ### 1. `favorites` 表被原地改结构 —— 对 Global Constraint 22「只增不改」的有意例外
 
@@ -532,4 +658,38 @@ Nest 的路由装饰器不能叠：`@Patch()` 与 `@Put()` 写在同一个方法
 
 多行输入框要把 `.field` 的圆角压回 `--radius-md`：`--radius-full` 那道弧会把
 `textarea` 的头尾两行切掉（`pet-edit` 的简介与发布页的正文各有一处）。
+
+## 五、遗留到阶段 3
+
+按 spec §8，阶段 3 是私信。本阶段主动留给它的东西：
+
+1. **私信本体**：`conversations` / `messages` 两张表、会话列表与聊天页、未读数。
+   社交类目资质要在提审前办下来（`RELEASE_CHECKLIST.md` 的合规一节）。
+2. **举报与人工复核端点**：状态机的 `approved → pending_review → approved/rejected`
+   三条边已定义且有单测，缺的只是触发它的接口与后台动作（每次动作都要写 `audit_log`，
+   Global Constraint 里的合规项 3）。
+3. **关注流 `GET /me/feed`**：`follows` 表已经在了，缺的是读路径。加它的时候
+   `post-visibility.security.spec.ts` 末尾那条静态守卫会红一次 —— 它的作用就是
+   提醒补三种身份的可见性断言。
+4. **对象存储替换 `LocalDiskImageStorage`**：接口不变，换一个 provider。
+   多副本部署之前必须做，理由见第三节第 1 条。
+5. **阶段 0 / 1 的老遗留仍未收口**：`page, .token-scope` 能否把自定义属性送到框架
+   tabBar 节点（需真机验证）；`useCompilerPlugins: ["typescript"]` 与 `noEmit: true`
+   是否冲突；`TencentPoiClient.searchPlace` 的真实 HTTP 调用（需要真的
+   `TENCENT_MAP_KEY`，目前只有契约测试）。
+
+## 六、过审前必办
+
+**关掉 `FAKE_CONTENT_SECURITY`，用正式 AppID 真跑一次 `msgSecCheck` / `imgSecCheck`。**
+
+本阶段的机审是假实现（当初的决定：先跑通链路，不卡在 AppID 上）。它保证了
+**收敛方向正确** —— 一律落 `pending`，未过审内容对他人 404，这条已经在演示走查里
+逐身份验过。但它**没有证明**微信那端的调用是对的：Task 10 的真实实现路径
+（access_token 经 Redis 单点缓存、`media_url` 传法、errcode 分支、超时与降级）
+只有契约测试与单测覆盖，没跑过真接口。
+
+所以提审前的顺序是：拿到正式 AppID → 配好上传私钥（不入库）→
+`FAKE_CONTENT_SECURITY` 置空重跑一遍走查 → 确认三处：正常文本/图片过、
+违规文本/图片被拦、微信侧报错时只写日志不把 errmsg 透给前端。
+这三条不过，「未过审内容对他人不可见」就只是一条自证的断言。
 

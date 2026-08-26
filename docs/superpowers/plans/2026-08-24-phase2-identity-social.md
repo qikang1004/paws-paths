@@ -162,12 +162,13 @@
 
 ### Task 16: 全量回归 + 阶段 2 验收
 
-- [ ] 三个包全量测试绿：server（真库 + 真 Redis 与无库无 Redis 两种环境各跑一次）、miniprogram、`@paws/types`。
-- [ ] `tsc --noEmit` 三处干净；`npm run build` 通过。
-- [ ] 端到端演示走查（真实 HTTP，仿阶段 1 的做法逐条记录响应）：登录 → 改资料 → 建宠物 → 传图 → 关注 → 发动态 → 验可见性 → 看历史与收藏。
-- [ ] 写 `docs/superpowers/phase2-notes.md`，格式对齐 `phase1-notes.md`：自动化回归表、演示走查、本轮暴露的限制、与计划的偏差、遗留到阶段 3。
-- [ ] 更新 `RELEASE_CHECKLIST.md` 与 `README.md`。
+- [x] 三个包全量测试绿：server（真库 + 真 Redis 与无库无 Redis 两种环境各跑一次）、miniprogram、`@paws/types`。
+- [x] `tsc --noEmit` 三处干净；`npm run build` 通过。
+- [x] 端到端演示走查（真实 HTTP，仿阶段 1 的做法逐条记录响应）：登录 → 改资料 → 建宠物 → 传图 → 关注 → 发动态 → 验可见性 → 看历史与收藏。
+- [x] 写 `docs/superpowers/phase2-notes.md`，格式对齐 `phase1-notes.md`：自动化回归表、演示走查、本轮暴露的限制、与计划的偏差、遗留到阶段 3。
+- [x] 更新 `RELEASE_CHECKLIST.md` 与 `README.md`。
 - [ ] **过审前必办**（写进 notes 的遗留项）：把 `FAKE_CONTENT_SECURITY` 关掉、用正式 AppID 真跑一次 `msgSecCheck`/`imgSecCheck`，验证 Task 10 的真实实现路径。假实现只证明了链路接得上，没证明微信那端的调用是对的。
+      → 遗留项已写入 `phase2-notes.md` 第六节与 `RELEASE_CHECKLIST.md`；这一格本身要等正式 AppID，阶段 2 内勾不掉，故留空。
 
 ---
 
