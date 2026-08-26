@@ -1,5 +1,5 @@
 import { followPet, fetchFollowing, unfollowPet } from '../api/follows';
-import { fetchFavorites, fetchHistory, fetchProfile, updateProfile } from '../api/me';
+import { fetchFavorites, fetchHistory, fetchMyPets, fetchProfile, updateProfile } from '../api/me';
 import {
   addPetPhoto,
   createPet,
@@ -128,6 +128,17 @@ describe('阶段 2 api 包装', () => {
       );
       await fetchFavorites({ page: 1, pageSize: 10 }, client);
       expect(wx.sent[1].url).toBe(`${BASE}/me/favorites`);
+    });
+
+    it('fetchMyPets 发 GET /me/pets，且不带任何分页参数', async () => {
+      // 服务端刻意不分页：发布页选宠物与「我的动态」都要完整清单。
+      // 顺手塞个 page 进去会让人以为这个端点分页，实则被忽略。
+      wx.queue(() => ok({ items: [{ id: 'p-1', name: '大黄' }] }));
+      const res = await fetchMyPets(client);
+      expect(wx.sent[0].method).toBe('GET');
+      expect(wx.sent[0].url).toBe(`${BASE}/me/pets`);
+      expect(wx.sent[0].data).toBeUndefined();
+      expect(res.items).toHaveLength(1);
     });
   });
 

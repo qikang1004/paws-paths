@@ -58,3 +58,18 @@ export interface PetListResponse {
   hasMore: boolean;
   page: number;
 }
+
+/**
+ * `GET /me/pets` 的响应 —— 「我的宠物」。
+ *
+ * **刻意不分页**：一个人的宠物只有几只，而两个消费者（发布页选宠物、
+ * 「我的动态」按宠物取动态）都需要完整清单才能工作，分页只会逼它们
+ * 自己拼页。所以这里没有 `hasMore` / `page`。
+ *
+ * 与 {@link PetListResponse} 的另一处区别是**不筛封面**：刚建好还没传照片的
+ * 宠物进不了广场瀑布流，但必须出现在「我的宠物」里 —— 否则主人没有入口
+ * 进去传第一张照片。
+ */
+export interface MyPetListResponse {
+  items: PetSummary[];
+}

@@ -1,5 +1,6 @@
 import type {
   WxAdapter,
+  WxMediaFile,
   WxRequestOptions,
   WxRequestResult,
   WxUploadOptions,
@@ -18,6 +19,13 @@ export class FakeWx implements WxAdapter {
     latitude: 31.23,
     longitude: 121.47,
   };
+
+  /**
+   * `chooseMedia` 的结果。设成 Error 就是模拟用户点了「取消」——
+   * wx 的取消也走 fail 回调，与真实的失败无法区分。
+   */
+  mediaOutcome: WxMediaFile[] | Error = [];
+  readonly chooseMediaCalls: number[] = [];
 
   readonly sent: WxRequestOptions[] = [];
 
@@ -51,6 +59,12 @@ export class FakeWx implements WxAdapter {
     this.getLocationCalls += 1;
     if (this.locationOutcome instanceof Error) throw this.locationOutcome;
     return this.locationOutcome;
+  }
+
+  async chooseMedia(count: number): Promise<WxMediaFile[]> {
+    this.chooseMediaCalls.push(count);
+    if (this.mediaOutcome instanceof Error) throw this.mediaOutcome;
+    return this.mediaOutcome;
   }
 
   async request<T>(opts: WxRequestOptions): Promise<WxRequestResult<T>> {
