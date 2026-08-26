@@ -109,6 +109,16 @@ export interface PetRepository {
   findNameById(petId: string): Promise<string | null>;
   /** 批量按 id 取卡片投影，保持传入顺序。关注列表这类「先有 id 再要卡片」的场景用它。 */
   listByIds(petIds: string[], coords?: { lat: number; lng: number }): Promise<PetRow[]>;
+  /**
+   * 「我的宠物」。不分页、**不筛封面**、不过滤 visibility：
+   *
+   * - 不筛封面 —— 刚建好还没传照片的宠物必须出现在这个清单里，否则主人
+   *   没有入口进去传第一张照片（`list` / `listByIds` 是 INNER JOIN，会把它漏掉）。
+   * - 不过滤 visibility —— 同 `findOwnerId`，私密宠物的主人要看得见自己的宠物。
+   *
+   * 距离一律 null：这是自己的宠物清单，不显示距离。
+   */
+  listByOwner(ownerId: string): Promise<PetRow[]>;
 
   /** 建号，返回新宠物 id。刚建的宠物没有照片，因此还进不了 `list` 的瀑布流。 */
   create(input: PetCreateInput): Promise<string>;
@@ -171,6 +181,14 @@ interface PetSeedRecord {
   ownerNickname: string;
   ownerAvatarUrl: string | null;
   ownerVerified: boolean;
+  /**
+   * 对应 `pets.created_at`，只给「我的宠物」排序用（新建的排最前）。
+   *
+   * 种子的这一格全部取同一个值 —— seed.sql 的 8 只宠物是**一条** INSERT 落库的，
+   * 真库里它们的 `created_at` 也确实相等，于是两边的次序都由 id 升序兜底。
+   * 给种子编造递增时间戳会让内存实现与真库的次序对不上。
+   */
+  createdAt: string;
 }
 
 interface PhotoSeedRecord {
@@ -182,7 +200,7 @@ interface PhotoSeedRecord {
   sortOrder: number;
 }
 
-const PET_SEED: PetSeedRecord[] = [
+const PET_SEED: Omit<PetSeedRecord, 'createdAt'>[] = [
   { id: 'p-1', ownerId: 'u-1', name: '大黄', species: 'dog', breed: '金毛', gender: 'male', birthDate: '2022-05-01', personalityTags: ['黏人', '爱玩水'], bio: '爱玩水的暖男，见到谁都摇尾巴。', lat: 39.906, lng: 116.404, lastActiveAt: '2026-08-20T10:00:00Z', coverUrl: 'https://picsum.photos/seed/paws-huang/600/800', coverWidth: 600, coverHeight: 800, ownerNickname: '小陈', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u1/120/120', ownerVerified: true },
   { id: 'p-2', ownerId: 'u-2', name: '奶昔', species: 'cat', breed: '布偶', gender: 'female', birthDate: '2024-02-14', personalityTags: ['温柔', '爱睡觉'], bio: '蓝眼睛的小公主，喜欢被摸下巴。', lat: 39.902, lng: 116.41, lastActiveAt: '2026-08-21T08:30:00Z', coverUrl: 'https://picsum.photos/seed/paws-naixi/800/600', coverWidth: 800, coverHeight: 600, ownerNickname: '阿喵', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u2/120/120', ownerVerified: true },
   { id: 'p-3', ownerId: 'u-3', name: '可乐', species: 'dog', breed: '柯基', gender: 'male', birthDate: '2023-08-20', personalityTags: ['活泼', '贪吃'], bio: '小短腿大嗓门，对零食毫无抵抗力。', lat: 39.91, lng: 116.4, lastActiveAt: '2026-08-19T18:00:00Z', coverUrl: 'https://picsum.photos/seed/paws-kele/600/800', coverWidth: 600, coverHeight: 800, ownerNickname: '老王', ownerAvatarUrl: 'https://picsum.photos/seed/paw-u3/120/120', ownerVerified: false },
@@ -239,6 +257,9 @@ function toPetRow(seed: PetSeedRecord, distanceMeters: number | null): PetRow {
   };
 }
 
+/** 种子宠物的建号时间。八只共用一个值，与 seed.sql 的单条 INSERT 一致。 */
+const SEED_CREATED_AT = '2026-08-01T00:00:00.000Z';
+
 @Injectable()
 export class InMemoryPetRepository implements PetRepository {
   /**
@@ -247,6 +268,7 @@ export class InMemoryPetRepository implements PetRepository {
    */
   private readonly pets: PetSeedRecord[] = PET_SEED.map((p) => ({
     ...p,
+    createdAt: SEED_CREATED_AT,
     personalityTags: [...p.personalityTags],
     coverPhotoId: PHOTO_SEED.filter((ph) => ph.petId === p.id).sort(
       (a, b) => a.sortOrder - b.sortOrder,
@@ -326,6 +348,15 @@ export class InMemoryPetRepository implements PetRepository {
       .map((seed) => toPetRow(seed, distanceTo(seed, coords)));
   }
 
+  async listByOwner(ownerId: string): Promise<PetRow[]> {
+    return this.pets
+      .filter((p) => p.ownerId === ownerId)
+      // 与 Postgres 侧的 `ORDER BY p.created_at DESC, p.id` 逐字对应：种子的
+      // createdAt 全部相等（真库里也相等），所以次序实际由 id 升序兜底。
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id))
+      .map((seed) => toPetRow(seed, null));
+  }
+
   async create(input: PetCreateInput): Promise<string> {
     const id = `p-${randomUUID()}`;
     this.pets.push({
@@ -341,6 +372,8 @@ export class InMemoryPetRepository implements PetRepository {
       lat: input.lat ?? null,
       lng: input.lng ?? null,
       lastActiveAt: new Date().toISOString(),
+      // 比种子的 SEED_CREATED_AT 晚，于是「我的宠物」里新建的排最前。
+      createdAt: new Date().toISOString(),
       // 还没有照片 —— 详情页打得开，但进不了瀑布流。
       coverPhotoId: null,
       coverUrl: '',
@@ -594,6 +627,30 @@ export class PostgresPetRepository implements PetRepository {
     `;
     const params = hasCoords ? [petIds, coords.lng, coords.lat] : [petIds];
     const { rows } = await this.pool.query<PetRow>(sql, params);
+    return rows;
+  }
+
+  async listByOwner(ownerId: string): Promise<PetRow[]> {
+    // 与 getById 同款 LEFT JOIN + COALESCE：没照片的宠物也要出现在这个清单里。
+    // 也不过滤 visibility —— 同 findOwnerId，主人看得见自己的私密宠物。
+    const { rows } = await this.pool.query<PetRow>(
+      `
+      SELECT p.id, p.name, p.species, p.breed, p.gender,
+             to_char(p.birth_date, 'YYYY-MM-DD') AS "birthDate",
+             p.personality_tags AS "personalityTags", p.bio,
+             null::float8 AS "distanceMeters",
+             COALESCE(ph.url, '') AS "coverUrl", COALESCE(ph.width, 0) AS "coverWidth",
+             COALESCE(ph.height, 0) AS "coverHeight",
+             u.nickname AS "ownerNickname", u.avatar_url AS "ownerAvatarUrl",
+             u.is_verified_owner AS "ownerVerified"
+      FROM pets p
+      LEFT JOIN pet_photos ph ON ph.id = p.cover_photo_id
+      JOIN users u ON u.id = p.owner_id
+      WHERE p.owner_id = $1
+      ORDER BY p.created_at DESC, p.id
+      `,
+      [ownerId],
+    );
     return rows;
   }
 

@@ -6,7 +6,13 @@ import { FollowsService, type FollowListResponse } from '../follows/follows.serv
 import { FavoritesService, type FavoriteListResponse } from '../favorites/favorites.service';
 import { HistoryService, type ViewHistoryListResponse } from '../history/history.service';
 import { parseProfilePatch, UsersService } from '../users/users.service';
+import { PetsService, type PetSummary } from '../pets/pets.service';
 import type { UserProfile } from '../users/user.repository';
+
+/** 形状与 `packages/types` 的 `MyPetListResponse` 一致（刻意不分页）。 */
+export interface MyPetListResponse {
+  items: PetSummary[];
+}
 
 /**
  * 当前用户的个人数据。整个 controller 都在 AuthGuard 后面 ——
@@ -20,6 +26,7 @@ export class MeController {
     private readonly history: HistoryService,
     private readonly favorites: FavoritesService,
     private readonly users: UsersService,
+    private readonly pets: PetsService,
   ) {}
 
   /**
@@ -93,5 +100,18 @@ export class MeController {
     // 与历史列表同理：pet/venue 混排的列表项不显示距离，坐标用不上。
     const { page, pageSize } = parseListQuery(q);
     return this.favorites.list(userId as string, { page, pageSize });
+  }
+
+  /**
+   * 「我的宠物」。**不分页**（见 `MyPetListResponse` 的注释）—— 发布页选宠物与
+   * 「我的动态」按宠物取动态都要完整清单，分页只会逼它们自己拼页。
+   *
+   * 路径挂 `/me/pets` 而不是给 `GET /pets` 加 `ownerId` 参数：广场那个端点是
+   * 匿名可访问的公开列表，塞进「只看某人的、不筛封面、不过滤 visibility」这三条
+   * 例外会让它的可见性规则说不清。
+   */
+  @Get('pets')
+  async myPets(@CurrentUser() userId: string | null): Promise<MyPetListResponse> {
+    return this.pets.listByOwner(userId as string);
   }
 }

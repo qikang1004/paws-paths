@@ -1,5 +1,6 @@
 import type {
   FavoriteItemDto,
+  MyPetListResponse,
   ProfileDto,
   ProfilePatchDto,
   ViewHistoryItemDto,
@@ -45,4 +46,15 @@ export async function fetchFavorites(
   client: ApiClient = api,
 ): Promise<PagedResponse<FavoriteItemDto>> {
   return client.call<PagedResponse<FavoriteItemDto>>('/me/favorites', { data: params });
+}
+
+/**
+ * 「我的宠物」。**不带分页参数** —— 服务端刻意不分页（见 `MyPetListResponse`），
+ * 发布页选宠物与「我的动态」按宠物取动态都要完整清单。
+ *
+ * 与 `fetchPets`（广场）的区别：这份清单里有还没传照片的宠物（封面是空串），
+ * 页面要自己兜住「没图」的情况。
+ */
+export async function fetchMyPets(client: ApiClient = api): Promise<MyPetListResponse> {
+  return client.call<MyPetListResponse>('/me/pets');
 }

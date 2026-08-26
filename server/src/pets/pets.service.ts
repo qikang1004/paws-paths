@@ -260,6 +260,17 @@ export class PetsService {
     return { items: items.map(toSummary), hasMore, page: query.page };
   }
 
+  /**
+   * 「我的宠物」。不分页、不筛封面（刚建好还没传照片的宠物也要出现），
+   * 距离一律 null —— 自己的宠物清单不显示距离。
+   */
+  async listByOwner(ownerId: string): Promise<{ items: PetSummary[] }> {
+    const rows = await this.repo.listByOwner(ownerId);
+    // `isFollowing` 保持 `false` 且不再覆盖：关注自己的宠物在 FollowsService 里是 422，
+    // 所以这张清单上的每一项恒为未关注。
+    return { items: rows.map(toSummary) };
+  }
+
   async detail(id: string, opts?: { lat?: number; lng?: number }): Promise<PetDetail | null> {
     const coords =
       opts && typeof opts.lat === 'number' && typeof opts.lng === 'number'
