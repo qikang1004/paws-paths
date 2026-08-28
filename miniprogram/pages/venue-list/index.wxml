@@ -1,38 +1,48 @@
-<view class="venues page-gutter">
-  <view class="venues__search">
-    <input
-      class="venues__input text-body-md"
-      value="{{keyword}}"
-      placeholder="搜索医院、宠物店、公园"
-      confirm-type="search"
-      bindinput="onKeywordInput"
-      bindconfirm="onSearchConfirm"
+<!-- Skyline 不提供全局滚动，页面内容挂在铺满的 scroll-view 里（见 app.wxss 的说明）。 -->
+<scroll-view
+  class="page-scroll"
+  scroll-y="{{true}}"
+  refresher-enabled="{{true}}"
+  refresher-triggered="{{refreshing}}"
+  refresher-default-style="black"
+  bindrefresherrefresh="onRefresh"
+>
+  <view class="venues page-gutter">
+    <view class="venues__search">
+      <input
+        class="venues__input text-body-md"
+        value="{{keyword}}"
+        placeholder="搜索医院、宠物店、公园"
+        confirm-type="search"
+        bindinput="onKeywordInput"
+        bindconfirm="onSearchConfirm"
+      />
+      <text class="venues__clear" wx:if="{{keyword}}" bindtap="onClearKeyword">清空</text>
+    </view>
+
+    <filter-chips
+      categories="{{categoryOptions}}"
+      selected="{{category}}"
+      subOptions="{{[]}}"
+      bind:change="onCategoryChange"
     />
-    <text class="venues__clear" wx:if="{{keyword}}" bindtap="onClearKeyword">清空</text>
-  </view>
 
-  <filter-chips
-    categories="{{categoryOptions}}"
-    selected="{{category}}"
-    subOptions="{{[]}}"
-    bind:change="onCategoryChange"
-  />
-
-  <view class="venues__list" wx:if="{{venues.length}}">
-    <venue-card
-      wx:for="{{venues}}"
-      wx:key="poiId"
-      venue="{{item}}"
-      bind:tap="onVenueTap"
+    <view class="venues__list" wx:if="{{venues.length}}">
+      <venue-card
+        wx:for="{{venues}}"
+        wx:key="poiId"
+        venue="{{item}}"
+        bind:tap="onVenueTap"
+      />
+    </view>
+    <empty-state
+      wx:elif="{{!loading}}"
+      title="附近没有找到合适的地方"
+      hint="换个关键词或类目试试"
     />
-  </view>
-  <empty-state
-    wx:elif="{{!loading}}"
-    title="附近没有找到合适的地方"
-    hint="换个关键词或类目试试"
-  />
 
-  <view class="venues__footer safe-bottom" wx:if="{{loading}}">
-    <sq-button type="plain" loading="{{loading}}">加载中…</sq-button>
+    <view class="venues__footer safe-bottom" wx:if="{{loading}}">
+      <sq-button type="plain" loading="{{loading}}">加载中…</sq-button>
+    </view>
   </view>
-</view>
+</scroll-view>

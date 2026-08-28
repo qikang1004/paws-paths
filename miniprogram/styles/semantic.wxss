@@ -49,6 +49,20 @@
   padding-left: var(--space-margin-mobile);
   padding-right: var(--space-margin-mobile);
 }
+
+/**
+ * 页面滚动容器。Skyline 下页面根节点不滚动，需要滚动的区域必须是 scroll-view，
+ * 靠 flex:1 吃掉 page 的剩余空间（官方最佳实践的写法）。
+ *
+ * `height: 0` 是配套的一半：flex 子项的 min-height 默认是 auto，内容比容器高时
+ * 它会被内容顶开而不是出现滚动条 —— 于是 flex:1 形同虚设，页面又滑不动了。
+ * 给一个 0 的基准高度把这条通道关掉，实际高度由 flex:1 分配。
+ */
+.page-scroll {
+  flex: 1;
+  height: 0;
+  width: 100%;
+}
 .feed-gap { gap: var(--space-gutter-mobile); }
 .section-gap { margin-top: var(--space-xl); }
 .safe-bottom { padding-bottom: calc(var(--space-md) + env(safe-area-inset-bottom)); }

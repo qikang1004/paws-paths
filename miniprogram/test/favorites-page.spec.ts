@@ -28,7 +28,12 @@ describe('dropById', () => {
  * 这里只钉住页面确实接的是它，以及两类目标各自调对的取消收藏接口。
  */
 describe('收藏列表页配置与结构', () => {
-  it('json 声明空态，开下拉刷新与触底', () => {
+  /**
+   * 下拉刷新与触底都搬到了 scroll-view 上（Skyline 不提供全局滚动，页面级的
+   * `enablePullDownRefresh` / `onReachBottomDistance` 没有载体），所以这里反过来
+   * 钉住它们不在 json 里——留着会在 WebView 回退路径上显示一个永不收回的刷新圈。
+   */
+  it('json 声明空态，不再声明页面级下拉刷新与触底', () => {
     const json = JSON.parse(read(`${DIR}/index.json`)) as {
       navigationBarTitleText?: string;
       enablePullDownRefresh?: boolean;
@@ -36,11 +41,22 @@ describe('收藏列表页配置与结构', () => {
       usingComponents?: Record<string, string>;
     };
     expect(json.navigationBarTitleText).toBe('我的收藏');
-    expect(json.enablePullDownRefresh).toBe(true);
-    expect(json.onReachBottomDistance).toBe(200);
+    expect(json.enablePullDownRefresh).toBeUndefined();
+    expect(json.onReachBottomDistance).toBeUndefined();
     const used = json.usingComponents ?? {};
     expect(used['empty-state']).toBe('/components/empty-state/index');
     expect(used['wf-icon']).toBe('/components/wf-icon/index');
+  });
+
+  it('wxml 用铺满的 scroll-view 承载滚动，刷新与触底挂在它身上', () => {
+    const wxml = read(`${DIR}/index.wxml`);
+    expect(wxml).toContain('<scroll-view');
+    expect(wxml).toContain('class="page-scroll"');
+    expect(wxml).toContain('scroll-y="{{true}}"');
+    expect(wxml).toContain('refresher-enabled="{{true}}"');
+    expect(wxml).toContain('refresher-triggered="{{refreshing}}"');
+    expect(wxml).toContain('bindrefresherrefresh="onRefresh"');
+    expect(wxml).toContain('bindscrolltolower="onLoadMore"');
   });
 
   it('wxml 一行一条：缩略图、标题、类型、时间，右侧可取消收藏', () => {
@@ -64,8 +80,10 @@ describe('收藏列表页配置与结构', () => {
     expect(ts).toContain('buildFavoriteRow');
     expect(ts).toContain('mergePage');
     expect(ts).toContain('shouldLoadMore');
-    expect(ts).toContain('onReachBottom');
-    expect(ts).toContain('stopPullDownRefresh');
+    expect(ts).toContain('onLoadMore');
+    expect(ts).toContain('onRefresh');
+    // 刷新态是受控位：取数失败也得复位，否则刷新圈不收。所以复位必须在 finally 里。
+    expect(ts).toMatch(/finally\s*\{\s*this\.setData\(\{\s*refreshing:\s*false/);
     expect(ts).not.toContain('wx.request');
   });
 

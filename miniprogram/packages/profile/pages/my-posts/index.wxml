@@ -1,65 +1,77 @@
-<view class="my-posts page-gutter">
-  <!-- 只有一只宠物时不画切换条：那行只会是块噪声。 -->
-  <view class="my-posts__pets" wx:if="{{pets.length > 1}}">
-    <text
-      class="chip {{item.id === petId ? 'chip--active' : ''}}"
-      wx:for="{{pets}}"
-      wx:key="id"
-      data-id="{{item.id}}"
-      bindtap="onPetTap"
-      aria-role="button"
-    >{{item.name}}</text>
-  </view>
+<!-- Skyline 不提供全局滚动，页面内容挂在铺满的 scroll-view 里（见 app.wxss 的说明）。 -->
+<scroll-view
+  class="page-scroll"
+  scroll-y="{{true}}"
+  refresher-enabled="{{true}}"
+  refresher-triggered="{{refreshing}}"
+  refresher-default-style="black"
+  bindrefresherrefresh="onRefresh"
+  lower-threshold="200"
+  bindscrolltolower="onLoadMore"
+>
+  <view class="my-posts page-gutter">
+    <!-- 只有一只宠物时不画切换条：那行只会是块噪声。 -->
+    <view class="my-posts__pets" wx:if="{{pets.length > 1}}">
+      <text
+        class="chip {{item.id === petId ? 'chip--active' : ''}}"
+        wx:for="{{pets}}"
+        wx:key="id"
+        data-id="{{item.id}}"
+        bindtap="onPetTap"
+        aria-role="button"
+      >{{item.name}}</text>
+    </view>
 
-  <view class="my-posts__list" wx:if="{{posts.length}}">
-    <view class="my-posts__item card" wx:for="{{posts}}" wx:key="id">
-      <view class="my-posts__head">
-        <text class="text-label-md c-on-surface-variant">{{item.timeText}}</text>
-        <audit-badge status="{{item.auditStatus}}" reason="{{item.badge.reasonText}}" />
-      </view>
+    <view class="my-posts__list" wx:if="{{posts.length}}">
+      <view class="my-posts__item card" wx:for="{{posts}}" wx:key="id">
+        <view class="my-posts__head">
+          <text class="text-label-md c-on-surface-variant">{{item.timeText}}</text>
+          <audit-badge status="{{item.auditStatus}}" reason="{{item.badge.reasonText}}" />
+        </view>
 
-      <text class="my-posts__text text-body-md">{{item.content}}</text>
+        <text class="my-posts__text text-body-md">{{item.content}}</text>
 
-      <view class="my-posts__photos" wx:if="{{item.hasImages}}">
-        <image
-          class="my-posts__photo"
-          wx:for="{{item.images}}"
-          wx:for-item="image"
-          wx:key="id"
-          src="{{image.url}}"
-          mode="aspectFill"
-          data-post="{{item.id}}"
-          data-index="{{index}}"
-          bindtap="onImageTap"
-        />
+        <view class="my-posts__photos" wx:if="{{item.hasImages}}">
+          <image
+            class="my-posts__photo"
+            wx:for="{{item.images}}"
+            wx:for-item="image"
+            wx:key="id"
+            src="{{image.url}}"
+            mode="aspectFill"
+            data-post="{{item.id}}"
+            data-index="{{index}}"
+            bindtap="onImageTap"
+          />
+        </view>
       </view>
     </view>
+
+    <!-- 没宠物与「有宠物但没发过」是两回事：前者该引去建宠物，后者引去发布页。 -->
+    <empty-state
+      wx:if="{{!pets.length && !loading}}"
+      icon="paw"
+      title="还没有宠物"
+      hint="动态是发在宠物名下的，先建一只吧"
+    >
+      <sq-button type="primary" size="md" bind:tap="onCreatePet">建一只</sq-button>
+    </empty-state>
+
+    <empty-state
+      wx:elif="{{!posts.length && !loading}}"
+      icon="paw"
+      title="还没发过动态"
+      hint="记一笔今天的散步，或者发张照片"
+    >
+      <sq-button type="primary" size="md" bind:tap="onCompose">发动态</sq-button>
+    </empty-state>
+
+    <view class="my-posts__footer" wx:if="{{posts.length && !hasMore}}">
+      <text class="text-body-sm c-on-surface-variant">没有更多了</text>
+    </view>
+
+    <view class="my-posts__bar safe-bottom" wx:if="{{pets.length && posts.length}}">
+      <sq-button type="primary" size="lg" bind:tap="onCompose">发动态</sq-button>
+    </view>
   </view>
-
-  <!-- 没宠物与「有宠物但没发过」是两回事：前者该引去建宠物，后者引去发布页。 -->
-  <empty-state
-    wx:if="{{!pets.length && !loading}}"
-    icon="paw"
-    title="还没有宠物"
-    hint="动态是发在宠物名下的，先建一只吧"
-  >
-    <sq-button type="primary" size="md" bind:tap="onCreatePet">建一只</sq-button>
-  </empty-state>
-
-  <empty-state
-    wx:elif="{{!posts.length && !loading}}"
-    icon="paw"
-    title="还没发过动态"
-    hint="记一笔今天的散步，或者发张照片"
-  >
-    <sq-button type="primary" size="md" bind:tap="onCompose">发动态</sq-button>
-  </empty-state>
-
-  <view class="my-posts__footer" wx:if="{{posts.length && !hasMore}}">
-    <text class="text-body-sm c-on-surface-variant">没有更多了</text>
-  </view>
-
-  <view class="my-posts__bar safe-bottom" wx:if="{{pets.length && posts.length}}">
-    <sq-button type="primary" size="lg" bind:tap="onCompose">发动态</sq-button>
-  </view>
-</view>
+</scroll-view>

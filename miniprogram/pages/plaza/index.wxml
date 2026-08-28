@@ -1,33 +1,49 @@
-<view class="plaza page-gutter">
-  <view class="plaza__location">
-    <text class="plaza__mode">{{modeText}}</text>
-    <text class="plaza__open" wx:if="{{canOpenSetting}}" bindtap="onOpenSetting">去开启</text>
-  </view>
+<!--
+  Skyline 不提供全局滚动，所以页面内容挂在一个铺满的 scroll-view 里。
+  下拉刷新与触底加载也随之从页面生命周期（onPullDownRefresh / onReachBottom）
+  搬到这个容器的属性上 —— 那两个回调依附的是页面级滚动，Skyline 下没有载体。
+-->
+<scroll-view
+  class="page-scroll"
+  scroll-y="{{true}}"
+  refresher-enabled="{{true}}"
+  refresher-triggered="{{refreshing}}"
+  refresher-default-style="black"
+  bindrefresherrefresh="onRefresh"
+  lower-threshold="200"
+  bindscrolltolower="onLoadMore"
+>
+  <view class="plaza page-gutter">
+    <view class="plaza__location">
+      <text class="plaza__mode">{{modeText}}</text>
+      <text class="plaza__open" wx:if="{{canOpenSetting}}" bindtap="onOpenSetting">去开启</text>
+    </view>
 
-  <filter-chips
-    categories="{{speciesOptions}}"
-    selected="{{filter.species}}"
-    subOptions="{{breedOptions}}"
-    subSelected="{{filter.breed}}"
-    bind:change="onFilterChange"
-  />
+    <filter-chips
+      categories="{{speciesOptions}}"
+      selected="{{filter.species}}"
+      subOptions="{{breedOptions}}"
+      subSelected="{{filter.breed}}"
+      bind:change="onFilterChange"
+    />
 
-  <wf-list
-    wx:if="{{items.length}}"
-    items="{{items}}"
-    itemTemplate="pet-card-tpl"
-    bind:item-tap="onPetTap"
-  />
-  <empty-state
-    wx:elif="{{!loading}}"
-    title="没有找到合适的毛孩子"
-    hint="换个筛选条件试试"
-  />
+    <wf-list
+      wx:if="{{items.length}}"
+      items="{{items}}"
+      itemTemplate="pet-card-tpl"
+      bind:item-tap="onPetTap"
+    />
+    <empty-state
+      wx:elif="{{!loading}}"
+      title="没有找到合适的毛孩子"
+      hint="换个筛选条件试试"
+    />
 
-  <view class="plaza__footer safe-bottom" wx:if="{{loading}}">
-    <sq-button type="plain" loading="{{loading}}">加载中…</sq-button>
+    <view class="plaza__footer safe-bottom" wx:if="{{loading}}">
+      <sq-button type="plain" loading="{{loading}}">加载中…</sq-button>
+    </view>
+    <view class="plaza__footer safe-bottom" wx:elif="{{items.length && !hasMore}}">
+      <text class="plaza__end">没有更多了</text>
+    </view>
   </view>
-  <view class="plaza__footer safe-bottom" wx:elif="{{items.length && !hasMore}}">
-    <text class="plaza__end">没有更多了</text>
-  </view>
-</view>
+</scroll-view>

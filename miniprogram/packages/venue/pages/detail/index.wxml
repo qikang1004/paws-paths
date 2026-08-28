@@ -1,54 +1,58 @@
-<view class="vdetail" wx:if="{{view}}">
-  <image
-    class="vdetail__cover"
-    wx:if="{{view.coverUrl}}"
-    src="{{view.coverUrl}}"
-    mode="aspectFill"
-  />
+<!-- 封面 + 详情比一屏长，Skyline 下页面根节点不滚，靠这层 scroll-view 承载。
+     两个分支仍是兄弟节点，wx:elif 才接得上。 -->
+<scroll-view class="page-scroll" scroll-y="{{true}}">
+  <view class="vdetail" wx:if="{{view}}">
+    <image
+      class="vdetail__cover"
+      wx:if="{{view.coverUrl}}"
+      src="{{view.coverUrl}}"
+      mode="aspectFill"
+    />
 
-  <view class="vdetail__body page-gutter">
-    <view class="vdetail__title">
-      <text class="vdetail__name text-headline-md">{{view.name}}</text>
-      <text class="vdetail__distance text-body-sm c-on-surface-variant" wx:if="{{view.distanceText}}">
-        {{view.distanceText}}
-      </text>
-    </view>
+    <view class="vdetail__body page-gutter">
+      <view class="vdetail__title">
+        <text class="vdetail__name text-headline-md">{{view.name}}</text>
+        <text class="vdetail__distance text-body-sm c-on-surface-variant" wx:if="{{view.distanceText}}">
+          {{view.distanceText}}
+        </text>
+      </view>
 
-    <view class="vdetail__tags">
-      <text class="chip chip--sm">{{view.categoryLabel}}</text>
-      <text class="chip chip--sm" wx:for="{{view.tags}}" wx:key="*this">{{item}}</text>
-    </view>
+      <view class="vdetail__tags">
+        <text class="chip chip--sm">{{view.categoryLabel}}</text>
+        <text class="chip chip--sm" wx:for="{{view.tags}}" wx:key="*this">{{item}}</text>
+      </view>
 
-    <view class="vdetail__row" wx:if="{{view.showRating}}">
-      <text class="vdetail__rating text-body-md">{{view.ratingText}}</text>
-    </view>
-    <view class="vdetail__row" wx:if="{{view.showPrice}}">
-      <text class="text-body-md c-on-surface-variant">{{view.priceText}}</text>
-    </view>
+      <view class="vdetail__row" wx:if="{{view.showRating}}">
+        <text class="vdetail__rating text-body-md">{{view.ratingText}}</text>
+      </view>
+      <view class="vdetail__row" wx:if="{{view.showPrice}}">
+        <text class="text-body-md c-on-surface-variant">{{view.priceText}}</text>
+      </view>
 
-    <view class="vdetail__address">
-      <text class="vdetail__address-text text-body-md" selectable="{{true}}">{{view.address}}</text>
-      <text class="vdetail__copy text-body-sm c-primary" bindtap="onCopyAddress">复制</text>
-    </view>
+      <view class="vdetail__address">
+        <text class="vdetail__address-text text-body-md" selectable="{{true}}">{{view.address}}</text>
+        <text class="vdetail__copy text-body-sm c-primary" bindtap="onCopyAddress">复制</text>
+      </view>
 
-    <view class="vdetail__actions safe-bottom">
-      <sq-button
-        type="{{favorite ? 'plain' : 'primary'}}"
-        size="lg"
-        loading="{{favoriting}}"
-        bindtap="onToggleFavorite"
-      >
-        {{favorite ? '已收藏' : '收藏'}}
-      </sq-button>
-      <view class="vdetail__nav" wx:if="{{view.showNavigation}}">
-        <sq-button type="plain" size="lg" bindtap="onNavigate">导航前往</sq-button>
+      <view class="vdetail__actions safe-bottom">
+        <sq-button
+          type="{{favorite ? 'plain' : 'primary'}}"
+          size="lg"
+          loading="{{favoriting}}"
+          bindtap="onToggleFavorite"
+        >
+          {{favorite ? '已收藏' : '收藏'}}
+        </sq-button>
+        <view class="vdetail__nav" wx:if="{{view.showNavigation}}">
+          <sq-button type="plain" size="lg" bindtap="onNavigate">导航前往</sq-button>
+        </view>
       </view>
     </view>
   </view>
-</view>
 
-<view class="vdetail__state" wx:elif="{{error}}">
-  <empty-state title="没找到这个地方" hint="它可能已经下线了">
-    <sq-button type="primary" bindtap="onRetry">重新加载</sq-button>
-  </empty-state>
-</view>
+  <view class="vdetail__state" wx:elif="{{error}}">
+    <empty-state title="没找到这个地方" hint="它可能已经下线了">
+      <sq-button type="primary" bindtap="onRetry">重新加载</sq-button>
+    </empty-state>
+  </view>
+</scroll-view>

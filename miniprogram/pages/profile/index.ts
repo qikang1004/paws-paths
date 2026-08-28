@@ -17,6 +17,8 @@ Page({
     pets: [] as PetTile[],
     entries: PROFILE_ENTRIES,
     loading: false,
+    /** scroll-view 刷新态的受控位。刷完必须置回 false，否则刷新圈不收。 */
+    refreshing: false,
   },
 
   /**
@@ -28,11 +30,16 @@ Page({
     void this.load();
   },
 
-  async onPullDownRefresh() {
+  /**
+   * 下拉刷新。挂在 scroll-view 的 `bindrefresherrefresh` 上而不是页面的
+   * `onPullDownRefresh` —— Skyline 没有全局滚动，页面级回调没有载体。
+   */
+  async onRefresh() {
+    this.setData({ refreshing: true });
     try {
       await this.load();
     } finally {
-      wx.stopPullDownRefresh();
+      this.setData({ refreshing: false });
     }
   },
 

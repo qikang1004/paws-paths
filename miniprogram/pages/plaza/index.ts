@@ -32,6 +32,8 @@ Page({
     loading: false,
     modeText: '城市',
     canOpenSetting: false,
+    /** scroll-view 刷新态的受控位。刷完必须置回 false，否则刷新圈不收。 */
+    refreshing: false,
   },
 
   onLoad() {
@@ -42,16 +44,23 @@ Page({
     syncTabBar(this);
   },
 
-  onReachBottom() {
+  /**
+   * 触底加载。挂在 scroll-view 的 `bindscrolltolower` 上而不是页面的
+   * `onReachBottom` —— Skyline 没有全局滚动，页面级回调不会被触发。
+   * 该事件在滚动中可能连发，`shouldLoadMore` 的 loading 判断就是去重。
+   */
+  onLoadMore() {
     if (!shouldLoadMore(this.data.hasMore, this.data.loading)) return;
     void this.loadPage(this.data.page + 1);
   },
 
-  async onPullDownRefresh() {
+  /** 下拉刷新。`refreshing` 是受控状态位，取代 wx.stopPullDownRefresh()。 */
+  async onRefresh() {
+    this.setData({ refreshing: true });
     try {
       await this.loadPage(1);
     } finally {
-      wx.stopPullDownRefresh();
+      this.setData({ refreshing: false });
     }
   },
 

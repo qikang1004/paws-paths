@@ -49,7 +49,12 @@
   },
   "renderer": "skyline",
   "rendererOptions": {
-    "skyline": { "defaultDisplayBlock": true, "disableABTest": true, "sdkVersionBegin": "3.0.0" }
+    "skyline": {
+      "defaultDisplayBlock": true,
+      "disableABTest": true,
+      "sdkVersionBegin": "3.0.0",
+      "enableScrollViewAutoSize": true
+    }
   },
   "componentFramework": "glass-easel",
   "glassEaselWebview": true,

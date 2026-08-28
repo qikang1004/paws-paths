@@ -1,7 +1,5 @@
 {
   "navigationBarTitleText": "萌宠广场",
-  "enablePullDownRefresh": true,
-  "onReachBottomDistance": 200,
   "usingComponents": {
     "wf-list": "/components/wf-list/index",
     "filter-chips": "/components/filter-chips/index",

@@ -1,46 +1,58 @@
-<view class="history page-gutter">
-  <block wx:if="{{sections.length}}">
-    <view class="history__section" wx:for="{{sections}}" wx:for-item="section" wx:key="key">
-      <text class="history__day text-label-md c-on-surface-variant">{{section.label}}</text>
+<!-- Skyline 不提供全局滚动，页面内容挂在铺满的 scroll-view 里（见 app.wxss 的说明）。 -->
+<scroll-view
+  class="page-scroll"
+  scroll-y="{{true}}"
+  refresher-enabled="{{true}}"
+  refresher-triggered="{{refreshing}}"
+  refresher-default-style="black"
+  bindrefresherrefresh="onRefresh"
+  lower-threshold="200"
+  bindscrolltolower="onLoadMore"
+>
+  <view class="history page-gutter">
+    <block wx:if="{{sections.length}}">
+      <view class="history__section" wx:for="{{sections}}" wx:for-item="section" wx:key="key">
+        <text class="history__day text-label-md c-on-surface-variant">{{section.label}}</text>
 
-      <view class="history__list card">
-        <view
-          class="history__row"
-          wx:for="{{section.items}}"
-          wx:key="id"
-          data-url="{{item.url}}"
-          bindtap="onRowTap"
-        >
-          <image
-            wx:if="{{item.coverUrl}}"
-            class="history__cover"
-            src="{{item.coverUrl}}"
-            mode="aspectFill"
-          />
-          <view wx:else class="history__cover history__cover--blank">
-            <wf-icon name="{{item.targetType === 'pet' ? 'paw' : 'place'}}" role="on-surface-variant" size="48rpx" />
-          </view>
+        <view class="history__list card">
+          <view
+            class="history__row"
+            wx:for="{{section.items}}"
+            wx:key="id"
+            data-url="{{item.url}}"
+            bindtap="onRowTap"
+          >
+            <image
+              wx:if="{{item.coverUrl}}"
+              class="history__cover"
+              src="{{item.coverUrl}}"
+              mode="aspectFill"
+            />
+            <view wx:else class="history__cover history__cover--blank">
+              <wf-icon name="{{item.targetType === 'pet' ? 'paw' : 'place'}}" role="on-surface-variant" size="48rpx" />
+            </view>
 
-          <view class="history__body">
-            <text class="history__title text-body-md">{{item.title}}</text>
-            <view class="history__meta">
-              <text class="chip chip--sm">{{item.typeLabel}}</text>
-              <text class="text-body-sm c-on-surface-variant">{{item.timeText}}</text>
+            <view class="history__body">
+              <text class="history__title text-body-md">{{item.title}}</text>
+              <view class="history__meta">
+                <text class="chip chip--sm">{{item.typeLabel}}</text>
+                <text class="text-body-sm c-on-surface-variant">{{item.timeText}}</text>
+              </view>
             </view>
           </view>
         </view>
       </view>
+    </block>
+
+    <empty-state
+      wx:elif="{{!loading}}"
+      icon="paw"
+      title="还没有浏览记录"
+      hint="逛过的毛孩子和场所会留在这儿，方便回头找"
+    />
+
+    <view class="history__footer safe-bottom" wx:if="{{sections.length && !hasMore}}">
+      <text class="text-body-sm c-on-surface-variant">没有更多了</text>
     </view>
-  </block>
-
-  <empty-state
-    wx:elif="{{!loading}}"
-    icon="paw"
-    title="还没有浏览记录"
-    hint="逛过的毛孩子和场所会留在这儿，方便回头找"
-  />
-
-  <view class="history__footer safe-bottom" wx:if="{{sections.length && !hasMore}}">
-    <text class="text-body-sm c-on-surface-variant">没有更多了</text>
   </view>
-</view>
+</scroll-view>

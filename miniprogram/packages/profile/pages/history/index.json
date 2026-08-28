@@ -1,7 +1,5 @@
 {
   "navigationBarTitleText": "浏览历史",
-  "enablePullDownRefresh": true,
-  "onReachBottomDistance": 200,
   "usingComponents": {
     "empty-state": "/components/empty-state/index",
     "wf-icon": "/components/wf-icon/index"

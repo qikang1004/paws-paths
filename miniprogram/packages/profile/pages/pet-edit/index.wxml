@@ -1,107 +1,110 @@
-<view class="pet-edit page-gutter">
-  <view wx:if="{{error}}" class="pet-edit__error card" bindtap="onRetry">
-    <text class="text-body-md c-on-surface-variant">没读到它的资料，点一下重试</text>
-  </view>
+<!-- 表单比一屏长，Skyline 下页面根节点不滚，靠这层 scroll-view 承载。 -->
+<scroll-view class="page-scroll" scroll-y="{{true}}">
+  <view class="pet-edit page-gutter">
+    <view wx:if="{{error}}" class="pet-edit__error card" bindtap="onRetry">
+      <text class="text-body-md c-on-surface-variant">没读到它的资料，点一下重试</text>
+    </view>
 
-  <view class="pet-edit__field">
-    <text class="pet-edit__label text-label-md c-on-surface-variant">名字</text>
-    <input
-      class="field"
-      value="{{form.name}}"
-      maxlength="{{nameMax}}"
-      placeholder="它叫什么"
-      bindinput="onNameInput"
-    />
-  </view>
+    <view class="pet-edit__field">
+      <text class="pet-edit__label text-label-md c-on-surface-variant">名字</text>
+      <input
+        class="field"
+        value="{{form.name}}"
+        maxlength="{{nameMax}}"
+        placeholder="它叫什么"
+        bindinput="onNameInput"
+      />
+    </view>
 
-  <view class="pet-edit__field">
-    <text class="pet-edit__label text-label-md c-on-surface-variant">它是</text>
-    <view class="pet-edit__chips">
-      <view
-        class="chip {{form.species === item.value ? 'chip--active' : ''}}"
-        wx:for="{{speciesOptions}}"
-        wx:key="value"
-        data-value="{{item.value}}"
-        bindtap="onSpeciesTap"
-      >
-        <text class="text-label-md">{{item.label}}</text>
+    <view class="pet-edit__field">
+      <text class="pet-edit__label text-label-md c-on-surface-variant">它是</text>
+      <view class="pet-edit__chips">
+        <view
+          class="chip {{form.species === item.value ? 'chip--active' : ''}}"
+          wx:for="{{speciesOptions}}"
+          wx:key="value"
+          data-value="{{item.value}}"
+          bindtap="onSpeciesTap"
+        >
+          <text class="text-label-md">{{item.label}}</text>
+        </view>
       </view>
     </view>
-  </view>
 
-  <view class="pet-edit__field">
-    <text class="pet-edit__label text-label-md c-on-surface-variant">性别</text>
-    <view class="pet-edit__chips">
-      <view
-        class="chip {{form.gender === item.value ? 'chip--active' : ''}}"
-        wx:for="{{genderOptions}}"
-        wx:key="value"
-        data-value="{{item.value}}"
-        bindtap="onGenderTap"
-      >
-        <text class="text-label-md">{{item.label}}</text>
+    <view class="pet-edit__field">
+      <text class="pet-edit__label text-label-md c-on-surface-variant">性别</text>
+      <view class="pet-edit__chips">
+        <view
+          class="chip {{form.gender === item.value ? 'chip--active' : ''}}"
+          wx:for="{{genderOptions}}"
+          wx:key="value"
+          data-value="{{item.value}}"
+          bindtap="onGenderTap"
+        >
+          <text class="text-label-md">{{item.label}}</text>
+        </view>
       </view>
     </view>
-  </view>
 
-  <view class="pet-edit__field">
-    <text class="pet-edit__label text-label-md c-on-surface-variant">品种</text>
-    <input class="field" value="{{form.breed}}" placeholder="不确定就留空" bindinput="onBreedInput" />
-  </view>
+    <view class="pet-edit__field">
+      <text class="pet-edit__label text-label-md c-on-surface-variant">品种</text>
+      <input class="field" value="{{form.breed}}" placeholder="不确定就留空" bindinput="onBreedInput" />
+    </view>
 
-  <view class="pet-edit__field">
-    <text class="pet-edit__label text-label-md c-on-surface-variant">生日</text>
-    <picker mode="date" value="{{form.birthDate}}" end="{{today}}" bindchange="onBirthDateChange">
-      <view class="field pet-edit__picker">
-        <text wx:if="{{form.birthDate}}" class="text-body-md">{{form.birthDate}}</text>
-        <text wx:else class="text-body-md c-on-surface-variant">不知道也没关系</text>
-      </view>
-    </picker>
-  </view>
+    <view class="pet-edit__field">
+      <text class="pet-edit__label text-label-md c-on-surface-variant">生日</text>
+      <picker mode="date" value="{{form.birthDate}}" end="{{today}}" bindchange="onBirthDateChange">
+        <view class="field pet-edit__picker">
+          <text wx:if="{{form.birthDate}}" class="text-body-md">{{form.birthDate}}</text>
+          <text wx:else class="text-body-md c-on-surface-variant">不知道也没关系</text>
+        </view>
+      </picker>
+    </view>
 
-  <view class="pet-edit__field">
-    <text class="pet-edit__label text-label-md c-on-surface-variant">性格标签</text>
-    <input
-      class="field"
-      value="{{tagsText}}"
-      placeholder="用逗号隔开，最多 {{tagsMax}} 个"
-      bindinput="onTagsInput"
-    />
-  </view>
+    <view class="pet-edit__field">
+      <text class="pet-edit__label text-label-md c-on-surface-variant">性格标签</text>
+      <input
+        class="field"
+        value="{{tagsText}}"
+        placeholder="用逗号隔开，最多 {{tagsMax}} 个"
+        bindinput="onTagsInput"
+      />
+    </view>
 
-  <view class="pet-edit__field">
-    <text class="pet-edit__label text-label-md c-on-surface-variant">简介</text>
-    <textarea
-      class="field pet-edit__textarea"
-      value="{{form.bio}}"
-      maxlength="{{bioMax}}"
-      placeholder="它平时爱干什么"
-      bindinput="onBioInput"
-    />
-  </view>
+    <view class="pet-edit__field">
+      <text class="pet-edit__label text-label-md c-on-surface-variant">简介</text>
+      <textarea
+        class="field pet-edit__textarea"
+        value="{{form.bio}}"
+        maxlength="{{bioMax}}"
+        placeholder="它平时爱干什么"
+        bindinput="onBioInput"
+      />
+    </view>
 
-  <view class="pet-edit__field">
-    <text class="pet-edit__label text-label-md c-on-surface-variant">照片</text>
-    <media-picker
-      wx:if="{{!isNew}}"
-      images="{{photos}}"
-      max="{{photosMax}}"
-      uploading="{{uploading}}"
-      bind:pick="onPickPhotos"
-      bind:remove="onRemovePhoto"
-    />
-    <!-- 照片要挂在已存在的宠物上，新建时先没地方放。 -->
-    <text wx:else class="text-body-sm c-on-surface-variant">先保存资料，就能传照片了</text>
-  </view>
+    <view class="pet-edit__field">
+      <text class="pet-edit__label text-label-md c-on-surface-variant">照片</text>
+      <media-picker
+        wx:if="{{!isNew}}"
+        images="{{photos}}"
+        max="{{photosMax}}"
+        uploading="{{uploading}}"
+        bind:pick="onPickPhotos"
+        bind:remove="onRemovePhoto"
+      />
+      <!-- 照片要挂在已存在的宠物上，新建时先没地方放。 -->
+      <text wx:else class="text-body-sm c-on-surface-variant">先保存资料，就能传照片了</text>
+    </view>
 
-  <view class="pet-edit__actions">
-    <sq-button type="primary" size="lg" loading="{{saving}}" bind:tap="onSave">
-      {{isNew ? '建好它' : '保存'}}
-    </sq-button>
-    <sq-button wx:if="{{!isNew}}" type="ghost" size="md" bind:tap="onDelete">
-      <text class="c-error">删除这只宠物</text>
-    </sq-button>
-  </view>
+    <view class="pet-edit__actions">
+      <sq-button type="primary" size="lg" loading="{{saving}}" bind:tap="onSave">
+        {{isNew ? '建好它' : '保存'}}
+      </sq-button>
+      <sq-button wx:if="{{!isNew}}" type="ghost" size="md" bind:tap="onDelete">
+        <text class="c-error">删除这只宠物</text>
+      </sq-button>
+    </view>
 
-  <view class="safe-bottom"></view>
-</view>
+    <view class="safe-bottom"></view>
+  </view>
+</scroll-view>

@@ -25,6 +25,8 @@ Page({
     page: 0,
     hasMore: true,
     loading: false,
+    /** scroll-view 刷新态的受控位。刷完必须置回 false，否则刷新圈不收。 */
+    refreshing: false,
   },
 
   onLoad() {
@@ -43,16 +45,22 @@ Page({
     void this.loadPage(1);
   },
 
-  onReachBottom() {
+  /**
+   * 触底加载与下拉刷新都挂在 scroll-view 的属性上，不用页面的
+   * `onReachBottom` / `onPullDownRefresh` —— Skyline 没有全局滚动，
+   * 那两个页面级回调不会被触发。
+   */
+  onLoadMore() {
     if (!shouldLoadMore(this.data.hasMore, this.data.loading)) return;
     void this.loadPage(this.data.page + 1);
   },
 
-  async onPullDownRefresh(): Promise<void> {
+  async onRefresh(): Promise<void> {
+    this.setData({ refreshing: true });
     try {
       await this.init(this.data.petId);
     } finally {
-      wx.stopPullDownRefresh();
+      this.setData({ refreshing: false });
     }
   },
 

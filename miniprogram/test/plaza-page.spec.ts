@@ -128,15 +128,20 @@ describe('品种联动', () => {
 });
 
 describe('广场页配置与结构', () => {
-  it('json 声明四个组件、下拉刷新与触底距离', () => {
+  /**
+   * 下拉刷新与触底都搬到了 scroll-view 上（Skyline 不提供全局滚动，页面级的
+   * `enablePullDownRefresh` / `onReachBottomDistance` 没有载体），所以这里反过来
+   * 钉住它们不在 json 里——留着会在 WebView 回退路径上显示一个永不收回的刷新圈。
+   */
+  it('json 声明四个组件，不再声明页面级下拉刷新与触底', () => {
     const json = JSON.parse(read('pages/plaza/index.json')) as {
       navigationBarTitleText?: string;
       enablePullDownRefresh?: boolean;
       onReachBottomDistance?: number;
       usingComponents?: Record<string, string>;
     };
-    expect(json.enablePullDownRefresh).toBe(true);
-    expect(json.onReachBottomDistance).toBe(200);
+    expect(json.enablePullDownRefresh).toBeUndefined();
+    expect(json.onReachBottomDistance).toBeUndefined();
     const used = json.usingComponents ?? {};
     expect(used['wf-list']).toBe('/components/wf-list/index');
     expect(used['filter-chips']).toBe('/components/filter-chips/index');
@@ -154,15 +159,32 @@ describe('广场页配置与结构', () => {
     expect(wxml).toContain('wx:elif="{{!loading}}"');
   });
 
+  /**
+   * 筛选条跟着内容一起滚——原先页面级滚动时它就是这个行为，这次只换承载者，
+   * 不顺手改成常驻吸顶。
+   */
+  it('wxml 用铺满的 scroll-view 承载滚动，刷新与触底挂在它身上', () => {
+    const wxml = read('pages/plaza/index.wxml');
+    expect(wxml).toContain('<scroll-view');
+    expect(wxml).toContain('class="page-scroll"');
+    expect(wxml).toContain('scroll-y="{{true}}"');
+    expect(wxml).toContain('refresher-enabled="{{true}}"');
+    expect(wxml).toContain('refresher-triggered="{{refreshing}}"');
+    expect(wxml).toContain('bindrefresherrefresh="onRefresh"');
+    expect(wxml).toContain('bindscrolltolower="onLoadMore"');
+    expect(wxml.indexOf('<scroll-view')).toBeLessThan(wxml.indexOf('<filter-chips'));
+  });
+
   it('页面 ts 只做绑定：定位经 store，翻页经纯函数', () => {
     const ts = read('pages/plaza/index.ts');
     expect(ts).toContain('locationStore');
     expect(ts).toContain('fetchPets');
     expect(ts).toContain('shouldLoadMore');
     expect(ts).toContain('mergePage');
-    expect(ts).toContain('onReachBottom');
-    expect(ts).toContain('onPullDownRefresh');
-    expect(ts).toContain('stopPullDownRefresh');
+    expect(ts).toContain('onLoadMore');
+    expect(ts).toContain('onRefresh');
+    // 刷新态是受控位：取数失败也得复位，否则刷新圈不收。所以复位必须在 finally 里。
+    expect(ts).toMatch(/finally\s*\{\s*this\.setData\(\{\s*refreshing:\s*false/);
     expect(ts).toContain("navigateTo");
   });
 

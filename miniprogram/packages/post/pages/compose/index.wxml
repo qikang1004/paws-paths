@@ -1,57 +1,60 @@
-<view class="compose page-gutter">
-  <!-- 没有宠物时不给一张发不出去的表单。 -->
-  <empty-state
-    wx:if="{{!pets.length}}"
-    icon="paw"
-    title="还没有宠物"
-    hint="动态是发在宠物名下的，先建一只吧"
-  >
-    <sq-button type="primary" size="md" bind:tap="onCreatePet">建一只</sq-button>
-  </empty-state>
+<!-- 键盘弹起后表单要能推上去看，Skyline 下页面根节点不滚，靠这层 scroll-view 承载。 -->
+<scroll-view class="page-scroll" scroll-y="{{true}}">
+  <view class="compose page-gutter">
+    <!-- 没有宠物时不给一张发不出去的表单。 -->
+    <empty-state
+      wx:if="{{!pets.length}}"
+      icon="paw"
+      title="还没有宠物"
+      hint="动态是发在宠物名下的，先建一只吧"
+    >
+      <sq-button type="primary" size="md" bind:tap="onCreatePet">建一只</sq-button>
+    </empty-state>
 
-  <block wx:else>
-    <view class="compose__section">
-      <text class="compose__label text-label-md c-on-surface-variant">发布到</text>
-      <view class="compose__pets">
-        <text
-          class="chip {{item.id === petId ? 'chip--active' : ''}}"
-          wx:for="{{pets}}"
-          wx:key="id"
-          data-id="{{item.id}}"
-          bindtap="onPetTap"
-          aria-role="button"
-        >{{item.name}}</text>
+    <block wx:else>
+      <view class="compose__section">
+        <text class="compose__label text-label-md c-on-surface-variant">发布到</text>
+        <view class="compose__pets">
+          <text
+            class="chip {{item.id === petId ? 'chip--active' : ''}}"
+            wx:for="{{pets}}"
+            wx:key="id"
+            data-id="{{item.id}}"
+            bindtap="onPetTap"
+            aria-role="button"
+          >{{item.name}}</text>
+        </view>
       </view>
-    </view>
 
-    <view class="compose__section">
-      <textarea
-        class="field compose__textarea text-body-md"
-        value="{{content}}"
-        placeholder="今天它做了什么？"
-        maxlength="{{contentMax}}"
-        bindinput="onContentInput"
-      />
-      <text class="compose__count text-body-sm c-on-surface-variant">{{contentCount}}/{{contentMax}}</text>
-    </view>
+      <view class="compose__section">
+        <textarea
+          class="field compose__textarea text-body-md"
+          value="{{content}}"
+          placeholder="今天它做了什么？"
+          maxlength="{{contentMax}}"
+          bindinput="onContentInput"
+        />
+        <text class="compose__count text-body-sm c-on-surface-variant">{{contentCount}}/{{contentMax}}</text>
+      </view>
 
-    <view class="compose__section">
-      <text class="compose__label text-label-md c-on-surface-variant">配图</text>
-      <media-picker
-        images="{{images}}"
-        max="{{imagesMax}}"
-        uploading="{{uploading}}"
-        bind:pick="onPickPhotos"
-        bind:remove="onRemovePhoto"
-      />
-    </view>
+      <view class="compose__section">
+        <text class="compose__label text-label-md c-on-surface-variant">配图</text>
+        <media-picker
+          images="{{images}}"
+          max="{{imagesMax}}"
+          uploading="{{uploading}}"
+          bind:pick="onPickPhotos"
+          bind:remove="onRemovePhoto"
+        />
+      </view>
 
-    <view class="compose__actions safe-bottom">
-      <sq-button type="primary" size="lg" loading="{{submitting}}" bind:tap="onSubmit">发布</sq-button>
-      <!-- 发布响应恒为 pending，先把这句说清，免得作者以为别人已经看得见了。 -->
-      <text class="compose__hint text-body-sm c-on-surface-variant">
-        发出去后要先过一遍审核，通过前只有你自己看得见。
-      </text>
-    </view>
-  </block>
-</view>
+      <view class="compose__actions safe-bottom">
+        <sq-button type="primary" size="lg" loading="{{submitting}}" bind:tap="onSubmit">发布</sq-button>
+        <!-- 发布响应恒为 pending，先把这句说清，免得作者以为别人已经看得见了。 -->
+        <text class="compose__hint text-body-sm c-on-surface-variant">
+          发出去后要先过一遍审核，通过前只有你自己看得见。
+        </text>
+      </view>
+    </block>
+  </view>
+</scroll-view>

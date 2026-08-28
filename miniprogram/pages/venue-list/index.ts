@@ -14,6 +14,8 @@ Page({
     keyword: '',
     venues: [] as Venue[],
     loading: false,
+    /** scroll-view 刷新态的受控位。刷完必须置回 false，否则刷新圈不收。 */
+    refreshing: false,
   },
 
   /** 每敲一个字都发请求会把后端打满，也会让结果闪烁：停手 300ms 才搜。 */
@@ -30,11 +32,17 @@ Page({
     syncTabBar(this);
   },
 
-  async onPullDownRefresh() {
+  /**
+   * 下拉刷新。挂在 scroll-view 的 `bindrefresherrefresh` 上而不是页面的
+   * `onPullDownRefresh` —— Skyline 没有全局滚动，页面级回调没有载体。
+   * `refreshing` 是受控状态位，取代 wx.stopPullDownRefresh()。
+   */
+  async onRefresh() {
+    this.setData({ refreshing: true });
     try {
       await this.load(this.data.keyword);
     } finally {
-      wx.stopPullDownRefresh();
+      this.setData({ refreshing: false });
     }
   },
 

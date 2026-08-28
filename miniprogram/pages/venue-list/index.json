@@ -1,6 +1,5 @@
 {
   "navigationBarTitleText": "周边",
-  "enablePullDownRefresh": true,
   "usingComponents": {
     "venue-card": "/components/venue-card/index",
     "filter-chips": "/components/filter-chips/index",
