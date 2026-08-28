@@ -1,5 +1,12 @@
 import { Logger, Module } from '@nestjs/common';
+import { Pool } from 'pg';
+import { DatabaseModule, PG_POOL } from '../database/database.module';
 import { WechatModule } from '../wechat/wechat.module';
+import {
+  AUDIT_LOG_REPOSITORY,
+  InMemoryAuditLogRepository,
+  PostgresAuditLogRepository,
+} from './audit-log.repository';
 import { CONTENT_SECURITY_API, shouldFakeContentSecurity } from './content-security';
 import { FakeContentSecurityApi } from './fake-content-security.api';
 import { WechatContentSecurityApi } from './wechat-content-security.api';
@@ -25,10 +32,24 @@ const contentSecurityProvider = {
   },
 };
 
+/** 双绑定：有库走 Postgres，无库走内存（与 FOLLOW_REPOSITORY 同款工厂）。 */
+const auditLogProvider = {
+  provide: AUDIT_LOG_REPOSITORY,
+  useFactory: (pool: Pool | null) =>
+    pool ? new PostgresAuditLogRepository(pool) : new InMemoryAuditLogRepository(),
+  inject: [PG_POOL],
+};
+
 @Module({
-  imports: [WechatModule],
-  providers: [WechatContentSecurityApi, FakeContentSecurityApi, contentSecurityProvider],
+  imports: [WechatModule, DatabaseModule],
+  providers: [
+    WechatContentSecurityApi,
+    FakeContentSecurityApi,
+    contentSecurityProvider,
+    auditLogProvider,
+  ],
   // 只吐令牌，不吐两个实现本体：业务代码因此拿不到「绕开开关直接调真微信」的路径。
-  exports: [CONTENT_SECURITY_API],
+  // 审计流水同理 —— 拿到的是接口，接口上没有 update/delete。
+  exports: [CONTENT_SECURITY_API, AUDIT_LOG_REPOSITORY],
 })
 export class ModerationModule {}
