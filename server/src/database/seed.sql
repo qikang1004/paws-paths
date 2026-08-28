@@ -14,6 +14,19 @@ INSERT INTO users (id, openid, nickname, avatar_url, is_verified_owner) VALUES
   ('u-8','openid-mimi','点点','https://picsum.photos/seed/paw-u8/120/120',false)
 ON CONFLICT DO NOTHING;
 
+-- 阶段 3：一个运营角色用户，供复核端点的测试与走查用。
+-- id 刻意不叫 u-9 —— 集成用例按 `^u-[0-9]+$` 数种子用户（8 位主人），
+-- 编号进去就把那条计数断言撞红了。它也不养宠物，不影响宠物与动态的计数。
+--
+-- 生产库不靠这条：SEED_DEMO_DATA 在生产是关的，运营账号的 role 必须手工授予
+-- （已记进 RELEASE_CHECKLIST.md）。
+--
+-- **不追加** audit_log / moderation_tasks 的种子行：它们是流水与队列，
+-- 种子里塞假数据会让「本轮真的写进去了几条」数不清。
+INSERT INTO users (id, openid, nickname, avatar_url, is_verified_owner, role) VALUES
+  ('u-mod','openid-moderator','审核员','https://picsum.photos/seed/paw-mod/120/120',false,'moderator')
+ON CONFLICT DO NOTHING;
+
 INSERT INTO pets (id, owner_id, name, species, breed, gender, birth_date, bio, personality_tags, location, last_active_at) VALUES
   ('p-1','u-1','大黄','dog','金毛','male','2022-05-01','爱玩水的暖男，见到谁都摇尾巴。','{"黏人","爱玩水"}',ST_SetSRID(ST_MakePoint(116.4040,39.9060),4326),'2026-08-20T10:00:00Z'),
   ('p-2','u-2','奶昔','cat','布偶','female','2024-02-14','蓝眼睛的小公主，喜欢被摸下巴。','{"温柔","爱睡觉"}',ST_SetSRID(ST_MakePoint(116.4100,39.9020),4326),'2026-08-21T08:30:00Z'),

@@ -25,7 +25,7 @@ describeDb('postgres integration', () => {
     await pool.end();
   });
 
-  it('建出 9 张业务表', async () => {
+  it('建出 11 张业务表', async () => {
     const { rows } = await pool.query(
       `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`,
     );
@@ -40,10 +40,28 @@ describeDb('postgres integration', () => {
       'view_history',
       'posts',
       'post_images',
+      'audit_log',
+      'moderation_tasks',
     ]) {
       expect(names).toContain(t);
     }
   });
+
+  /**
+   * 在事务里跑探针再回滚：本组好几条要**插入成功**才能验（部分唯一索引得先有一条
+   * 未处理工单占位），而这个库是共享的远程实例，留下的行会让后面的走查数不清。
+   * 既有那些探针都是「插入必失败」，失败本身就不留数据，所以它们不需要这个。
+   */
+  const inRollback = async (fn: (c: import('pg').PoolClient) => Promise<void>): Promise<void> => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await fn(client);
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
+  };
 
   describe('阶段 2 新表的约束（真库层面）', () => {
     it('follows 的 (follower_id, target_pet_id) 唯一约束真实生效', async () => {
@@ -123,6 +141,127 @@ describeDb('postgres integration', () => {
           ['po-fk-probe'],
         ),
       ).rejects.toThrow(/foreign key/i);
+    });
+  });
+
+  // 阶段 3 的三处变更（spec §4.4）。单元测试只能证明 SQL 文本长什么样，
+  // 「约束真的生效」「部分索引真的只约束未处理的行」都得在真库上验。
+  describe('阶段 3 的审核流水与工单队列（真库层面）', () => {
+    it('users.role 加列成功，既有用户自动落 user，非法值被拦', async () => {
+      const { rows } = await pool.query<{ role: string; n: string }>(
+        `SELECT role, count(*)::text AS n FROM users GROUP BY role`,
+      );
+      // 不写死总数（种子之外可能有走查留下的用户），只钉「都是合法值且有 user」。
+      expect(rows.length).toBeGreaterThan(0);
+      for (const r of rows) expect(['user', 'moderator', 'admin']).toContain(r.role);
+      expect(rows.some((r) => r.role === 'user')).toBe(true);
+
+      await inRollback(async (c) => {
+        await expect(
+          c.query(`UPDATE users SET role = '超级管理员' WHERE id = 'u-1'`),
+        ).rejects.toThrow(/check constraint|violates/i);
+      });
+    });
+
+    it('种子里有一个 moderator，供复核端点的测试与走查用', async () => {
+      const { rows } = await pool.query<{ role: string }>(
+        `SELECT role FROM users WHERE id = 'u-mod'`,
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].role).toBe('moderator');
+    });
+
+    it('audit_log 的 action 与 target_type CHECK 拦下非法值', async () => {
+      await inRollback(async (c) => {
+        await expect(
+          c.query(
+            `INSERT INTO audit_log (id, actor_id, action, target_type, target_id, status_before, status_after)
+             VALUES ('al-probe','u-1','删掉','post','po-1','approved','rejected')`,
+          ),
+        ).rejects.toThrow(/check constraint|violates/i);
+      });
+      await inRollback(async (c) => {
+        await expect(
+          c.query(
+            `INSERT INTO audit_log (id, actor_id, action, target_type, target_id, status_before, status_after)
+             VALUES ('al-probe','u-1','report','pet_photo','pp-1','approved','pending_review')`,
+          ),
+        ).rejects.toThrow(/check constraint|violates/i);
+      });
+    });
+
+    it('audit_log 的 actor_id 可空且不挂外键——机审没有操作人，流水要比主体活得久', async () => {
+      await inRollback(async (c) => {
+        // actor_id 为 NULL：机审的流水。
+        await c.query(
+          `INSERT INTO audit_log (id, actor_id, action, target_type, target_id, status_before, status_after)
+           VALUES ('al-auto-probe',NULL,'auto_reject','post','po-1','pending','rejected')`,
+        );
+        // actor_id 指向不存在的用户也能写进去：没有外键。代价是拼错不会被库拦住，接受。
+        await c.query(
+          `INSERT INTO audit_log (id, actor_id, action, target_type, target_id, status_before, status_after)
+           VALUES ('al-ghost-probe','u-已注销','report','post','po-1','approved','pending_review')`,
+        );
+        const { rows } = await c.query<{ n: string }>(
+          `SELECT count(*)::text AS n FROM audit_log WHERE id IN ('al-auto-probe','al-ghost-probe')`,
+        );
+        expect(rows[0].n).toBe('2');
+      });
+    });
+
+    it('部分唯一索引只约束未处理的工单：同目标可以被举报、复核、再举报', async () => {
+      await inRollback(async (c) => {
+        const ins = (id: string, result: string | null): Promise<unknown> =>
+          c.query(
+            `INSERT INTO moderation_tasks (id, target_type, target_id, source, reported_by, result, handled_by, handled_at)
+             VALUES ($1,'post','po-idx-probe','user_report','u-1',$2,
+                     CASE WHEN $2::text IS NULL THEN NULL ELSE 'u-mod' END,
+                     CASE WHEN $2::text IS NULL THEN NULL ELSE now() END)`,
+            [id, result],
+          );
+
+        // 已处理的工单不受约束：同一目标可以有任意多条历史。
+        await ins('mt-done-1', 'approved');
+        await ins('mt-done-2', 'rejected');
+        // 未处理的只能有一条。
+        await ins('mt-open-1', null);
+        await expect(ins('mt-open-2', null)).rejects.toThrow(/duplicate key|unique/i);
+      });
+    });
+
+    it('moderation_tasks 的 result 与 source CHECK 生效', async () => {
+      await inRollback(async (c) => {
+        await expect(
+          c.query(
+            `INSERT INTO moderation_tasks (id, target_type, target_id, source, result)
+             VALUES ('mt-probe','post','po-1','user_report','待定')`,
+          ),
+        ).rejects.toThrow(/check constraint|violates/i);
+      });
+      await inRollback(async (c) => {
+        await expect(
+          c.query(
+            `INSERT INTO moderation_tasks (id, target_type, target_id, source)
+             VALUES ('mt-probe','post','po-1','管理员随手点的')`,
+          ),
+        ).rejects.toThrow(/check constraint|violates/i);
+      });
+    });
+
+    it('两张表的查询路径都有索引：流水按目标查、队列按创建时间取', async () => {
+      const { rows } = await pool.query<{ indexname: string }>(
+        `SELECT indexname FROM pg_indexes
+         WHERE tablename IN ('audit_log','moderation_tasks')`,
+      );
+      const names = rows.map((r) => r.indexname);
+      for (const idx of [
+        'audit_log_target_idx',
+        'audit_log_actor_idx',
+        'moderation_tasks_open_target_idx',
+        'moderation_tasks_queue_idx',
+      ]) {
+        expect(names).toContain(idx);
+      }
     });
   });
 

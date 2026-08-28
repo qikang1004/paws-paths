@@ -125,8 +125,76 @@ CREATE TABLE IF NOT EXISTS post_images (
 );
 CREATE INDEX IF NOT EXISTS post_images_post_idx ON post_images (post_id, sort_order);
 
+-- ── 阶段 3：举报与人工复核 ──────────────────────────────────────────
+-- spec §4.4 的两张表。职责不同，不可互相替代（spec 原话）：
+-- audit_log 是不可变流水，只追加；moderation_tasks 是待处理队列，会被更新。
+
+-- 审核动作的不可变流水。
+--
+-- actor_id 与 target_id 都不挂外键，理由不同：
+--   actor_id：流水必须比它记录的主体活得久。ON DELETE SET NULL 会改写一条
+--     本该不可变的记录，RESTRICT 会让有审核历史的用户永远删不掉。
+--   target_id：目标是多态的（post / post_image 两张表），同 favorites/view_history。
+-- 代价是拼错的 actor_id 不会被库拦住，接受。
+-- 机审的流水 actor_id 为 NULL —— 那不是人做的动作。
+CREATE TABLE IF NOT EXISTS audit_log (
+  id TEXT PRIMARY KEY,
+  actor_id TEXT,
+  action TEXT NOT NULL
+    CHECK (action IN ('report','review_approve','review_reject','auto_approve','auto_reject')),
+  target_type TEXT NOT NULL CHECK (target_type IN ('post','post_image')),
+  target_id TEXT NOT NULL,
+  status_before TEXT NOT NULL
+    CHECK (status_before IN ('pending','approved','pending_review','rejected')),
+  status_after TEXT NOT NULL
+    CHECK (status_after IN ('pending','approved','pending_review','rejected')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS audit_log_target_idx ON audit_log (target_type, target_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_log_actor_idx ON audit_log (actor_id, created_at DESC);
+
+-- 待处理的审核工单。result IS NULL 即待处理。
+-- source 保留 spec §4.4 的三个值，但本阶段机审**不入队**（机审当场就有结论，
+-- 入队等于建一条立刻要关掉的工单）。
+--
+-- reported_by 与 handled_by **挂**了外键（ON DELETE SET NULL）：工单是队列不是流水，
+-- 运营账号注销后把指针置空是可接受的，而队列本身不承担合规留痕的职责 —— 那是
+-- audit_log 的事。这与 audit_log.actor_id 不挂外键的取向不矛盾，两张表职责不同。
+CREATE TABLE IF NOT EXISTS moderation_tasks (
+  id TEXT PRIMARY KEY,
+  target_type TEXT NOT NULL CHECK (target_type IN ('post','post_image')),
+  target_id TEXT NOT NULL,
+  source TEXT NOT NULL CHECK (source IN ('wx_auto','user_report','manual')),
+  reported_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  reason TEXT,
+  result TEXT CHECK (result IN ('approved','rejected')),
+  handled_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  handled_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- 举报幂等的实现：同一目标同时只能有一条未处理工单。
+-- 部分索引而不是整表唯一 —— 同一条内容可以被举报、复核、再被举报第二次。
+CREATE UNIQUE INDEX IF NOT EXISTS moderation_tasks_open_target_idx
+  ON moderation_tasks (target_type, target_id) WHERE result IS NULL;
+CREATE INDEX IF NOT EXISTS moderation_tasks_queue_idx
+  ON moderation_tasks (created_at) WHERE result IS NULL;
+
 -- ── 既有表的迁移 ────────────────────────────────────────────────────
 -- 放在所有建表之后：这里改的是阶段 1 已经存在的表，顺序反了会改到还没建的表上。
+
+-- 运营角色。RBAC 的最小落法（spec §3.1 的运营后台复用同一 API + RBAC 隔离）。
+-- 只增一列，不改任何既有列的类型或约束。既有用户自动落 'user'。
+--
+-- CHECK 写成**列级**约束跟在同一句里，不另开 ADD CONSTRAINT：
+-- ADD CONSTRAINT 没有 IF NOT EXISTS，重跑会报重复，而列级 CHECK 跟着
+-- ADD COLUMN IF NOT EXISTS 一起幂等 —— 列已存在时整句跳过，不会重复加约束。
+-- 已在远程库上用临时表实测：重跑两次约束数不变（都是一条自动命名的
+-- users_role_check），且非法值被拦（SQLSTATE 23514）。
+--
+-- 角色**不进 JWT**：令牌是阶段 0 签的，里面没有角色字段；而把角色塞进令牌会让
+-- 「撤销运营权限」要等到令牌过期才生效。每次复核多一次 O(1) 查询，换即时可撤销。
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user'
+  CHECK (role IN ('user','moderator','admin'));
 
 -- favorites 多态化。spec §4.2 要求 (target_type, target_id)，阶段 1 实际建的是
 -- (user_id, poi_id) 复合主键，只支持场所收藏，宠物详情的收藏心标（原型 _2）

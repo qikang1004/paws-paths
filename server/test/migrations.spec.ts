@@ -65,7 +65,7 @@ describe('runMigrations', () => {
     expect(sql[1]).toContain('INSERT INTO pets');
   });
 
-  it('建表 SQL 覆盖 9 张业务表与 postgis 扩展', async () => {
+  it('建表 SQL 覆盖 11 张业务表与 postgis 扩展', async () => {
     const { pool, queries } = fakePool();
     await runMigrations(pool);
     const schema = businessSql(queries)[0];
@@ -82,6 +82,9 @@ describe('runMigrations', () => {
       'view_history',
       'posts',
       'post_images',
+      // 阶段 3
+      'audit_log',
+      'moderation_tasks',
     ]) {
       expect(schema).toContain(`CREATE TABLE IF NOT EXISTS ${t}`);
     }
@@ -104,6 +107,69 @@ describe('runMigrations', () => {
     // 图片宽高为瀑布流预估高度而存在，spec §4.1 明确非可选
     expect(schema).toContain('width INTEGER NOT NULL CHECK (width > 0)');
     expect(schema).toContain('height INTEGER NOT NULL CHECK (height > 0)');
+  });
+
+  // 阶段 3 的两张表：audit_log 是不可变流水，moderation_tasks 是待处理队列
+  // （spec §4.4 原话「不可互相替代」）。真库断言在 postgres.integration.spec.ts。
+  it('audit_log 带齐动作与状态 CHECK，且 actor_id / target_id 都不挂外键', async () => {
+    const { pool, queries } = fakePool();
+    await runMigrations(pool);
+    const schema = businessSql(queries)[0];
+    const create = schema.slice(schema.indexOf('CREATE TABLE IF NOT EXISTS audit_log'));
+    const body = create.slice(0, create.indexOf(');'));
+
+    expect(body).toContain(
+      "CHECK (action IN ('report','review_approve','review_reject','auto_approve','auto_reject'))",
+    );
+    expect(body).toContain("CHECK (target_type IN ('post','post_image'))");
+    // 迁移前后两个状态都要落，且都受四状态 CHECK 约束。
+    expect(body).toContain('status_before TEXT NOT NULL');
+    expect(body).toContain('status_after TEXT NOT NULL');
+    // 流水必须比它记录的主体活得久：挂外键会在删用户时改写或阻塞一条不可变记录。
+    expect(body).not.toContain('actor_id TEXT NOT NULL');
+    expect(body).not.toMatch(/actor_id[^,]*REFERENCES/);
+    expect(body).not.toMatch(/target_id[^,]*REFERENCES/);
+  });
+
+  it('moderation_tasks 的未处理工单有部分唯一索引，这是举报幂等的实现', async () => {
+    const { pool, queries } = fakePool();
+    await runMigrations(pool);
+    const schema = businessSql(queries)[0];
+
+    // 部分索引而不是整表唯一：同一条内容可以被举报、复核、再被举报第二次。
+    expect(schema).toMatch(
+      /CREATE UNIQUE INDEX IF NOT EXISTS moderation_tasks_open_target_idx\s+ON moderation_tasks \(target_type, target_id\) WHERE result IS NULL/,
+    );
+
+    const create = schema.slice(schema.indexOf('CREATE TABLE IF NOT EXISTS moderation_tasks'));
+    const body = create.slice(0, create.indexOf(');'));
+    // source 保留 spec §4.4 的三个值，即使本阶段机审不入队。
+    expect(body).toContain("CHECK (source IN ('wx_auto','user_report','manual'))");
+    // result 可空：NULL 即待处理，这是队列语义的载体。
+    expect(body).toContain("result TEXT CHECK (result IN ('approved','rejected'))");
+    expect(body).not.toContain('result TEXT NOT NULL');
+    // 队列不承担合规留痕，运营账号注销后置空指针可接受——与 audit_log 取向不同。
+    expect(body).toMatch(/reported_by TEXT REFERENCES users\(id\) ON DELETE SET NULL/);
+    expect(body).toMatch(/handled_by TEXT REFERENCES users\(id\) ON DELETE SET NULL/);
+  });
+
+  // users 是阶段 1 建的表，阶段 3 只给它加一列 role（Global Constraint 22：只增不改）。
+  it('users.role 用 ADD COLUMN IF NOT EXISTS 加列，CHECK 写成列级约束', async () => {
+    const { pool, queries } = fakePool();
+    await runMigrations(pool);
+    const schema = businessSql(queries)[0];
+
+    // 列级 CHECK 跟着 ADD COLUMN IF NOT EXISTS 一起幂等；ADD CONSTRAINT 没有
+    // IF NOT EXISTS，重跑会报重复。所以这里钉住「一句话」的形态。
+    expect(schema).toMatch(
+      /ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user'\s+CHECK \(role IN \('user','moderator','admin'\)\)/,
+    );
+    // 不许退化成另开一句 ADD CONSTRAINT。
+    expect(schema).not.toMatch(/ALTER TABLE users ADD CONSTRAINT/);
+    // 加列语句必须在迁移区（所有建表之后）。
+    expect(schema.indexOf('ADD COLUMN IF NOT EXISTS role')).toBeGreaterThan(
+      schema.indexOf('-- ── 既有表的迁移'),
+    );
   });
 
   // favorites 是阶段 1 建的表，阶段 2 要把它从「只支持场所」改成多态
