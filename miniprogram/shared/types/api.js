@@ -12,6 +12,19 @@ exports.ERROR_CODES = {
     AUDIT_REJECTED: 42201,
     LOCATION_REQUIRED: 42202,
     FOLLOW_SELF: 42203,
+    /**
+     * 举报的 `target_type` 不在白名单里（本阶段只有 `post` / `post_image`）。
+     * 与 `VALIDATION_FAILED` 分开是为了让客户端能认出「这个类型服务端压根不支持」，
+     * 而不是「这次的参数填错了」——前者重试也没用。
+     */
+    MODERATION_TARGET_INVALID: 42204,
+    /**
+     * 工单已被别人处理。并发复核的败者拿这个（拿票的 UPDATE 影响行数为 0）。
+     *
+     * 刻意**没有** `ALREADY_REPORTED`：重复举报是幂等成功，不是错误 ——
+     * 内容已经撤下、工单已在队列里，这就是期望状态。
+     */
+    MODERATION_TASK_HANDLED: 42205,
     RATE_LIMITED: 42900,
     INTERNAL: 50000,
     UPSTREAM_WECHAT: 50201,
@@ -32,6 +45,8 @@ exports.ERROR_MESSAGES = {
     [exports.ERROR_CODES.AUDIT_REJECTED]: '内容未通过审核',
     [exports.ERROR_CODES.LOCATION_REQUIRED]: '该功能需要位置信息',
     [exports.ERROR_CODES.FOLLOW_SELF]: '不能关注自己的宠物',
+    [exports.ERROR_CODES.MODERATION_TARGET_INVALID]: '这类内容暂不支持举报',
+    [exports.ERROR_CODES.MODERATION_TASK_HANDLED]: '这条工单已被处理',
     [exports.ERROR_CODES.RATE_LIMITED]: '操作太频繁，请稍后再试',
     [exports.ERROR_CODES.INTERNAL]: FALLBACK_MESSAGE,
     [exports.ERROR_CODES.UPSTREAM_WECHAT]: '微信服务暂时不可用',

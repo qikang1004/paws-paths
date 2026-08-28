@@ -7,3 +7,4 @@ export * from './filter';
 export * from './social';
 export * from './profile';
 export * from './upload';
+export * from './moderation';

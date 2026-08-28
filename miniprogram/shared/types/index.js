@@ -25,3 +25,4 @@ __exportStar(require("./filter"), exports);
 __exportStar(require("./social"), exports);
 __exportStar(require("./profile"), exports);
 __exportStar(require("./upload"), exports);
+__exportStar(require("./moderation"), exports);
