@@ -26,6 +26,18 @@ export interface DetailView {
   photos: PhotoItem[];
   album: PhotoItem[];
   urls: string[];
+  /**
+   * 关注态。服务端 `PetDetail.isFollowing` 必填、未登录一律 `false`，
+   * 所以这里原样带过来，页面不写 `?? false`。
+   */
+  isFollowing: boolean;
+  /**
+   * 关注按钮显不显示。自己的宠物不显示 —— 关注自己在服务端是
+   * `FOLLOW_SELF:42203`，让按钮出现再报错等于把一个必然失败的动作摆在用户面前。
+   */
+  showFollow: boolean;
+  /** 按钮文案。放在视图里而不是 wxml 的三元表达式里：wxml 不做判断。 */
+  followText: string;
 }
 
 const GENDER_TEXT: Record<PetGender, string> = {
@@ -43,6 +55,14 @@ function buildAlbum(pet: PetDetail): PhotoItem[] {
     ratio: photo.width > 0 ? photo.height / photo.width : 1,
     index,
   }));
+}
+
+/** 关注按钮的两种文案。查表而不是三元表达式 —— 与别处的文案查表同款。 */
+const FOLLOW_TEXT = { on: '已关注', off: '关注' } as const;
+
+/** 关注态 → 按钮文案。导出给页面在就地翻转时复用，免得两处各写一份映射。 */
+export function followTextOf(isFollowing: boolean): string {
+  return isFollowing ? FOLLOW_TEXT.on : FOLLOW_TEXT.off;
 }
 
 /**
@@ -69,5 +89,8 @@ export function buildDetailView(pet: PetDetail, now?: Date): DetailView {
     photos: album,
     album,
     urls: album.map((photo) => photo.url),
+    isFollowing: pet.isFollowing,
+    showFollow: !pet.isOwn,
+    followText: followTextOf(pet.isFollowing),
   };
 }

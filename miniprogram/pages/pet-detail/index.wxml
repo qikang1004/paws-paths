@@ -25,6 +25,20 @@
       </view>
       <text class="detail__meta text-body-md c-on-surface-variant">{{view.metaText}}</text>
 
+      <!--
+        关注按钮。自己的宠物不出现（`showFollow`）—— 关注自己在服务端是
+        FOLLOW_SELF:42203，让按钮出现再报错等于把必然失败的动作摆在用户面前。
+        文案与禁用态都由页面算好，wxml 不做判断。
+      -->
+      <view class="detail__follow" wx:if="{{view.showFollow}}">
+        <sq-button
+          type="{{view.isFollowing ? 'ghost' : 'primary'}}"
+          size="md"
+          disabled="{{following}}"
+          bind:tap="onToggleFollow"
+        >{{view.followText}}</sq-button>
+      </view>
+
       <text class="detail__bio text-body-md" wx:if="{{view.bioShown}}">{{view.bio}}</text>
 
       <view class="detail__tags" wx:if="{{view.personalityTags.length}}">

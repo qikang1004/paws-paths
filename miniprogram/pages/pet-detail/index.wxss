@@ -74,3 +74,10 @@
 .detail__state {
   padding-top: var(--space-xl);
 }
+
+/* 关注按钮独占一行，与 meta 行分开一档间距。不与距离挤在标题行里：
+   那行右侧已经放了距离，两个元素抢同一处会在长名字下折行。 */
+.detail__follow {
+  display: flex;
+  padding-top: var(--space-sm);
+}

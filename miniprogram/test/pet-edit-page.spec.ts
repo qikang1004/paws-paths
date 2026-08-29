@@ -39,6 +39,8 @@ const detail = (over: Partial<PetDetail> = {}): PetDetail => ({
   ],
   isFollowing: false,
   isFavorite: false,
+  // 编辑页只会打开自己的宠物 —— 这个夹具因此恒为 true。
+  isOwn: true,
   ...over,
 });
 
