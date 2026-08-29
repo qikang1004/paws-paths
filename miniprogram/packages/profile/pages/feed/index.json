@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "关注动态",
+  "usingComponents": {
+    "audit-badge": "/components/audit-badge/index",
+    "empty-state": "/components/empty-state/index",
+    "sq-button": "/components/sq-button/index"
+  }
+}

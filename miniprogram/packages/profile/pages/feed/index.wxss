@@ -1,0 +1,69 @@
+.feed {
+  padding-top: var(--space-md);
+}
+
+.feed__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.feed__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* 宠物名与时间一行两端对齐。跨宠物混排，宠物名是这张卡最重要的识别信息，
+   所以它占标题字号而不是与时间同级。 */
+.feed__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+/* 名字长了截断，别把时间挤出卡片 —— 时间的宽度是固定的，名字才该让位。 */
+.feed__pet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 正文不截断，让卡片跟着内容长；长串不留空隙地断行。 */
+.feed__text {
+  word-break: break-all;
+}
+
+.feed__photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.feed__photo {
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-container);
+}
+
+.feed__footer {
+  display: flex;
+  justify-content: center;
+  padding-top: var(--space-md);
+}
+
+/* 举报那一行靠右，与正文/图片分开一档间距。整行只有一个操作，
+   所以不画分隔线 —— 那会让卡片看起来像有两块内容。 */
+.feed__actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-xs);
+}
+
+/* 点击区比字号大一圈：低频操作误触的代价高（举报不可撤销），
+   但太小又点不中，所以给左右内边距而不是缩小热区。 */
+.feed__report {
+  padding: var(--space-xs) var(--space-sm);
+}

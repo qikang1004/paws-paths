@@ -1,0 +1,83 @@
+<!-- Skyline 不提供全局滚动，页面内容挂在铺满的 scroll-view 里（见 app.wxss 的说明）。 -->
+<scroll-view
+  class="page-scroll"
+  scroll-y="{{true}}"
+  refresher-enabled="{{true}}"
+  refresher-triggered="{{refreshing}}"
+  refresher-default-style="black"
+  bindrefresherrefresh="onRefresh"
+  lower-threshold="200"
+  bindscrolltolower="onLoadMore"
+>
+  <view class="feed page-gutter">
+    <view class="feed__list" wx:if="{{posts.length}}">
+      <view class="feed__item card" wx:for="{{posts}}" wx:key="id">
+        <view class="feed__head">
+          <!-- 跨宠物混排，「这条是谁发的」必须显示 —— 不像「我的动态」那样
+               靠页面顶部的切换条隐含。 -->
+          <text class="feed__pet text-title-sm">{{item.petName}}</text>
+          <text class="text-label-md c-on-surface-variant">{{item.timeText}}</text>
+        </view>
+
+        <!-- feed 里全是别人 approved 的内容，角标理论上不出现；复用组件是为了
+             「万一出现」时的口径与别处一致，而不是新写一份判断。 -->
+        <audit-badge status="{{item.auditStatus}}" reason="{{item.badge.reasonText}}" />
+
+        <text class="feed__text text-body-md">{{item.content}}</text>
+
+        <view class="feed__photos" wx:if="{{item.hasImages}}">
+          <image
+            class="feed__photo"
+            wx:for="{{item.images}}"
+            wx:for-item="image"
+            wx:key="id"
+            src="{{image.url}}"
+            mode="aspectFill"
+            data-post="{{item.id}}"
+            data-index="{{index}}"
+            bindtap="onImageTap"
+          />
+        </view>
+
+        <!--
+          举报入口。放在卡片底部一行而不是右上角的「···」：这一页只有举报这一个
+          操作，多套一层菜单只是多一次点击。文案写「举报」不写图标 —— 图标在这种
+          低频且后果不可撤销的动作上认不出来。
+        -->
+        <view class="feed__actions">
+          <text
+            class="feed__report text-label-md c-on-surface-variant"
+            data-id="{{item.id}}"
+            bindtap="onReport"
+            aria-role="button"
+          >举报</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 两种空态必须分开：「一只都没关注」该去广场找宠物，
+         「关注了但他们没发过」去关注列表看看关注了谁。合成一种会让前者
+         以为关注流坏了。followingCount 为 -1 表示还没取到，两种都不显示。 -->
+    <empty-state
+      wx:if="{{!posts.length && !loading && followingCount === 0}}"
+      icon="paw"
+      title="还没有关注任何宠物"
+      hint="去广场逛逛，关注几只感兴趣的"
+    >
+      <sq-button type="primary" size="md" bind:tap="onGoPlaza">去广场</sq-button>
+    </empty-state>
+
+    <empty-state
+      wx:elif="{{!posts.length && !loading && followingCount > 0}}"
+      icon="paw"
+      title="关注的宠物还没发过动态"
+      hint="他们发了你就能在这里看到"
+    >
+      <sq-button type="ghost" size="md" bind:tap="onGoFollowing">看看我的关注</sq-button>
+    </empty-state>
+
+    <view class="feed__footer" wx:if="{{posts.length && !hasMore}}">
+      <text class="text-body-sm c-on-surface-variant">没有更多了</text>
+    </view>
+  </view>
+</scroll-view>

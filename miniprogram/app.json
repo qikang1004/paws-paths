@@ -12,6 +12,7 @@
       "pages": [
         "pages/pet-edit/index",
         "pages/following/index",
+        "pages/feed/index",
         "pages/my-posts/index",
         "pages/favorites/index",
         "pages/history/index",

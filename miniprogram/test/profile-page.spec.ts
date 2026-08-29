@@ -76,14 +76,17 @@ describe('buildProfileView', () => {
 });
 
 describe('PROFILE_ENTRIES', () => {
-  it('四个入口指向 profile 分包里真实声明过的页面', () => {
+  it('五个入口指向 profile 分包里真实声明过的页面', () => {
     const app = JSON.parse(read('app.json')) as {
       subPackages: { root: string; pages: string[] }[];
     };
     const declared = app.subPackages.flatMap((pkg) => pkg.pages.map((p) => `/${pkg.root}/${p}`));
+    // 顺序也钉住：`feed` 紧跟在 `following` 后面，两者是关注这件事的两面
+    // （关注了谁 / 他们发了什么）。阶段 3 Task 10 加的就是那一项。
     expect(PROFILE_ENTRIES.map((e) => e.key)).toEqual([
       'posts',
       'following',
+      'feed',
       'favorites',
       'history',
     ]);

@@ -49,10 +49,12 @@ export interface EntryView {
   url: string;
 }
 
-/** 四个入口。路径与 `app.json` 的 `packages/profile` 分包声明一一对应。 */
+/** 五个入口。路径与 `app.json` 的 `packages/profile` 分包声明一一对应。 */
 export const PROFILE_ENTRIES: EntryView[] = [
   { key: 'posts', label: '我的动态', url: '/packages/profile/pages/my-posts/index' },
   { key: 'following', label: '我的关注', url: '/packages/profile/pages/following/index' },
+  // 与「我的关注」相邻：两者是关注这件事的两面 —— 关注了谁 / 他们发了什么。
+  { key: 'feed', label: '关注动态', url: '/packages/profile/pages/feed/index' },
   { key: 'favorites', label: '我的收藏', url: '/packages/profile/pages/favorites/index' },
   { key: 'history', label: '浏览历史', url: '/packages/profile/pages/history/index' },
 ];
