@@ -59,6 +59,17 @@ export interface PostListQuery {
   pageSize: number;
 }
 
+/**
+ * 关注流的入参。**没有 `petId`** —— 取的是「这个人关注的所有宠物」。
+ *
+ * `viewerId` 不可为 null：feed 是「我的」数据，端点挂着 `AuthGuard`。
+ */
+export interface FeedQuery {
+  viewerId: string;
+  page: number;
+  pageSize: number;
+}
+
 export interface PostRepository {
   /** 一律落 `pending`（库里的默认值），机审结论随后走 `setAuditStatus`。 */
   create(input: PostCreateInput): Promise<PostRow>;
@@ -67,10 +78,41 @@ export interface PostRepository {
    * 会让「一页 10 条」变成「一页 3 条还说 hasMore」——分页就不对了。
    */
   list(query: PostListQuery): Promise<{ items: PostRow[]; hasMore: boolean }>;
+  /**
+   * 关注流：**这个人关注的所有宠物**的动态，跨宠物按发布时间倒序混排。
+   *
+   * 与 `list` 的两处关键差别：
+   *   · 只出**公开状态**的内容，**没有**「我是作者所以能看」那条例外 ——
+   *     feed 里全是别人的动态，加上作者例外反而会把自己的 `pending` 内容漏进来；
+   *   · 排除自己发的（Global Constraint 30）。不靠「关注表里不会有自己的宠物」
+   *     这个假设：那条约束由 `FollowsService` 在端点上把关，仓储层拦不住，
+   *     而 feed 的正确性不该依赖另一层的校验。
+   */
+  listFeed(query: FeedQuery): Promise<{ items: PostRow[]; hasMore: boolean }>;
   /** 不做可见性过滤：判定要 `authorId`，交给上层的 `isVisibleTo`（详情要区分 404 与 200）。 */
   getById(id: string): Promise<PostRow | null>;
   /** 迁移动态本身的审核状态。合法性由上层的 `assertTransition` 把关。 */
   setAuditStatus(id: string, status: AuditStatus, rejectReason: string | null): Promise<void>;
+  /**
+   * 按**图片自己的 id** 反查图片与它所属的动态。
+   *
+   * 一并返回动态是因为图片行上没有作者（`PostImageRow` 只有审核状态），
+   * 而举报一张图要判「举报人看不看得见它」，那要作者。
+   */
+  findImageById(imageId: string): Promise<{ post: PostRow; image: PostImageRow } | null>;
+  /** 迁移单张图片的审核状态。与所属动态的状态**互不影响**。 */
+  setImageAuditStatus(imageId: string, status: AuditStatus): Promise<void>;
+}
+
+/**
+ * 无库模式下「这个人关注了哪些宠物」的适配面。
+ *
+ * 关注关系存在 `InMemoryFollowRepository` 里，动态存在这里 —— 内存实现没有 JOIN
+ * 可用，只能问一句。签名与 `FollowRepository.followingPetIds` 一致（结构化兼容，
+ * 直接把那个仓储注进来就行），所以这个接口只是为了让动态域不必 import 关注域的类型。
+ */
+export interface InMemoryFeedFollowSource {
+  followingPetIds(userId: string, petIds: string[]): Promise<Set<string>>;
 }
 
 /** 对外可见的状态。从状态机筛，不写死字面量（spec §4.5 要求状态机唯一）。 */
@@ -165,7 +207,12 @@ const POST_SEED: readonly (Omit<PostRow, 'publishedAt' | 'images'> & {
 export class InMemoryPostRepository implements PostRepository {
   private readonly rows: PostRow[];
 
-  constructor() {
+  /**
+   * `follows` 是关注流要的 —— 只有它能回答「这个人关注了哪些宠物」。
+   * 可选：`@Optional()` 在模块里给，没注入时 feed 恒为空列表（无库演示里
+   * 关注关系本来就可能没建过），而不是抛「依赖缺失」。
+   */
+  constructor(private readonly follows?: InMemoryFeedFollowSource) {
     const now = Date.now();
     this.rows = POST_SEED.map(({ hoursAgo, images, ...rest }) => ({
       ...rest,
@@ -208,11 +255,64 @@ export class InMemoryPostRepository implements PostRepository {
     return row ? this.clone(row) : null;
   }
 
+  /**
+   * 关注流。可见性只看**公开状态**，不做作者例外；再排掉自己发的。
+   *
+   * 候选宠物 id 先从自己存的动态里收集，再问一次关注仓储 —— 反过来（先取关注列表
+   * 再逐个查动态）在内存里也行，但那要求关注仓储支持「取全部」，而它的接口是分页的。
+   */
+  async listFeed({ viewerId, page, pageSize }: FeedQuery): Promise<{
+    items: PostRow[];
+    hasMore: boolean;
+  }> {
+    if (!this.follows) return { items: [], hasMore: false };
+    const candidatePetIds = [...new Set(this.rows.map((row) => row.petId))];
+    const followed = await this.follows.followingPetIds(viewerId, candidatePetIds);
+
+    const visible = this.rows
+      .filter(
+        (row) =>
+          followed.has(row.petId) &&
+          // Global Constraint 30：自己的动态不进自己的 feed。判在可见性之前 ——
+          // 顺序无关紧要，但写在前面才与 SQL 里那个 `<>` 的位置对得上。
+          row.authorId !== viewerId &&
+          // 注意传的是 false（「我不是作者」）：feed 里全是别人的动态，
+          // 而排掉自己之后这个参数恒为 false，等价于只留公开状态。
+          isVisibleTo(row.auditStatus, false),
+      )
+      .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+    const offset = (page - 1) * pageSize;
+    const slice = visible.slice(offset, offset + pageSize);
+    return {
+      items: slice.map((row) => this.clone(row)),
+      hasMore: offset + slice.length < visible.length,
+    };
+  }
+
   async setAuditStatus(id: string, status: AuditStatus, rejectReason: string | null): Promise<void> {
     const row = this.rows.find((candidate) => candidate.id === id);
     if (!row) return;
     row.auditStatus = status;
     row.rejectReason = rejectReason;
+  }
+
+  async findImageById(imageId: string): Promise<{ post: PostRow; image: PostImageRow } | null> {
+    for (const row of this.rows) {
+      const image = row.images.find((candidate) => candidate.id === imageId);
+      if (image) return { post: this.clone(row), image: { ...image } };
+    }
+    return null;
+  }
+
+  async setImageAuditStatus(imageId: string, status: AuditStatus): Promise<void> {
+    for (const row of this.rows) {
+      // 找的是**存着的那份**（不是 clone），改的才作数。
+      const image = row.images.find((candidate) => candidate.id === imageId);
+      if (image) {
+        image.auditStatus = status;
+        return;
+      }
+    }
   }
 
   /** 出仓库的行一律是副本：调用方投影 DTO 时改到的不该是这里存的那份。 */
@@ -359,11 +459,67 @@ export class PostgresPostRepository implements PostRepository {
     return rows[0] ? toRow(rows[0]) : null;
   }
 
+  /**
+   * 关注流。`JOIN follows` 把「关注了谁」写进同一条语句 ——
+   * 分成「先取关注列表、再按 petId IN (...) 查动态」两条的话，第一条得取**全部**
+   * 关注（不能分页），而 feed 的分页要落在动态上。
+   *
+   * WHERE 里三件事，每一件都不能省：
+   *   · `po.audit_status = ANY($2)`：只出公开状态。**刻意没有** `OR po.author_id = $1`
+   *     那条作者例外（`list` 有）—— feed 里全是别人的动态，加上它只会把自己的
+   *     `pending` 内容漏出来；
+   *   · `po.author_id <> $1`：Global Constraint 30，自己的动态不进自己的 feed。
+   *     不靠「关注表里不会有自己的宠物」（那由 `FollowsService` 在端点上把关，
+   *     仓储层拦不住，feed 的正确性不该依赖另一层的校验）；
+   *   · JOIN 本身：没关注任何宠物时结果自然是空页，不必特判。
+   */
+  async listFeed({ viewerId, page, pageSize }: FeedQuery): Promise<{
+    items: PostRow[];
+    hasMore: boolean;
+  }> {
+    const offset = (page - 1) * pageSize;
+    // 多取一条判断 hasMore，省一次 count（同 list）。
+    const { rows } = await this.pool.query<PostQueryRow>(
+      `${SELECT_POSTS}
+       JOIN follows f ON f.target_pet_id = po.pet_id AND f.follower_id = $1
+       WHERE po.audit_status = ANY($2) AND po.author_id <> $1
+       ORDER BY po.published_at DESC, po.id DESC
+       LIMIT $3 OFFSET $4`,
+      [viewerId, PUBLIC_STATUSES, pageSize + 1, offset],
+    );
+    return { items: rows.slice(0, pageSize).map(toRow), hasMore: rows.length > pageSize };
+  }
+
   async setAuditStatus(id: string, status: AuditStatus, rejectReason: string | null): Promise<void> {
     await this.pool.query(`UPDATE posts SET audit_status = $2, reject_reason = $3 WHERE id = $1`, [
       id,
       status,
       rejectReason,
+    ]);
+  }
+
+  /**
+   * 先取图片所属的动态 id，再复用 `getById` 把整条动态（含全部图片）取回来。
+   *
+   * 两次往返而不是一条大 JOIN：`SELECT_POSTS` 已经把图片聚成数组了，重写一条
+   * 「以图片为主体」的语句等于把那段 `json_agg` 复制第二份，两份迟早分叉。
+   */
+  async findImageById(imageId: string): Promise<{ post: PostRow; image: PostImageRow } | null> {
+    const { rows } = await this.pool.query<{ post_id: string }>(
+      `SELECT post_id FROM post_images WHERE id = $1`,
+      [imageId],
+    );
+    if (!rows[0]) return null;
+    const post = await this.getById(rows[0].post_id);
+    if (!post) return null;
+    const image = post.images.find((candidate) => candidate.id === imageId);
+    return image ? { post, image } : null;
+  }
+
+  async setImageAuditStatus(imageId: string, status: AuditStatus): Promise<void> {
+    await this.pool.query(`UPDATE post_images SET audit_status = $2 WHERE id = $1`, [
+      imageId,
+      status,
     ]);
   }
 }

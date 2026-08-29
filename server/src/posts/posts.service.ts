@@ -200,6 +200,19 @@ export class PostsService implements OnModuleDestroy {
   }
 
   /**
+   * 关注流。可见性与「不含自己的动态」两件事都在仓储的 WHERE 里做完 ——
+   * 先取一页再筛，会让分页不对（同 `list` 的理由）。
+   *
+   * 投影时 `viewerId` 照常传：feed 里全是别人的动态，所以 `isAuthor` 恒为 false，
+   * 未过审的图片自然被 `toDto` 滤掉。传 null 也是同样结果，但传真实值才与
+   * 「这个人在看」这件事一致，将来加「我点赞过吗」之类的字段时不必回头改。
+   */
+  async feed(viewerId: string, opts: { page: number; pageSize: number }): Promise<PostListResponse> {
+    const { items, hasMore } = await this.posts.listFeed({ viewerId, ...opts });
+    return { items: items.map((row) => toDto(row, viewerId)), hasMore, page: opts.page };
+  }
+
+  /**
    * 详情。看不见的动态返回 404 而不是 403：两者不同的话，响应码本身就把
    * 「这条 id 有东西」告诉了探测者。
    */

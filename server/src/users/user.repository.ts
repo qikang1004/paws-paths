@@ -1,8 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { USER_ROLES, type UserRole } from '@paws/types';
 import type { Pool } from 'pg';
 
 export const USER_REPOSITORY = 'UserRepository';
+
+/**
+ * DI token：无库模式下的角色种子（`userId → role`）。
+ *
+ * 内存用户仓储没有 `users.role` 那一列可读，而运营端点的测试与无库演示都需要
+ * 造一个 moderator 出来。做成可注入的令牌而不是写死常量：写死的话每加一个
+ * 运营用例就要改仓储源码，而测试要造的身份本来就是用例自己的事。
+ */
+export const USER_ROLE_SEED = 'UserRoleSeed';
 
 /**
  * 新用户的占位昵称。users.nickname 有 NOT NULL 约束，而微信登录只给 openid，
@@ -42,6 +52,15 @@ export interface UserRepository {
   findProfile(userId: string): Promise<UserProfile | null>;
   /** 更新后的资料，用户不存在返回 null。 */
   updateProfile(userId: string, patch: UserProfilePatch): Promise<UserProfile | null>;
+  /**
+   * 只取角色，用户不存在返回 `null`。
+   *
+   * 单独一个窄方法而不扩 `findProfile` 的返回形状：那个方法是个人中心的首屏查询，
+   * 带三个计数子查询，而守卫每次请求只要一个 O(1) 的角色。三个既有调用方也不必跟着改。
+   *
+   * 角色**只从这里读**（Global Constraint 28）—— 不从 JWT 读，否则撤权要等令牌过期。
+   */
+  findRole(userId: string): Promise<UserRole | null>;
 }
 
 /** 无库时的降级实现，驱动 InMemory 模式的演示。 */
@@ -49,8 +68,28 @@ export interface UserRepository {
 export class InMemoryUserRepository implements UserRepository {
   private readonly byOpenid = new Map<string, UserRecord>();
 
+  /**
+   * 角色种子。`@Optional()` 是为了不给既有的 `UsersModule` 加必填依赖 ——
+   * 没注入时所有人都是 `user`，这正是无库演示该有的样子（谁也不是运营）。
+   */
+  constructor(
+    @Optional() @Inject(USER_ROLE_SEED) private readonly roles: Record<string, UserRole> = {},
+  ) {}
+
   async findByOpenid(openid: string): Promise<UserRecord | null> {
     return this.byOpenid.get(openid) ?? null;
+  }
+
+  /**
+   * 角色从注入的种子里读。种子里没有这个 id 就回 `null`（不是 `user`）——
+   * 「查不到这个人」与「这个人是普通用户」在守卫那边虽然都是 403，
+   * 但把两者混成同一个值会让将来「按角色分流」的代码拿不到真相。
+   */
+  async findRole(userId: string): Promise<UserRole | null> {
+    const role = this.roles[userId];
+    if (role) return role;
+    // 种子里没有，但真的建过号的人算普通用户。
+    return this.find(userId) ? 'user' : null;
   }
 
   async create(openid: string): Promise<UserRecord> {
@@ -164,6 +203,24 @@ export class PostgresUserRepository implements UserRepository {
     );
     // 计数不在 users 表里，UPDATE 的 RETURNING 给不全，回读一次拼完整资料。
     return rowCount ? this.findProfile(userId) : null;
+  }
+
+  /**
+   * 只取一列。`role` 有 NOT NULL DEFAULT 'user'（见 schema.sql 的迁移段），
+   * 所以查到行就一定有值；查不到行才是 `null`。
+   *
+   * 白名单再筛一次是为了「库里被手改成了乱值」那种情况 —— 生产上运营角色是
+   * 人工 UPDATE 授的（见 RELEASE_CHECKLIST），列级 CHECK 兜得住，但真绕过了
+   * 也不该让一个未知字符串在守卫里被当成有效角色。
+   */
+  async findRole(userId: string): Promise<UserRole | null> {
+    const { rows } = await this.pool.query<{ role: string }>(
+      `SELECT role FROM users WHERE id = $1`,
+      [userId],
+    );
+    if (!rows[0]) return null;
+    const role = rows[0].role;
+    return (USER_ROLES as readonly string[]).includes(role) ? (role as UserRole) : null;
   }
 
   private toProfile(row: Record<string, unknown>): UserProfile {

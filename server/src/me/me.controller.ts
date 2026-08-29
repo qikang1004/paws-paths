@@ -7,6 +7,7 @@ import { FavoritesService, type FavoriteListResponse } from '../favorites/favori
 import { HistoryService, type ViewHistoryListResponse } from '../history/history.service';
 import { parseProfilePatch, UsersService } from '../users/users.service';
 import { PetsService, type PetSummary } from '../pets/pets.service';
+import { PostsService, type PostListResponse } from '../posts/posts.service';
 import type { UserProfile } from '../users/user.repository';
 
 /** 形状与 `packages/types` 的 `MyPetListResponse` 一致（刻意不分页）。 */
@@ -27,6 +28,7 @@ export class MeController {
     private readonly favorites: FavoritesService,
     private readonly users: UsersService,
     private readonly pets: PetsService,
+    private readonly posts: PostsService,
   ) {}
 
   /**
@@ -100,6 +102,21 @@ export class MeController {
     // 与历史列表同理：pet/venue 混排的列表项不显示距离，坐标用不上。
     const { page, pageSize } = parseListQuery(q);
     return this.favorites.list(userId as string, { page, pageSize });
+  }
+
+  /**
+   * 关注流。路径挂 `/me/feed` 而不是给 `GET /posts` 加一个 `feed=1` 参数：
+   * 那个端点是匿名可访问的公开列表、按宠物取，而 feed 要求登录、跨宠物混排、
+   * 还刻意排除自己的动态 —— 三条例外挤进去会让它的可见性规则说不清。
+   */
+  @Get('feed')
+  async feed(
+    @Query() q: Record<string, string | undefined>,
+    @CurrentUser() userId: string | null,
+  ): Promise<PostListResponse> {
+    // feed 不吃坐标（动态不显示距离），但分页规则与其他列表一致，复用同一套校验。
+    const { page, pageSize } = parseListQuery(q);
+    return this.posts.feed(userId as string, { page, pageSize });
   }
 
   /**
