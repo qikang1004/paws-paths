@@ -51,3 +51,26 @@ git-ignored 的流程草稿里，移到仓库根显式追踪。逐项勾选。
 ## 安全跟进
 
 - [ ] 评估锁定依赖树的 76 个 `npm audit` 漏洞告警（4 low / 18 moderate / 12 high / 42 critical），决定升级或豁免。
+
+## 内容审核（阶段 3 新增）
+
+- [ ] **运营账号的 `role` 必须在生产库里手工授予。** `users.role` 默认是 `'user'`，
+      而角色**只从库里读**（Global Constraint 28：不进 JWT，否则撤权要等令牌过期）。
+      种子里的 `u-mod` 靠不住 —— `SEED_DEMO_DATA` 在生产是关的。
+      逐个授权：`UPDATE users SET role = 'moderator' WHERE id = '<真实用户 id>';`
+      授完核对一次 `SELECT id, role FROM users WHERE role <> 'user';` —— 这张表就是
+      运营后台的全部权限来源，多授一个人等于多一个能撤下任何内容的账号。
+- [ ] **`audit_log` 的备份与保留策略单独定，不能跟着库一起清。** 它是合规流水
+      （谁在什么时候把哪条内容撤下/放行），监管问起来要拿得出。三条要求：
+      ① 纳入定期备份；② **不设自动清理** —— 表上没有 TTL，也别加；
+      ③ 应用侧没有删除入口（`AuditLogRepository` 接口连 update/delete 都没有），
+      所以任何清理都只能是 DBA 的显式动作，做之前先确认保留期限。
+      与 `moderation_tasks` 分开对待：那张是可被更新的工单队列，这张是只追加的流水，
+      两者不可互相替代（Global Constraint 25）。
+- [ ] **提审前必须关掉 `FAKE_CONTENT_SECURITY` 并用正式 AppID 真跑一次机审。**
+      假实现下**没有任何内容会自动过审**（一律停在 `pending`，刻意不放行），
+      而举报要求内容当前可见 —— 两条叠起来会让「举报 → 复核」闭环在假实现下走不完。
+      走查脚本 `server/test/manual/phase3-walkthrough.mjs` 会检测并提示这一点。
+- [ ] **`POST /reports` 目前没有限流。** 一个账号可以把整页内容逐条举报，每条都会
+      立刻对所有人隐藏（直到运营复核）。上线前评估是否要接 `RateLimitModule`，
+      或至少给「短时间内大量举报」加一条告警。
