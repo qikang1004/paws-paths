@@ -51,6 +51,16 @@ export interface PetDetail {
    * 与 `isFollowing` 同款：必填、未登录一律 `false`，免得页面到处写 `?? false`。
    */
   isFavorite: boolean;
+  /**
+   * 这只宠物是不是**看的人自己的**。未登录一律 `false`。
+   *
+   * 客户端拿它决定「关注按钮出不出现」：关注自己的宠物在服务端是
+   * `FOLLOW_SELF:42203`，让按钮出现再报错等于把一个必然失败的动作摆在用户面前。
+   *
+   * 下发的是这个**布尔值**而不是 `ownerId`：主人的用户 id 不该出现在公开的详情
+   * 响应里（`PetRow` 也刻意不带它），而客户端要判的本来就只是「是不是我」。
+   */
+  isOwn: boolean;
 }
 
 export interface PetListResponse {

@@ -103,6 +103,7 @@ describe('PetDetail.isFavorite', () => {
     owner: { nickname: '阿喵', avatarUrl: null, ownerVerified: false },
     photos: [],
     isFollowing: false,
+    isOwn: false,
   };
 
   it('详情页有收藏心标（原型 _2），关注与收藏是两个独立状态', () => {
@@ -306,5 +307,48 @@ describe('PostDto', () => {
       images: [],
     };
     expect(post.id).toBe('po-9');
+  });
+});
+
+/**
+ * `PetDetail.isOwn`（阶段 3 Task 11）。
+ *
+ * 客户端靠它决定关注按钮出不出现。下发布尔值而不是 `ownerId` —— 主人的用户 id
+ * 不该出现在公开的详情响应里，而客户端要判的本来就只是「是不是我」。
+ */
+describe('PetDetail.isOwn', () => {
+  const base = {
+    id: 'p-1',
+    name: '奶糖',
+    species: 'cat' as const,
+    breed: '布偶',
+    gender: 'female' as const,
+    birthDate: '2024-02-14',
+    bio: '爱睡觉',
+    personalityTags: [],
+    distanceMeters: null,
+    owner: { nickname: '阿喵', avatarUrl: null, ownerVerified: false },
+    photos: [],
+    isFollowing: false,
+    isFavorite: false,
+  };
+
+  it('自己的宠物 isOwn 为 true，且与 isFollowing / isFavorite 相互独立', () => {
+    const mine: PetDetail = { ...base, isOwn: true, isFavorite: true };
+    // 可以收藏自己的宠物（收藏是个人书签），但关注不行 —— 三个状态各自成立。
+    expect([mine.isOwn, mine.isFollowing, mine.isFavorite]).toEqual([true, false, true]);
+  });
+
+  it('是必填的 —— 可选会让页面写 ?? false，那等于默认「不是我的」', () => {
+    // @ts-expect-error 缺 isOwn
+    const bad: PetDetail = base;
+    expect(bad.id).toBe('p-1');
+  });
+
+  it('响应里没有 ownerId —— 主人的用户 id 不下发', () => {
+    const detail: PetDetail = { ...base, isOwn: false };
+    expect(detail).not.toHaveProperty('ownerId');
+    // owner 那一层只有展示用的三样。
+    expect(Object.keys(detail.owner).sort()).toEqual(['avatarUrl', 'nickname', 'ownerVerified']);
   });
 });

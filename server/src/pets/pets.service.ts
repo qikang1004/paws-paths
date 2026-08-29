@@ -52,6 +52,14 @@ export interface PetDetail {
   photos: PetPhoto[];
   isFollowing: boolean;
   isFavorite: boolean;
+  /**
+   * 这只宠物是不是**看的人自己的**。未登录一律 false。
+   *
+   * 客户端拿它决定关注按钮出不出现（关注自己是 `FOLLOW_SELF:42203`）。
+   * 下发布尔值而不是 `ownerId` —— 主人的用户 id 不进公开响应，
+   * 同 `PetRepository.findOwnerId` 那条「ownerId 不下发客户端」的注释。
+   */
+  isOwn: boolean;
 }
 
 export interface PetListResponse {
@@ -271,7 +279,20 @@ export class PetsService {
     return { items: rows.map(toSummary) };
   }
 
-  async detail(id: string, opts?: { lat?: number; lng?: number }): Promise<PetDetail | null> {
+  /**
+   * 详情。
+   *
+   * `viewerId` 只为算 `isOwn`（关注按钮出不出现）。它是可选的 —— `update()`
+   * 内部也调这个方法，那条路径上不需要归属标记（写操作前已经 `assertOwner` 过了）。
+   *
+   * 归属走 `findOwnerId` 而不是往 `PetRow` 加 `ownerId`：主人的用户 id 不下发
+   * 客户端，混进展示投影里容易被顺手带进响应（同 `findOwnerId` 的既有注释）。
+   * 未登录时不查这一发 —— 没有 viewer 就一定不是「我的」。
+   */
+  async detail(
+    id: string,
+    opts?: { lat?: number; lng?: number; viewerId?: string | null },
+  ): Promise<PetDetail | null> {
     const coords =
       opts && typeof opts.lat === 'number' && typeof opts.lng === 'number'
         ? { lat: opts.lat, lng: opts.lng }
@@ -279,6 +300,8 @@ export class PetsService {
     const found = await this.repo.getById(id, coords);
     if (!found) return null;
     const { pet, photos } = found;
+    const viewerId = opts?.viewerId ?? null;
+    const isOwn = viewerId != null && (await this.repo.findOwnerId(id)) === viewerId;
     return {
       id: pet.id,
       name: pet.name,
@@ -299,6 +322,7 @@ export class PetsService {
       isFollowing: false,
       // 同理，由 PetsController 用 FavoritesService.isFavorite 覆盖。
       isFavorite: false,
+      isOwn,
     };
   }
 

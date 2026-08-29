@@ -100,7 +100,7 @@ export class PetsController {
     const lat = optionalNumber(q.lat);
     const lng = optionalNumber(q.lng);
     const coords = lat != null && lng != null ? { lat, lng } : undefined;
-    const detail = await this.pets.detail(id, coords);
+    const detail = await this.pets.detail(id, { ...coords, viewerId: userId });
     if (!detail) {
       throw new ApiException(ERROR_CODES.NOT_FOUND, '宠物不存在', HttpStatus.NOT_FOUND);
     }

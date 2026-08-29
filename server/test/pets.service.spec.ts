@@ -60,6 +60,29 @@ describe('PetsService', () => {
     expect(await service.detail('nope')).toBeNull();
   });
 
+  /**
+   * `isOwn`（阶段 3 Task 11）—— 客户端靠它决定关注按钮出不出现。
+   *
+   * 种子里 p-1 归 u-1。不传 viewerId 时恒为 false（未登录），传了才比对归属。
+   */
+  it('detail 的 isOwn：主人自己看是 true，别人与未登录都是 false', async () => {
+    expect((await service.detail('p-1', { viewerId: 'u-1' }))?.isOwn).toBe(true);
+    expect((await service.detail('p-1', { viewerId: 'u-2' }))?.isOwn).toBe(false);
+    expect((await service.detail('p-1', { viewerId: null }))?.isOwn).toBe(false);
+    // 不传 opts 的那条路径（`update()` 内部用它）也必须有值，不能是 undefined。
+    expect((await service.detail('p-1'))?.isOwn).toBe(false);
+  });
+
+  it('detail 不下发 ownerId —— 主人的用户 id 不进公开响应', async () => {
+    const detail = await service.detail('p-1', { viewerId: 'u-1' });
+    expect(detail).not.toHaveProperty('ownerId');
+    expect(Object.keys(detail?.owner ?? {}).sort()).toEqual([
+      'avatarUrl',
+      'nickname',
+      'ownerVerified',
+    ]);
+  });
+
   it('list 无坐标 → 距离全 null', async () => {
     const res = await service.list({
       filter: { species: 'all', breed: 'all' },

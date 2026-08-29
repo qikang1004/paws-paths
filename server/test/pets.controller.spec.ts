@@ -249,5 +249,44 @@ describe('PetsController', () => {
       const res = await request(app.getHttpServer()).get(`/pets/${TARGET}`).expect(200);
       expect(res.body.data.isFollowing).toBe(false);
     });
+
+    /**
+     * `isOwn`（阶段 3 Task 11）—— 客户端靠它决定关注按钮出不出现。
+     *
+     * 与上面那条 `FOLLOW_SELF:42203` 是同一件事的两端：服务端仍然会挡下关注自己，
+     * 而 `isOwn` 让客户端**压根不摆出**那个必然失败的按钮。
+     */
+    it('GET /pets/:id 的 isOwn：主人自己看是 true', async () => {
+      // u-1 是 p-1 的主人（见种子）。
+      const ownerToken = sign({ openid: 'openid-huang' }, 'test-secret', { subject: 'u-1' });
+      const mine = await request(app.getHttpServer())
+        .get('/pets/p-1')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(200);
+      expect(mine.body.data.isOwn).toBe(true);
+      // 主人看自己的宠物：能收藏（个人书签），但关注不成立 —— 两个状态各自独立。
+      expect(mine.body.data.isFollowing).toBe(false);
+    });
+
+    it('GET /pets/:id 的 isOwn：别人与未登录都是 false', async () => {
+      const other = await request(app.getHttpServer())
+        .get('/pets/p-1')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(other.body.data.isOwn).toBe(false);
+
+      const anon = await request(app.getHttpServer()).get('/pets/p-1').expect(200);
+      expect(anon.body.data.isOwn).toBe(false);
+    });
+
+    it('GET /pets/:id 不下发 ownerId —— 主人的用户 id 不进公开响应', async () => {
+      const res = await request(app.getHttpServer()).get('/pets/p-1').expect(200);
+      expect(res.body.data).not.toHaveProperty('ownerId');
+      expect(Object.keys(res.body.data.owner).sort()).toEqual([
+        'avatarUrl',
+        'nickname',
+        'ownerVerified',
+      ]);
+    });
   });
 });
