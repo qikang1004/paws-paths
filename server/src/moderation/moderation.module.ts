@@ -2,6 +2,7 @@ import { Logger, Module } from '@nestjs/common';
 import { Pool } from 'pg';
 import { DatabaseModule, PG_POOL } from '../database/database.module';
 import { AuthModule } from '../auth/auth.module';
+import { RateLimitModule } from '../common/rate-limit/rate-limit.module';
 import { PostRepositoryModule } from '../posts/post-repository.module';
 import { POST_REPOSITORY, type PostRepository } from '../posts/post.repository';
 import { WechatModule } from '../wechat/wechat.module';
@@ -146,7 +147,11 @@ const moderationRepositoryProvider = {
   // PostRepositoryModule 只为无库模式的目标源借一个 POST_REPOSITORY。
   // 单独成模块是为了打断循环：PostsModule 需要 ModerationModule 出机审裁决，
   // 而这里需要动态仓储 —— 直接 import PostsModule 就成环了。
-  imports: [WechatModule, DatabaseModule, AuthModule, PostRepositoryModule],
+  //
+  // RateLimitModule 出 ReportRateLimitGuard：举报每成功一次内容就立刻隐藏，
+  // 不限流等于给每个账号一个批量下架按钮。守卫是宿主模块的 injectable，
+  // 所以要 import 才造得出来（同 ModeratorGuard 那次的教训）。
+  imports: [WechatModule, DatabaseModule, AuthModule, RateLimitModule, PostRepositoryModule],
   controllers: [ReportsController, ModerationController],
   providers: [
     WechatContentSecurityApi,

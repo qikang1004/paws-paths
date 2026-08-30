@@ -8,7 +8,7 @@
 
 | 包 / 环境 | 结果 |
 | --- | --- |
-| server（无库 + 无 Redis） | **43 suites / 450 tests 绿，6 suites / 125 tests 按门控 skip**（共 49 套 / 575 例） |
+| server（无库 + 无 Redis） | **44 suites / 458 tests 绿，6 suites / 125 tests 按门控 skip**（共 50 套 / 583 例）—— 含收尾后补做的举报限流，见第十节 |
 | server（真库 + 真 Redis） | **未执行** —— 本环境没有 `server/.env`，见第三节 |
 | miniprogram | **41 suites / 513 tests 全绿** |
 | `@paws/types` | **6 suites / 82 tests 全绿** |
@@ -73,6 +73,8 @@ Global Constraint 26 返回 404。脚本检测到这一点会打印说明并提�
 5. **`findRole` 的 `SELECT role FROM users`**（无库模式走的是注入的角色种子）。
 6. **`findImageById` / `setImageAuditStatus`** 的 Postgres 实现。
 7. **可见性套件的第 6、7 组**（举报翻转可见性、feed 可见性）—— 两组都是真库门控。
+8. **`RedisRateLimitStore.increment` 的 INCR/EXPIRE**（收尾后补做的举报限流，见第十节）
+   —— 本环境没有 `REDIS_URL`，那条限流全程走内存 store。
 
 提审前必须在有 `.env` 的机器上补跑一次带库回归 + 走查。这是本阶段最大的未闭合项。
 
@@ -233,9 +235,76 @@ feed 页的 `followingCount`：`0` = 一只都没关注（引去广场）、`>0`
    feed 卡片上只有「举报整条动态」。图片举报要先有一个能长按某张图的交互。
 4. **`pet_photos` 的审核状态**（既有账 2）：要么补上那一列并接机审，要么在 spec 里
    明确记为不做。当前状态是「文档说有、实际没有」，这种不一致比任一选择都差。
-5. **举报的限流**：`POST /reports` 目前没有限流。一个人可以把整页内容全举报一遍，
-   每条都会让内容立刻对所有人消失（直到运营复核）。这是本阶段最明显的滥用面。
+5. ~~**举报的限流**~~ —— **已补做**，见第十节。
 6. **工单列表的筛选与排序**：目前只有「未处理、按时间正序」一种。真实运营会要按
    `reason` 筛、按目标类型筛。
 7. **审计流水的查询入口**：`AuditLogRepository.listByTarget` 只能按目标查，没有
    「某个运营做过什么」的入口（`audit_log_actor_idx` 索引已经建好了，就等一个端点）。
+
+## 十、阶段 3 收尾后补做：举报限流
+
+阶段 3 收口时把「`POST /reports` 没有限流」记成了阶段 4 清单第 5 条。推送后立刻回来
+补上了 —— 它不该等下一个阶段：**每成功一次举报，那条内容就立刻对所有人隐藏**
+（直到运营复核），没有限流等于给每个账号一个批量下架按钮。这是整个阶段 3 里唯一
+「一个普通用户就能造成实质破坏」的路径。
+
+### 按 userId 键控，不是 IP
+
+这是与登录限流最重要的差别，两条理由都成立：
+
+- **按 IP 会连坐**：同一出口 IP 后面可能是整个校园网或办公室。
+- **按 IP 也拦不住真想刷的人**：换 IP 对一个账号来说太容易了。
+
+登录端点没有这个选择 —— 那时还没有身份，只能按 IP。举报要求登录，而滥用的单位
+本来就是账号。守卫因此必须排在 `AuthGuard` **之后**（`req.userId` 是它挂的），
+拿不到 userId 时抛 401 且**不计数** —— 退回按 IP 计只会把这条限流变成连坐，
+而匿名请求也不该能把某个键刷爆。
+
+### 一小时 10 次，不是一分钟 30 次
+
+`REPORT_RATE_LIMIT = { windowSeconds: 3600, maxAttempts: 10 }`，具名导出而不是埋在
+守卫里 —— 这两个数值是契约：测试拿它断言，`RELEASE_CHECKLIST.md` 也引用它。
+
+两种滥用的时间尺度差一个数量级：登录重试是分钟级行为，而正常人一小时举报不了
+10 条内容。
+
+### `RateLimiterService.check` 加了按次覆盖参数
+
+举报与登录**共用同一个 `RateLimiterService` 单例**，而构造函数里那套默认值
+（一分钟 30 次）是登录的。所以 `check(key, opts?)` 多接一个可选参数，举报在调用处
+带自己的数值。这比再造一个 provider 干净：那还得多一个 DI token，且两处的 store
+必须是同一个（限流计数得落在同一个 Redis 空间里）。
+
+默认值不受影响，有断言钉着（「按次覆盖不影响默认那套 60s/30 次」）。
+
+### 降级日志现在带 key 前缀
+
+`RedisRateLimitStore` 原来那条日志写死了「登录端点暂时无限流保护」—— 现在有两处
+限流，这句话在举报失守时是错的。改成从 key 取前缀（`login:` / `report:`）。
+
+**只取前缀，不打完整 key** —— 后面跟的是 userId 或 IP，那是个人数据。
+
+两者失守的后果完全不同（登录是暴力破解风险，举报是「有人能批量下架内容」），
+所以 `RELEASE_CHECKLIST.md` 里那条告警要求改成「两者分开配」。
+
+### 三个既有套件要覆盖掉限流 store
+
+`reports.controller.spec.ts` / `moderation.controller.spec.ts` /
+`post-visibility.security.spec.ts` 都要发好几次举报造夹具，加上限流后两件事同时发生：
+
+1. 撞上「一小时 10 次」的真实上限 —— 那不是被测行为，是夹具被自己的产品逻辑挡住；
+2. **每次调用等 Redis 超时 2s 才降级放行** —— `reports.controller.spec.ts` 从 1.5s
+   变成 30s，整套回归从 7s 变成 34s，还触发了 jest 的 "worker process failed to
+   exit gracefully" 警告。
+
+三处都 `overrideProvider(RATE_LIMIT_STORE)` 注入 `{ increment: async () => 0 }`。
+限流本身有自己的套件（`report-rate-limit.spec.ts`，8 例），不该混进语义测试里。
+
+### 实测
+
+server **44 套绿 / 6 skip，458 绿 / 125 skip / 583 例**（阶段 3 收口是 43/6、
+450/125/575；+1 套 +8 例）。`tsc --noEmit` 干净。整套回归回到 7.0s。
+
+真库分支仍未验证 —— 限流走的是 Redis，而本环境没有 `REDIS_URL`：
+`report-rate-limit.spec.ts` 全程用内存 store，`RedisRateLimitStore.increment` 那条
+INCR/EXPIRE **没有在真 Redis 上跑过**。这一项加进第三节那份清单。

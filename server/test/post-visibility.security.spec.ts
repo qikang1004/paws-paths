@@ -8,6 +8,10 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { ERROR_CODES } from '@paws/types';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
+import {
+  RATE_LIMIT_STORE,
+  type RateLimitStore,
+} from '../src/common/rate-limit/rate-limit.store';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
 import {
   CONTENT_SECURITY_API,
@@ -160,6 +164,10 @@ describeDb('动态可见性（Global Constraint 16 · 真库门控）', () => {
     })
       .overrideProvider(CONTENT_SECURITY_API)
       .useValue(security)
+      // 限流关掉：第 6 组走真的 `POST /reports`，而本套件验的是可见性 ——
+      // 不覆盖的话每次举报都要等 Redis 超时 2s 才降级放行。限流有自己的套件。
+      .overrideProvider(RATE_LIMIT_STORE)
+      .useValue({ increment: async () => 0 } satisfies RateLimitStore)
       .compile();
     app = moduleRef.createNestApplication();
     app.useGlobalInterceptors(new ResponseInterceptor());

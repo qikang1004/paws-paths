@@ -9,6 +9,10 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { ERROR_CODES } from '@paws/types';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
+import {
+  RATE_LIMIT_STORE,
+  type RateLimitStore,
+} from '../src/common/rate-limit/rate-limit.store';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
 import {
   AUDIT_LOG_REPOSITORY,
@@ -135,6 +139,12 @@ describe('举报 POST /reports', () => {
     })
       .overrideProvider(CONTENT_SECURITY_API)
       .useValue(security)
+      // 限流关掉：本套件验的是举报的语义（判定顺序、幂等、流水），不是限流 ——
+      // 那有自己的套件（`report-rate-limit.spec.ts`）。两个理由都成立：
+      //   · 本套件一个举报人要发十几次举报，会撞上「一小时 10 次」的真实上限；
+      //   · 不覆盖的话每次调用都要等 Redis 超时 2s 才降级放行，整套跑 30s。
+      .overrideProvider(RATE_LIMIT_STORE)
+      .useValue({ increment: async () => 0 } satisfies RateLimitStore)
       .compile();
     app = moduleRef.createNestApplication();
     app.useGlobalInterceptors(new ResponseInterceptor());

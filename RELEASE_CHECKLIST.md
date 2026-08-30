@@ -71,6 +71,13 @@ git-ignored 的流程草稿里，移到仓库根显式追踪。逐项勾选。
       假实现下**没有任何内容会自动过审**（一律停在 `pending`，刻意不放行），
       而举报要求内容当前可见 —— 两条叠起来会让「举报 → 复核」闭环在假实现下走不完。
       走查脚本 `server/test/manual/phase3-walkthrough.mjs` 会检测并提示这一点。
-- [ ] **`POST /reports` 目前没有限流。** 一个账号可以把整页内容逐条举报，每条都会
-      立刻对所有人隐藏（直到运营复核）。上线前评估是否要接 `RateLimitModule`，
-      或至少给「短时间内大量举报」加一条告警。
+- [ ] **确认举报限流的阈值适合你的量级。** `POST /reports` 挂了 `ReportRateLimitGuard`，
+      **按 userId 键控**（不是 IP —— 举报要求登录，滥用单位是账号；按 IP 会连坐
+      同一出口的无辜用户，也拦不住换 IP 的人），默认 **一小时 10 次**
+      （`REPORT_RATE_LIMIT`，`server/src/common/rate-limit/rate-limit.service.ts`）。
+      正常人一小时举报不了 10 条内容；真要放宽先想清楚：每成功一次举报，那条内容
+      就立刻对所有人隐藏直到复核。
+- [ ] **限流降级告警要能分清 `login:` 与 `report:`。** 两处限流共用
+      `RedisRateLimitStore`，Redis 不可用时都 fail-open 放行并打 ERROR 日志
+      （日志里带 key 前缀，不带 userId/IP 本身）。两者失守的后果完全不同 ——
+      登录是暴力破解风险，举报是「有人能批量下架内容」，告警规则应分开配。

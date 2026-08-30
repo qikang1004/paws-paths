@@ -38,8 +38,12 @@ export class RedisRateLimitStore implements RateLimitStore, OnModuleDestroy {
    * 的微小竞态对限流无害（最坏情况窗口多续一秒）。
    *
    * Redis 不可用时降级放行（返回 0，限流器视为未超限）并写 ERROR 日志。
-   * 取舍：登录可用性优先于限流保护 —— 代价是宕机窗口内登录端点无暴力破解
-   * 防护，靠日志告警补偿。决策记录见 docs/superpowers/phase1-notes.md。
+   * 取舍：可用性优先于限流保护 —— 代价是宕机窗口内相关端点无防护，
+   * 靠日志告警补偿。决策记录见 docs/superpowers/phase1-notes.md。
+   *
+   * 日志里带 `key` 的前缀：现在有两处限流（`login:` 与 `report:`），
+   * 而它们的失守后果完全不同 —— 登录是暴力破解风险，举报是「有人能批量下架
+   * 内容」。告警规则要能分得开，所以前缀必须打出来。
    */
   async increment(key: string, windowSeconds: number): Promise<number> {
     try {
@@ -52,8 +56,10 @@ export class RedisRateLimitStore implements RateLimitStore, OnModuleDestroy {
       );
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
+      // 只取前缀，不打完整 key —— 后面跟的是 userId 或 IP，那是个人数据。
+      const scope = key.split(':')[0] ?? 'unknown';
       this.logger.error(
-        `限流存储不可用，本次放行（登录端点暂时无限流保护）: ${reason}`,
+        `限流存储不可用，本次放行（${scope} 端点暂时无限流保护）: ${reason}`,
       );
       return 0;
     }

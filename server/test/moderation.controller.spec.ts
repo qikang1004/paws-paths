@@ -9,6 +9,10 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { ERROR_CODES } from '@paws/types';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
+import {
+  RATE_LIMIT_STORE,
+  type RateLimitStore,
+} from '../src/common/rate-limit/rate-limit.store';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
 import {
   AUDIT_LOG_REPOSITORY,
@@ -150,7 +154,11 @@ describe('复核 /moderation/tasks', () => {
 
     const builder = Test.createTestingModule({ imports: [PostsModule, ModerationModule] })
       .overrideProvider(CONTENT_SECURITY_API)
-      .useValue(security);
+      .useValue(security)
+      // 限流关掉：本套件为了造工单要发好几次举报，会撞上「一小时 10 次」的真实上限；
+      // 不覆盖的话每次还要等 Redis 超时 2s 才降级放行。限流有自己的套件。
+      .overrideProvider(RATE_LIMIT_STORE)
+      .useValue({ increment: async () => 0 } satisfies RateLimitStore);
     if (!DB_URL) {
       builder.overrideProvider(USER_ROLE_SEED).useValue({ [MODERATOR]: 'moderator' });
     }
