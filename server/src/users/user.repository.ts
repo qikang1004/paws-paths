@@ -15,6 +15,24 @@ export const USER_REPOSITORY = 'UserRepository';
 export const USER_ROLE_SEED = 'UserRoleSeed';
 
 /**
+ * DI token：无库模式下的运营凭据种子（`username → 凭据`）。
+ *
+ * 同 `USER_ROLE_SEED` 的理由 —— 内存用户仓储没有 `username` / `password_hash`
+ * 两列可读，而运营登录的测试与无库演示都需要一个能登进去的账号。
+ */
+export const ADMIN_CREDENTIAL_SEED = 'AdminCredentialSeed';
+
+/** 登录要用的那三样。`passwordHash` 是自描述串（见 `src/auth/password.ts`）。 */
+export interface AdminCredential {
+  userId: string;
+  passwordHash: string;
+  role: UserRole;
+}
+
+/** 无库模式的凭据种子：用户名 → 凭据。 */
+export type AdminCredentialSeed = Record<string, AdminCredential>;
+
+/**
  * 新用户的占位昵称。users.nickname 有 NOT NULL 约束，而微信登录只给 openid，
  * 昵称要用户自己在个人中心填。两个实现必须用同一个值：
  * 「占位昵称能改掉」是阶段 2 的验收项，两边发不同的占位值就测不准。
@@ -61,6 +79,15 @@ export interface UserRepository {
    * 角色**只从这里读**（Global Constraint 28）—— 不从 JWT 读，否则撤权要等令牌过期。
    */
   findRole(userId: string): Promise<UserRole | null>;
+  /**
+   * 按用户名取运营登录凭据，找不到返回 `null`。
+   *
+   * **只有运营账号有用户名** —— 小程序用户的 `username` / `password_hash` 都是
+   * NULL（见 schema.sql 的迁移段）。所以这个方法对普通用户恒为 `null`，
+   * 而调用方（`AuthService.loginWithPassword`）把「找不到」与「密码错」
+   * 收敛成同一个 401，免得能问出「这个用户名存在」。
+   */
+  findCredentialByUsername(username: string): Promise<AdminCredential | null>;
 }
 
 /** 无库时的降级实现，驱动 InMemory 模式的演示。 */
@@ -74,10 +101,18 @@ export class InMemoryUserRepository implements UserRepository {
    */
   constructor(
     @Optional() @Inject(USER_ROLE_SEED) private readonly roles: Record<string, UserRole> = {},
+    @Optional()
+    @Inject(ADMIN_CREDENTIAL_SEED)
+    private readonly credentials: AdminCredentialSeed = {},
   ) {}
 
   async findByOpenid(openid: string): Promise<UserRecord | null> {
     return this.byOpenid.get(openid) ?? null;
+  }
+
+  /** 从注入的种子里读。没配就是「无库模式下谁也登不进后台」，那是对的默认。 */
+  async findCredentialByUsername(username: string): Promise<AdminCredential | null> {
+    return this.credentials[username] ?? null;
   }
 
   /**
@@ -221,6 +256,32 @@ export class PostgresUserRepository implements UserRepository {
     if (!rows[0]) return null;
     const role = rows[0].role;
     return (USER_ROLES as readonly string[]).includes(role) ? (role as UserRole) : null;
+  }
+
+  /**
+   * 按用户名取凭据。
+   *
+   * `password_hash IS NOT NULL` 是必须的一半：一个只有用户名、没有密码的行
+   * （手工建号时漏了第二步）绝不该能登录 —— 少了这个条件，`verifyPassword`
+   * 会拿到 `null`，而那条路径上任何异常都收敛成 false，看起来像密码错，
+   * 实际上是账号建坏了。显式在 SQL 里排掉，让两种情况在日志上分得开。
+   *
+   * 角色照旧过白名单筛（同 `findRole`）：库里被手改成乱值时不该当成有效角色。
+   */
+  async findCredentialByUsername(username: string): Promise<AdminCredential | null> {
+    const { rows } = await this.pool.query<{
+      id: string;
+      password_hash: string;
+      role: string;
+    }>(
+      `SELECT id, password_hash, role FROM users
+        WHERE username = $1 AND password_hash IS NOT NULL`,
+      [username],
+    );
+    if (!rows[0]) return null;
+    const role = rows[0].role;
+    if (!(USER_ROLES as readonly string[]).includes(role)) return null;
+    return { userId: rows[0].id, passwordHash: rows[0].password_hash, role: role as UserRole };
   }
 
   private toProfile(row: Record<string, unknown>): UserProfile {

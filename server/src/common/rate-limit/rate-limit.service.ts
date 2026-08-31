@@ -26,6 +26,18 @@ const DEFAULTS: RateLimitOptions = { windowSeconds: 60, maxAttempts: 30 };
  */
 export const REPORT_RATE_LIMIT: RateLimitOptions = { windowSeconds: 3600, maxAttempts: 10 };
 
+/**
+ * 运营登录的窗口与上限：**一小时 10 次**。
+ *
+ * 比小程序登录（一分钟 30 次）严得多，因为这条路径上有**可爆破的凭据** ——
+ * 微信登录压根没有密码可猜。而运营账号数量固定、正常人不会一小时试 10 次密码，
+ * 所以这个上限对真实使用几乎无感。
+ *
+ * 与举报限流数值相同但语义无关，各自具名 —— 合并成一个常量会让「改举报的阈值
+ * 顺手改了登录的」变成可能。
+ */
+export const ADMIN_LOGIN_RATE_LIMIT: RateLimitOptions = { windowSeconds: 3600, maxAttempts: 10 };
+
 @Injectable()
 export class RateLimiterService {
   private readonly opts: RateLimitOptions;

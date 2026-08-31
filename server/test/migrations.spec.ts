@@ -172,6 +172,39 @@ describe('runMigrations', () => {
     );
   });
 
+  /**
+   * 运营账号的登录凭据（阶段 4：独立 Web 后台）。
+   *
+   * 两列都**允许 NULL**：小程序用户走微信登录，压根没有用户名与密码。
+   * 只有运营账号会有值，所以这不是「给所有用户加密码」——那会变成一条
+   * 全新的、不该存在的攻击面。
+   */
+  it('users 加 username / password_hash 两列，都允许 NULL', async () => {
+    const { pool, queries } = fakePool();
+    await runMigrations(pool);
+    const schema = businessSql(queries)[0];
+
+    // 同 role 那句：ADD COLUMN IF NOT EXISTS 自带幂等，不另开 ADD CONSTRAINT。
+    expect(schema).toMatch(/ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT/);
+    expect(schema).toMatch(/ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT/);
+    // **不能** NOT NULL：既有 8 个种子用户与所有小程序用户都没有这两样，
+    // 加 NOT NULL 会让迁移在有数据的旧库上直接失败。
+    expect(schema).not.toMatch(/username TEXT NOT NULL/);
+    expect(schema).not.toMatch(/password_hash TEXT NOT NULL/);
+
+    // 用户名唯一，但**只约束非 NULL 的行** —— 部分唯一索引，否则一堆
+    // NULL 会被当成重复值（Postgres 的 UNIQUE 允许多个 NULL，但显式写清更好读，
+    // 且这个索引同时是登录查询的索引）。
+    expect(schema).toMatch(
+      /CREATE UNIQUE INDEX IF NOT EXISTS users_username_idx\s+ON users \(username\) WHERE username IS NOT NULL/,
+    );
+
+    // 两列都在迁移区（所有建表之后）。
+    expect(schema.indexOf('ADD COLUMN IF NOT EXISTS username')).toBeGreaterThan(
+      schema.indexOf('-- ── 既有表的迁移'),
+    );
+  });
+
   // favorites 是阶段 1 建的表，阶段 2 要把它从「只支持场所」改成多态
   // （spec §4.2）。这是「只增不改」的有意例外，所以约束写得比别的表细：
   // 新库直接建成多态形状，旧库靠 DO 块迁移，两条路都要在 SQL 里看得见。

@@ -196,6 +196,25 @@ CREATE INDEX IF NOT EXISTS moderation_tasks_queue_idx
 ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user'
   CHECK (role IN ('user','moderator','admin'));
 
+-- 运营后台的登录凭据（阶段 4：独立 Web 后台）。
+--
+-- 两列都**允许 NULL**，这是本段最要紧的一点：小程序用户走微信登录（openid），
+-- 压根没有用户名与密码。只有运营账号会有值 —— 给所有用户加密码等于开一条
+-- 全新的、不该存在的攻击面。加 NOT NULL 还会让迁移在有数据的旧库上直接失败。
+--
+-- password_hash 存的是自描述串（scrypt$N$r$p$salt$hash，见 src/auth/password.ts），
+-- 参数写在串里，所以这里不需要额外的算法/成本列 —— 将来调高成本或换 argon2
+-- 都不必再动 schema。
+ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+
+-- 用户名唯一，但只约束非 NULL 的行。
+-- Postgres 的 UNIQUE 本来就允许多个 NULL，写成部分索引是为了把意图讲明白：
+-- 「没有用户名」不是一种需要互斥的值。这个索引同时也是登录查询的索引
+-- （WHERE username = $1 是密码登录的唯一入口）。
+CREATE UNIQUE INDEX IF NOT EXISTS users_username_idx
+  ON users (username) WHERE username IS NOT NULL;
+
 -- favorites 多态化。spec §4.2 要求 (target_type, target_id)，阶段 1 实际建的是
 -- (user_id, poi_id) 复合主键，只支持场所收藏，宠物详情的收藏心标（原型 _2）
 -- 因此从未落地。这是对「只增不改」的**有意例外**，记在

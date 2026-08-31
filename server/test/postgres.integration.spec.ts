@@ -171,6 +171,36 @@ describeDb('postgres integration', () => {
       expect(rows[0].role).toBe('moderator');
     });
 
+    /**
+     * 运营账号的登录凭据（阶段 4）。两列都允许 NULL，所以既有用户不受影响 ——
+     * 这一条只有真库能证：单元测试只看得到 SQL 文本长什么样。
+     */
+    it('users.username / password_hash 加列成功，既有用户两列都是 NULL', async () => {
+      const { rows } = await pool.query<{ n: string }>(
+        `SELECT count(*)::text AS n FROM users
+          WHERE id ~ '^u-[0-9]+$' AND (username IS NOT NULL OR password_hash IS NOT NULL)`,
+      );
+      // 只数种子前缀的行（走查会留下别的用户）。小程序用户不该有这两样。
+      expect(rows[0].n).toBe('0');
+    });
+
+    it('username 的唯一索引只约束非 NULL 的行', async () => {
+      await inRollback(async (c) => {
+        // 多行 NULL 共存 —— 所有小程序用户都是这种状态，撞了就等于迁移不可用。
+        await c.query(`UPDATE users SET username = NULL WHERE id IN ('u-1','u-2')`);
+        const { rows } = await c.query<{ n: string }>(
+          `SELECT count(*)::text AS n FROM users WHERE username IS NULL`,
+        );
+        expect(Number(rows[0].n)).toBeGreaterThanOrEqual(2);
+
+        // 同一个非 NULL 用户名插两次必须撞。
+        await c.query(`UPDATE users SET username = 'ops-probe' WHERE id = 'u-1'`);
+        await expect(
+          c.query(`UPDATE users SET username = 'ops-probe' WHERE id = 'u-2'`),
+        ).rejects.toThrow(/duplicate key|unique/i);
+      });
+    });
+
     it('audit_log 的 action 与 target_type CHECK 拦下非法值', async () => {
       await inRollback(async (c) => {
         await expect(
