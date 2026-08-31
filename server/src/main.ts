@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common';
 import type { Pool } from 'pg';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
+import { corsOptionsFor, parseAllowedOrigins } from './common/cors';
 import { ResponseInterceptor } from './common/response.interceptor';
 import { PG_POOL } from './database/database.module';
 import { runMigrations, shouldSeed } from './database/migrations';
@@ -27,6 +28,23 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
   app.useGlobalInterceptors(new ResponseInterceptor());
   app.useGlobalFilters(new AllExceptionsFilter());
+
+  /**
+   * CORS 只为运营后台开，且**默认关着**。
+   *
+   * 小程序不需要它（`wx.request` 不受同源策略约束，不发 Origin 头），所以
+   * 没配 `ADMIN_ORIGINS` 就是「还没有 Web 后台」—— 那时一个跨域来源都不该放。
+   * 解析在启动时做，配错直接崩：跨域配错的表现是浏览器里一条离原因很远的
+   * CORS 报错，启动就失败反而好查。
+   */
+  const cors = corsOptionsFor(parseAllowedOrigins(process.env.ADMIN_ORIGINS));
+  const corsLogger = new Logger('Cors');
+  if (cors) {
+    app.enableCors(cors);
+    corsLogger.log(`运营后台跨域已开启，白名单：${cors.origin.join(', ')}`);
+  } else {
+    corsLogger.log('未设 ADMIN_ORIGINS，跨域完全关闭（小程序不需要 CORS）');
+  }
 
   // 不开这个，SIGTERM 时 OnModuleDestroy / OnApplicationShutdown 一个都不会跑：
   // Redis 客户端与 pg 连接池都不会收尾，云托管滚动发布时旧实例要挂到超时被 kill。
