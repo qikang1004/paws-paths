@@ -10,7 +10,7 @@
 | --- | --- |
 | server（无库 + 无 Redis） | **44 suites / 458 tests 绿，6 suites / 125 tests 按门控 skip**（共 50 套 / 583 例）—— 含收尾后补做的举报限流，见第十节 |
 | server（真库 + 真 Redis） | **未执行** —— 本环境没有 `server/.env`，见第三节 |
-| miniprogram | **41 suites / 513 tests 全绿** |
+| miniprogram | **41 suites / 520 tests 全绿**（含收尾后补做的图片举报入口，见第十一节） |
 | `@paws/types` | **6 suites / 82 tests 全绿** |
 | `tsc --noEmit` | server / miniprogram / `@paws/types` 三处干净 |
 | `npm run build` | 通过（`@paws/types` → `dist`，server → `dist` 含 `*.sql` 拷贝） |
@@ -156,9 +156,9 @@ feed 页的 `followingCount`：`0` = 一只都没关注（引去广场）、`>0`
 把「还没取到」和「一只没关注」混成同一支 —— 那会在首屏闪一下「还没有关注任何宠物」，
 而用户可能关注了一堆。
 
-## 五、四次踩同一个坑：文本级断言撞上自己的说明文字
+## 五、五次踩同一个坑：文本级断言撞上自己的说明文字
 
-本轮有四处测试自身的返工，同源同因，值得单列一节 —— 这类断言在**结构守卫**里很常见，
+本轮有五处测试自身的返工，同源同因，值得单列一节 —— 这类断言在**结构守卫**里很常见，
 而它的失败模式是「断言红了但被测代码是对的」，最容易被误判成实现缺陷。
 
 | # | 任务 | 断言 | 撞在什么上 | 改法 |
@@ -167,6 +167,7 @@ feed 页的 `followingCount`：`0` = 一只都没关注（引去广场）、`>0`
 | 2 | Task 10 | `expect(ts).not.toContain('petId')` | 注释「feed 不吃 petId」 | 断言调用形状 `/fetchFeed\(\{\s*page,\s*pageSize/` |
 | 3 | Task 11 | `/finally\s*\{\s*this\.setData/` | 夹在中间的一行注释 | 正则里容一行注释 |
 | 4 | Task 12 | `expect(ts).not.toContain('已删除')` | 注释「不是『已删除』」 | 断言真实 toast 调用形状 |
+| 5 | 第十一节 | `expect(body).not.toContain('dropById')` | `dropImageById` 自己就把它当子串包含，注释里也写了那个名字 | 断言两个调用形状（`dropImageById(...)` 要有、`dropById(this.data.posts` 不许有） |
 
 第 4 条相邻还有一处：`not.toContain('loadPage')` 的切片切到了文件尾，把 `loadPage`
 自己的定义包了进去 —— 改成切到下一个方法为止。
@@ -231,8 +232,7 @@ feed 页的 `followingCount`：`0` = 一只都没关注（引去广场）、`>0`
 1. **补跑真库回归 + 走查**（第三节那 7 项）。这是最高优先级，其余都排在它后面。
 2. **运营侧的界面**：本阶段只有 API（`GET /moderation/tasks` +
    `POST /moderation/tasks/:id/resolve`），没有任何页面。运营目前只能用 curl。
-3. **图片举报的客户端入口**：`reportImage` 的 api 包装在，但没有页面调用它 ——
-   feed 卡片上只有「举报整条动态」。图片举报要先有一个能长按某张图的交互。
+3. ~~**图片举报的客户端入口**~~ —— **已补做**，见第十一节。
 4. **`pet_photos` 的审核状态**（既有账 2）：要么补上那一列并接机审，要么在 spec 里
    明确记为不做。当前状态是「文档说有、实际没有」，这种不一致比任一选择都差。
 5. ~~**举报的限流**~~ —— **已补做**，见第十节。
@@ -308,3 +308,60 @@ server **44 套绿 / 6 skip，458 绿 / 125 skip / 583 例**（阶段 3 收口�
 真库分支仍未验证 —— 限流走的是 Redis，而本环境没有 `REDIS_URL`：
 `report-rate-limit.spec.ts` 全程用内存 store，`RedisRateLimitStore.increment` 那条
 INCR/EXPIRE **没有在真 Redis 上跑过**。这一项加进第三节那份清单。
+
+## 十一、收尾后补做（二）：单张图片的举报入口
+
+阶段 3 收口时 `reportImage` 的 api 包装已经在（Task 9 计划外补的），但**没有任何页面
+调用它** —— feed 卡片上只有「举报整条动态」。这条记在阶段 4 清单第 3 条，现在补上。
+
+### 为什么它不该等：图片与动态的审核状态是独立的
+
+`post_images` 有自己的 `audit_status`，服务端的举报路径也早就支持
+`targetType: 'post_image'`（`TARGET_SELECT` / `TARGET_RESOLVE_UPDATE` 两张定值表里
+都有那一支）。缺客户端入口的后果是：一条文字正常、只有某张图违规的动态，用户唯一
+能做的是**举报整条** —— 那会连文字一起撤下，而运营复核时看到的也是整条。
+有了这个入口，撤一张图就只撤一张图。
+
+### 长按而不是再加一个按钮
+
+九宫格里每张图都配一个「举报」会把卡片挤满。长按是相册类界面里已有的惯例
+（点开预览、长按出操作），且与既有的 `bindtap="onImageTap"` 不冲突 ——
+两个手势各管一件事。
+
+### `dropImageById`：只摘那一张，并重算 `hasImages`
+
+新增在 `utils/post-view.ts`（与 `buildPostView` 同一处，都是动态视图的装配）。
+三条要点各有断言：
+
+- **不能用 `dropById`** —— 那会把整条动态从列表里删掉。动态还在，只是少一张图。
+- **必须重算 `hasImages`**：摘掉最后一张时它得翻成 `false`，否则 wxml 里
+  `wx:if="{{item.hasImages}}"` 会渲染出一个空的图片容器。
+- **找不到目标时原样返回，不静默清空**：id 对不上说明调用方拿错了，
+  把整条动态的图清掉会让那次错误看起来像「举报成功了」。
+
+返回新数组新对象（不原地改）—— `setData` 认引用，同 `dropById` 的既有理由。
+
+### 两个确认框的文案必须不同
+
+长按一张图时弹「举报这条动态？」会让用户以为整条要被撤下。图片那个说的是
+「只有这张图会被隐藏等复核，动态的文字和其他图片不受影响」—— 用户长按一张图时
+最担心的正是这件事。两个 `confirm*` 函数共用一个 `showModal` 实现（文案由调用方传），
+断言因此落在各自的函数体上，而不是「showModal 附近有这几个字」。
+
+### 本轮第五次踩同一个坑
+
+`expect(body).not.toContain('dropById')` —— 这条**从一开始就不可能通过**：
+`dropImageById` 自己就把 `dropById` 当子串包含（更别说注释里还写了那个名字）。
+改成断言两个调用形状：`dropImageById(this.data.posts, postId, imageId)` 要有、
+`dropById(this.data.posts` 不许有（正则里用 `[^I]` 排除掉前者的尾部匹配）。
+
+第五节那张表已补上这一行。教训不变：**文本级断言要么切准作用域，要么断言调用形状**。
+
+### 实测
+
+miniprogram **41 套 / 520 例全绿**（补做前是 41 套 / 513 例；+7 例，同一套件里加的）。
+`tsc --noEmit` 干净。
+
+**未验证**：长按手势在真机上的触发阈值与 `bindtap` 的冲突表现 —— 本环境起不了微信
+开发者工具（同第七节那条 Skyline 限制）。真机上要确认：长按不会误触发预览，
+预览不会误触发举报面板。

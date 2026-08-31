@@ -5,6 +5,7 @@ import {
   reasonAt,
   ACTION_SHEET_MAX_ITEMS,
 } from '../utils/report-view';
+import { dropImageById, type PostView } from '../utils/post-view';
 import { REPORT_REASONS, REPORT_REASON_LABELS } from '../shared/types/index';
 
 const ROOT = resolve(__dirname, '..');
@@ -93,5 +94,107 @@ describe('feed 页的举报入口', () => {
     expect(ts).toContain('reportingId');
     expect(ts).toMatch(/if\s*\(this\.data\.reportingId\)\s*return/);
     expect(ts).toMatch(/finally\s*\{\s*(?:\/\/[^\n]*\n\s*)?this\.setData\(\{\s*reportingId:\s*''/);
+  });
+});
+
+/**
+ * 单张图片的举报入口。
+ *
+ * 与举报整条动态是**两件不同的事**：图片与动态的审核状态独立（`post_images`
+ * 有自己的 `audit_status`），撤下一张图不影响文字。所以：
+ *   · 走的是 `reportImage`（`targetType: 'post_image'`），传图片自己的 id；
+ *   · 成功后摘掉的是**那一张图**，不是整条动态 —— 动态还在，只是少一张图。
+ *
+ * 交互用长按而不是再加一个按钮：九宫格里每张图都配一个「举报」会把卡片挤满，
+ * 而长按是相册类界面里已有的惯例（点开预览、长按出操作）。
+ */
+describe('feed 页的图片举报入口', () => {
+  it('wxml 图片上挂长按，带图片自己的 id', () => {
+    const wxml = read(`${DIR}/index.wxml`);
+    expect(wxml).toContain('bindlongpress="onReportImage"');
+    // 点击仍是预览 —— 两个手势各管一件事，不能互相顶替。
+    expect(wxml).toContain('bindtap="onImageTap"');
+    // 长按要知道是哪一张图（image.id），也要知道它属于哪条动态（摘图时要定位）。
+    expect(wxml).toContain('data-image="{{image.id}}"');
+  });
+
+  it('页面 ts 调 reportImage，不是 reportPost', () => {
+    const ts = read(`${DIR}/index.ts`);
+    expect(ts).toContain('reportImage');
+    expect(ts).toContain('onReportImage');
+  });
+
+  it('成功后只摘掉那一张图，动态本身留在列表里', () => {
+    const ts = read(`${DIR}/index.ts`);
+    const body = ts.slice(ts.indexOf('async submitImageReport'), ts.indexOf('async init'));
+    // 断言**调用形状**，不是「源码里没有 dropById 这几个字」——
+    // 后者从一开始就不可能通过：dropImageById 自己就把 dropById 当子串包含，
+    // 而解释这件事的注释里也写了那个名字（本轮第五次踩这个坑）。
+    expect(body).toMatch(/dropImageById\(this\.data\.posts,\s*postId,\s*imageId\)/);
+    // 摘整条动态的那个调用形状不许出现在这里。
+    expect(body).not.toMatch(/[^I]dropById\(this\.data\.posts/);
+  });
+
+  it('两个确认框的文案不同 —— 长按一张图不该弹「举报这条动态」', () => {
+    const ts = read(`${DIR}/index.ts`);
+    // 两个 confirm 函数共用一个 showModal 实现（文案由调用方传），所以断言的是
+    // **各自函数体里的文案**，而不是「showModal 附近有这几个字」。
+    const imageConfirm = ts.slice(
+      ts.indexOf('function confirmImageReport'),
+      ts.indexOf('function confirm('),
+    );
+    expect(imageConfirm).toContain('举报这张图片？');
+    // 说清只有这张图受影响 —— 用户长按一张图时最担心的正是「整条会不会没」。
+    expect(imageConfirm).toMatch(/动态的文字和其他图片不受影响/);
+
+    const postConfirm = ts.slice(
+      ts.indexOf('function confirmReport'),
+      ts.indexOf('function confirmImageReport'),
+    );
+    expect(postConfirm).toContain('举报这条动态？');
+    // 两个文案确实不同（不是复制粘贴忘了改）。
+    expect(imageConfirm).not.toContain('举报这条动态？');
+  });
+
+  it('dropImageById 从动态里摘掉一张图并重算 hasImages', () => {
+    const post = {
+      id: 'po-1',
+      hasImages: true,
+      images: [
+        { id: 'pi-1', url: 'a', width: 1, height: 1 },
+        { id: 'pi-2', url: 'b', width: 1, height: 1 },
+      ],
+    } as PostView;
+    const once = dropImageById([post], 'po-1', 'pi-1');
+    expect(once[0].images.map((i) => i.id)).toEqual(['pi-2']);
+    expect(once[0].hasImages).toBe(true);
+
+    // 摘掉最后一张：hasImages 必须翻成 false，否则 wxml 会渲染一个空的图片容器。
+    const empty = dropImageById(once, 'po-1', 'pi-2');
+    expect(empty[0].images).toEqual([]);
+    expect(empty[0].hasImages).toBe(false);
+    // 动态本身还在 —— 举报一张图不影响文字。
+    expect(empty[0].id).toBe('po-1');
+  });
+
+  it('dropImageById 不碰别的动态，也不改原数组', () => {
+    const posts = [
+      { id: 'po-1', hasImages: true, images: [{ id: 'pi-1', url: 'a', width: 1, height: 1 }] },
+      { id: 'po-2', hasImages: true, images: [{ id: 'pi-9', url: 'b', width: 1, height: 1 }] },
+    ] as PostView[];
+    const next = dropImageById(posts, 'po-1', 'pi-1');
+    expect(next[1].images.map((i) => i.id)).toEqual(['pi-9']);
+    // setData 认引用：原地改再 setData 同一个引用，渲染层可能不更新。
+    expect(next).not.toBe(posts);
+    expect(next[0]).not.toBe(posts[0]);
+    expect(posts[0].images).toHaveLength(1);
+  });
+
+  it('图片 id 对不上时原样返回 —— 不静默清空整条动态的图', () => {
+    const posts = [
+      { id: 'po-1', hasImages: true, images: [{ id: 'pi-1', url: 'a', width: 1, height: 1 }] },
+    ] as PostView[];
+    expect(dropImageById(posts, 'po-1', 'pi-zzz')[0].images).toHaveLength(1);
+    expect(dropImageById(posts, 'po-zzz', 'pi-1')[0].images).toHaveLength(1);
   });
 });

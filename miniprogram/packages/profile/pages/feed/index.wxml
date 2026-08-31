@@ -26,6 +26,11 @@
         <text class="feed__text text-body-md">{{item.content}}</text>
 
         <view class="feed__photos" wx:if="{{item.hasImages}}">
+          <!--
+            点击预览、长按举报这张图。两个手势各管一件事，不能互相顶替 ——
+            图片与动态的审核状态独立，撤下一张图不影响文字，所以这里传的是
+            图片自己的 id（image.id），走的是 reportImage 而不是 reportPost。
+          -->
           <image
             class="feed__photo"
             wx:for="{{item.images}}"
@@ -34,8 +39,10 @@
             src="{{image.url}}"
             mode="aspectFill"
             data-post="{{item.id}}"
+            data-image="{{image.id}}"
             data-index="{{index}}"
             bindtap="onImageTap"
+            bindlongpress="onReportImage"
           />
         </view>
 

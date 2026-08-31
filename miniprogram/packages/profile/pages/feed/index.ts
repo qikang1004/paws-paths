@@ -1,8 +1,8 @@
 import { fetchProfile } from '../../../../api/me';
 import { fetchFeed } from '../../../../api/posts';
-import { reportPost } from '../../../../api/reports';
+import { reportImage, reportPost } from '../../../../api/reports';
 import { dropById, mergePage, shouldLoadMore } from '../../../../utils/list-paging';
-import { buildPostView, type PostView } from '../../../../utils/post-view';
+import { buildPostView, dropImageById, type PostView } from '../../../../utils/post-view';
 import {
   REPORT_REASON_LABEL_LIST,
   REPORT_REASON_OPTIONS,
@@ -33,10 +33,29 @@ function pickReason(): Promise<ReportReason | null> {
 
 /** 二次确认。举报不可撤销，且会让内容对所有人消失。 */
 function confirmReport(): Promise<boolean> {
+  return confirm(
+    '举报这条动态？',
+    '提交后这条内容会立刻隐藏，等运营复核。复核通过它会重新出现。',
+  );
+}
+
+/**
+ * 举报单张图片的确认。文案与上面**必须不同** —— 用户长按一张图时弹
+ * 「举报这条动态？」会让他以为整条要被撤下，而实际上只有那张图会消失。
+ */
+function confirmImageReport(): Promise<boolean> {
+  return confirm(
+    '举报这张图片？',
+    '只有这张图会被隐藏等复核，动态的文字和其他图片不受影响。',
+  );
+}
+
+/** 两个确认框共用的实现。`fail` 也 resolve —— 理由同 `pickReason`。 */
+function confirm(title: string, content: string): Promise<boolean> {
   return new Promise((resolve) => {
     wx.showModal({
-      title: '举报这条动态？',
-      content: '提交后这条内容会立刻隐藏，等运营复核。复核通过它会重新出现。',
+      title,
+      content,
       confirmText: '举报',
       success: (res) => resolve(res.confirm),
       fail: () => resolve(false),
@@ -161,6 +180,52 @@ Page({
       wx.showToast({ title: (err as Error).message || '举报失败', icon: 'none' });
     } finally {
       // 一律复位：失败一次就永久禁用的话，用户只能退出重进。
+      this.setData({ reportingId: '' });
+    }
+  },
+
+  /**
+   * 长按一张图 → 举报**那张图**。
+   *
+   * 与举报整条动态是两件事：图片与动态的审核状态独立，撤下一张图不影响文字。
+   * 用长按而不是再加一个按钮 —— 九宫格里每张图都配一个「举报」会把卡片挤满，
+   * 而长按是相册类界面里已有的惯例（点开预览、长按出操作）。
+   *
+   * `reportingId` 与举报整条动态共用：同一时刻只该有一次举报在飞。
+   */
+  onReportImage(e: WechatMiniprogram.BaseEvent) {
+    if (this.data.reportingId) return;
+    const { post: postId, image: imageId } = e.currentTarget.dataset;
+    const post = String(postId ?? '');
+    const image = String(imageId ?? '');
+    if (!post || !image) return;
+    void this.runImageReport(post, image);
+  },
+
+  async runImageReport(postId: string, imageId: string): Promise<void> {
+    const reason = await pickReason();
+    if (!reason) return;
+    if (!(await confirmImageReport())) return;
+    await this.submitImageReport(postId, imageId, reason);
+  },
+
+  async submitImageReport(
+    postId: string,
+    imageId: string,
+    reason: ReportReason,
+  ): Promise<void> {
+    if (this.data.reportingId) return;
+    // 键控用图片 id：同一条动态里长按另一张图是另一次举报。
+    this.setData({ reportingId: imageId });
+    try {
+      await reportImage(imageId, reason);
+      // 只摘那一张图，动态本身留着 —— dropById 会把整条删掉，那是错的。
+      // dropImageById 顺带重算 hasImages（摘掉最后一张时那个 wx:if 得关）。
+      this.setData({ posts: dropImageById(this.data.posts, postId, imageId) });
+      wx.showToast({ title: '已提交复核', icon: 'none' });
+    } catch (err) {
+      wx.showToast({ title: (err as Error).message || '举报失败', icon: 'none' });
+    } finally {
       this.setData({ reportingId: '' });
     }
   },

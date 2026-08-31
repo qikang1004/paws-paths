@@ -87,6 +87,30 @@ export interface BuildPostViewOptions {
 }
 
 /**
+ * 从某条动态里摘掉一张图，并重算 `hasImages`。
+ *
+ * 举报**单张图片**成功后用它 —— 与举报整条动态不同：图片与动态的审核状态独立
+ * （`post_images` 有自己的 `audit_status`），撤下一张图不影响文字，所以动态本身
+ * 必须留在列表里。用 `dropById` 会把整条删掉。
+ *
+ * 重算 `hasImages` 是关键的一半：摘掉最后一张时那个标志必须翻成 false，
+ * 否则 wxml 里 `wx:if="{{item.hasImages}}"` 会渲染出一个空的图片容器。
+ *
+ * 返回新数组、新对象（不原地改）：`setData` 认引用，原地改后再 setData
+ * 同一个引用，渲染层可能不更新 —— 同 `dropById` 的理由。
+ * 找不到目标时原样返回，**不静默清空**：id 对不上说明调用方拿错了，
+ * 把整条动态的图清掉会让那次错误看起来像「举报成功了」。
+ */
+export function dropImageById(posts: PostView[], postId: string, imageId: string): PostView[] {
+  return posts.map((post) => {
+    if (post.id !== postId) return post;
+    const images = post.images.filter((image) => image.id !== imageId);
+    if (images.length === post.images.length) return post;
+    return { ...post, images, hasImages: images.length > 0 };
+  });
+}
+
+/**
  * 动态 → 视图。wxml 里不做判断，全部在这里算好。
  *
  * 刻意**不**再按可见性筛一遍图片：服务端 `toDto` 已经把这个人看不到的图筛掉了，
