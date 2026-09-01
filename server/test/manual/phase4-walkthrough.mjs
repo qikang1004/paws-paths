@@ -114,6 +114,37 @@ async function main() {
   log('GET /moderation/tasks?pageSize=21', `${tooBig.status} ${tooBig.code} ${tooBig.message}`);
   must(tooBig.status === 422, '页大小超过 20 应 422（后台固定发 20）');
 
+  // —— 流水列表（阶段 4 新增的端点）——
+  const logs = await call('GET', '/moderation/audit-logs?pageSize=20', { token });
+  log('GET /moderation/audit-logs', `${logs.status} ${logs.data?.items?.length ?? '-'} 条流水`);
+  must(logs.status === 200, '运营应能读流水');
+  must(Array.isArray(logs.data.items), '应返回 items 数组');
+
+  if (logs.data.items.length > 0) {
+    const row = logs.data.items[0];
+    log('最近一条流水', show(row));
+    // 流水**不带内容原文** —— 它要比它记录的目标活得久（动态被删了，
+    // 「谁撤下了它」仍必须查得到）。
+    must(!('content' in row), '流水不该带内容原文');
+    must(!('imageUrls' in row), '流水不该带图片');
+    must('actorName' in row, '流水应带操作人显示名这个键（值可能是 null）');
+    must(typeof row.action === 'string', '流水应带动作');
+    must(typeof row.statusBefore === 'string' && typeof row.statusAfter === 'string', '应带前后状态');
+  } else {
+    log('流水是空的', '这个库还没有任何审核动作 —— 先跑一遍 phase3-walkthrough.mjs');
+  }
+
+  // 只读：这张表没有写入端点，也不该有。
+  for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+    const res = await call(method, '/moderation/audit-logs', { token, body: {} });
+    must(res.status === 404, `${method} /moderation/audit-logs 应是 404，实际 ${res.status}`);
+  }
+  log('流水没有写入端点', '四个动词全 404 —— 流水只由复核流程在自己的事务里追加');
+
+  const logsAsAnon = await call('GET', '/moderation/audit-logs');
+  must(logsAsAnon.status === 401, '未登录读流水应 401');
+  log('未登录读流水', `${logsAsAnon.status} ${logsAsAnon.code}`);
+
   // —— 两种失败必须无法区分（防枚举）——
   const wrongPass = await login(USER, `${PASS}-wrong`);
   const noSuchUser = await login(`no-such-${Date.now().toString(36)}`, PASS);

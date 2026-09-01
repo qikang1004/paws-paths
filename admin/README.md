@@ -68,14 +68,17 @@ echo '一个至少 12 位的密码' | npm run admin:create -w server -- ops-alic
 - 工单带被举报内容的原文、图片、举报原因、作者昵称
 - 放行（举报不成立）与撤下（举报成立，必须写原因）
 - 图片点开看大图
+- **审核流水**（只读的合规视图）：动作、操作人、目标、状态变化、时间
 - 令牌失效时自动回到登录页
 
 ## 还没有的
 
-- **审计日志页**：服务端目前没有分页查询端点 —— `AuditLogRepository` 上只有
-  `append` 与 `listByTarget`（按单个目标查），做不了「最近 100 条操作」那种列表
-- **已处理工单的历史**：`GET /moderation/tasks` 只出 `result IS NULL` 的
-- **筛选与排序**：服务端固定按创建时间正序（先举报的先处理）
+- **已处理工单的历史**：`GET /moderation/tasks` 只出 `result IS NULL` 的。
+  流水页能看到「这条内容被怎么处理了」，但看不到当时的工单
+- **单条内容的审核历史**：流水只有全局分页，没有 `?targetId=` ——
+  仓储上的 `listByTarget` 还没有对应的端点。那也是后台第一个真需要深链的页面
+- **筛选与排序**：两个列表都固定排序（工单按创建时间正序、流水倒序），
+  没有按动作/操作人/时间段筛
 - **待审图片看不到**：待审图落私有档，只有作者本人取得到（`UploadsService.fetch`），
   而 `<img>` 压根不会带 Authorization 头 —— 运营连自己的身份都递不过去。已过审的图
   （公开档）正常显示。界面上取不到的图会画成占位并说明原因，不留碎图图标。
@@ -88,24 +91,31 @@ src/
   api/
     session.ts      登录态（localStorage 读写 + 存坏了当没登录）
     client.ts       fetch 包装：Bearer 头、统一包络、401 清会话
-    moderation.ts   两个端点的包装 + 页大小常量
+    moderation.ts   三个端点的包装 + 页大小常量
   components/
     Toast.tsx       浮出提示（替掉 alert）
     RejectDialog.tsx 驳回原因输入（替掉 prompt）
     ImageLightbox.tsx 大图预览
     TaskCard.tsx    一条工单
+    Pager.tsx       上一页 / 下一页（两个列表页共用）
   pages/
     LoginPage.tsx
-    TasksPage.tsx
-  App.tsx           登录 / 工单两个视图的切换
+    TasksPage.tsx   待复核队列（有操作）
+    AuditLogsPage.tsx 审核流水（只读）
+  App.tsx           登录 / 工单 / 流水的切换
   styles.css
-test/               vitest + @testing-library/react，58 个用例
+test/               vitest + @testing-library/react，81 个用例
 ```
 
 ## 几个刻意的选择
 
-**不引路由库。** 只有两个视图，一个 `session` 状态就够。等审计日志页进来、
-真的需要「地址栏表达位置」时再引。
+**不引路由库。** 加了流水页之后重新掂量过一次：两页都是**队列式**的工作面
+（进来就从第一页开始清），没有「把某一页的链接发给同事」这种用法。真正需要深链的是
+「某条内容的审核历史」，而那要先有 `GET /audit-logs?targetId=` 那个端点。等它进来再引。
+
+**不按角色藏菜单。** 两个视图都对 `moderator` 与 `admin` 开放 —— 服务端那两条端点
+挂的是同一个 `ModeratorGuard`。藏了会让人以为自己没权限，而实际上点进去能用；
+真要分权得先在服务端分。
 
 **不引 UI 框架。** 两页七个组件，引一套组件库会为了几个按钮拖进几十个包。
 等手写开始重复再换。

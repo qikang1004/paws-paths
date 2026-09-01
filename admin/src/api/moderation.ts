@@ -1,4 +1,4 @@
-import type { ModerationTaskDto, UserRole } from '@paws/types';
+import type { AuditLogDto, ModerationTaskDto, UserRole } from '@paws/types';
 import { api } from './client';
 
 /** `GET /moderation/tasks` 的一页。形状与服务端的 `TaskListResponse` 一致。 */
@@ -52,4 +52,21 @@ export function resolveTask(
     result,
     ...(result === 'rejected' ? { rejectReason } : {}),
   });
+}
+
+/** `GET /moderation/audit-logs` 的一页。 */
+export interface AuditLogPage {
+  items: AuditLogDto[];
+  hasMore: boolean;
+  page: number;
+}
+
+/**
+ * 审核流水的一页，按时间倒序。
+ *
+ * 与工单列表共用 `PAGE_SIZE`（服务端两条端点走的是同一个 `parseListQuery`，
+ * 上限都是 20）。
+ */
+export function fetchAuditLogs(page: number): Promise<AuditLogPage> {
+  return api.get<AuditLogPage>(`/moderation/audit-logs?page=${page}&pageSize=${PAGE_SIZE}`);
 }

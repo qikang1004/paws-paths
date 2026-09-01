@@ -16,6 +16,7 @@ import { parseListQuery } from '../common/list-query';
 import {
   ModerationService,
   parseResolve,
+  type AuditLogListResponse,
   type ResolveResponse,
   type TaskListResponse,
 } from './moderation.service';
@@ -37,6 +38,24 @@ export class ModerationController {
   async tasks(@Query() query: Record<string, string | undefined>): Promise<TaskListResponse> {
     const { page, pageSize } = parseListQuery(query);
     return this.moderation.listTasks({ page, pageSize });
+  }
+
+  /**
+   * 审核流水的一页，按时间倒序（最近的动作在最前）。
+   *
+   * 与 `tasks` 一样挂 `ModeratorGuard` —— 流水里有「谁撤下了什么」，那是内部信息。
+   *
+   * 只读：这张表没有写入端点，也不该有。流水由复核流程在自己的事务里追加
+   * （Global Constraint 24），而仓储接口上压根没有 update / delete
+   * （Global Constraint 25）。
+   */
+  @Get('audit-logs')
+  @UseGuards(AuthGuard, ModeratorGuard)
+  async auditLogs(
+    @Query() query: Record<string, string | undefined>,
+  ): Promise<AuditLogListResponse> {
+    const { page, pageSize } = parseListQuery(query);
+    return this.moderation.listAuditLogs({ page, pageSize });
   }
 
   /**

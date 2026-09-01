@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PAGE_SIZE, fetchTasks, resolveTask } from '../src/api/moderation';
+import { PAGE_SIZE, fetchAuditLogs, fetchTasks, resolveTask } from '../src/api/moderation';
 import { bodyOf, envelope, stubFetch } from './helpers';
 
 afterEach(() => {
@@ -41,5 +41,22 @@ describe('工单接口的包装', () => {
     const calls = stubFetch([envelope({ taskId: 't-1', result: 'approved' })]);
     await resolveTask('t-1', 'approved', '这个不该被发出去');
     expect(bodyOf(calls[0])).toEqual({ result: 'approved' });
+  });
+});
+
+describe('流水接口的包装', () => {
+  it('带上页码与页大小', async () => {
+    const calls = stubFetch([envelope({ items: [], hasMore: false, page: 2 })]);
+    await fetchAuditLogs(2);
+    expect(calls[0].url).toBe(`/api/moderation/audit-logs?page=2&pageSize=${PAGE_SIZE}`);
+  });
+
+  /** 两条端点走的是服务端同一个 `parseListQuery`，页大小不该各写一个。 */
+  it('与工单列表共用同一个页大小常量', async () => {
+    const calls = stubFetch([envelope({ items: [], hasMore: false, page: 1 })]);
+    await fetchAuditLogs(1);
+    await fetchTasks(1);
+    const sizeOf = (url: string) => new URL(url, 'http://x').searchParams.get('pageSize');
+    expect(sizeOf(calls[0].url)).toBe(sizeOf(calls[1].url));
   });
 });

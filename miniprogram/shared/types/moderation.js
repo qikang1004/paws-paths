@@ -1,6 +1,8 @@
 // 由 packages/types 同步而来，禁止手改。
 // 改动请改 packages/types，然后跑 npm run sync:types。
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.AUDIT_ACTION_LABELS = exports.MODERATION_SOURCES = exports.AUDIT_ACTIONS = exports.REPORT_REASON_LABELS = exports.REPORT_REASONS = exports.MODERATION_TARGET_TYPES = exports.USER_ROLES = void 0;
 /**
  * 举报与人工复核（spec §4.4）。
  *
@@ -8,8 +10,6 @@
  * 本阶段用到的三条边（`approved → pending_review`、`pending_review → approved`、
  * `pending_review → rejected`）阶段 0 就已定义并有单测，这里只加类型，不碰迁移表。
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.MODERATION_SOURCES = exports.AUDIT_ACTIONS = exports.REPORT_REASON_LABELS = exports.REPORT_REASONS = exports.MODERATION_TARGET_TYPES = exports.USER_ROLES = void 0;
 /**
  * 运营角色。RBAC 的最小落法（spec §3.1：运营后台复用同一 API + RBAC 隔离）。
  *
@@ -67,3 +67,11 @@ exports.AUDIT_ACTIONS = [
 ];
 /** 工单来源。三个值与建表时的 CHECK 一致；本阶段机审不入队，`wx_auto` 是预留。 */
 exports.MODERATION_SOURCES = ['wx_auto', 'user_report', 'manual'];
+/** 审核动作的展示文案。客户端直接吃这个，不各自硬编码一份。 */
+exports.AUDIT_ACTION_LABELS = {
+    report: '用户举报',
+    review_approve: '复核放行',
+    review_reject: '复核撤下',
+    auto_approve: '机审通过',
+    auto_reject: '机审拒绝',
+};

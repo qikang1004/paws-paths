@@ -107,6 +107,11 @@ describe('复核 /moderation/tasks', () => {
     return sub ? as(req, sub) : req;
   };
 
+  const listAuditLogs = async (sub?: string, query = '') => {
+    const req = http().get(`/moderation/audit-logs${query}`);
+    return sub ? as(req, sub) : req;
+  };
+
   const resolve = async (taskId: string, body: Record<string, unknown>, sub?: string) => {
     const req = http().post(`/moderation/tasks/${taskId}/resolve`).send(body);
     return sub ? as(req, sub) : req;
@@ -203,15 +208,20 @@ describe('复核 /moderation/tasks', () => {
   });
 
   describe('5. 鉴权（先测这组：它不产生工单，不扰动下面的列表计数）', () => {
-    it('未登录调两个端点都是 401', async () => {
+    it('未登录调三个端点都是 401', async () => {
       expect((await listTasks()).status).toBe(401);
+      expect((await listAuditLogs()).status).toBe(401);
       expect((await resolve(randomUUID(), { result: 'approved' })).status).toBe(401);
     });
 
-    it('普通用户调两个端点都是 403', async () => {
+    it('普通用户调三个端点都是 403', async () => {
       const list = await listTasks(PLAIN);
       expect(list.status).toBe(403);
       expect(list.body.code).toBe(ERROR_CODES.FORBIDDEN);
+      // 流水里有「谁撤下了什么」，那是内部信息 —— 与工单同一道守卫。
+      const logs = await listAuditLogs(PLAIN);
+      expect(logs.status).toBe(403);
+      expect(logs.body.code).toBe(ERROR_CODES.FORBIDDEN);
       const one = await resolve(randomUUID(), { result: 'approved' }, PLAIN);
       expect(one.status).toBe(403);
       expect(one.body.code).toBe(ERROR_CODES.FORBIDDEN);
@@ -420,6 +430,101 @@ describe('复核 /moderation/tasks', () => {
       expect(again.status).toBe(422);
       expect(again.body.code).toBe(ERROR_CODES.MODERATION_TASK_HANDLED);
       expect(await auditLog.listByTarget('post', postId)).toHaveLength(2);
+    });
+  });
+
+  /**
+   * 流水列表（阶段 4）。
+   *
+   * 放在复核那几组**之后**：它要有流水可读，而流水是上面那些复核动作写下的。
+   * 断言一律用 `find` 挑本套件造的那几条 —— 库是共享的，写死行数就是假红
+   * （同 48fab02 对种子计数那条的处理）。
+   */
+  describe('7. 流水列表 /moderation/audit-logs', () => {
+    let postId: string;
+    let taskId: string;
+
+    beforeAll(async () => {
+      ({ postId, taskId } = await queued('会进流水列表的动态'));
+      const res = await resolve(taskId, { result: 'rejected', rejectReason: '流水列表用' }, MODERATOR);
+      expect(res.status).toBe(200);
+    });
+
+    it('运营能读到，形状同其他列表端点', async () => {
+      const res = await listAuditLogs(MODERATOR);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data.items)).toBe(true);
+      expect(res.body.data.page).toBe(1);
+      expect(typeof res.body.data.hasMore).toBe('boolean');
+    });
+
+    /** 举报与复核各写一条，倒序 —— 复核那条在举报那条之前。 */
+    it('举报与复核两条动作都在，按时间倒序', async () => {
+      const res = await listAuditLogs(MODERATOR, '?pageSize=20');
+      const mine = (res.body.data.items as Record<string, unknown>[]).filter(
+        (row) => row.targetId === postId,
+      );
+      expect(mine.length).toBeGreaterThanOrEqual(2);
+      const actions = mine.map((row) => row.action);
+      expect(actions).toContain('report');
+      expect(actions).toContain('review_reject');
+      expect(actions.indexOf('review_reject')).toBeLessThan(actions.indexOf('report'));
+    });
+
+    it('一条流水带动作、操作人、前后状态与时间', async () => {
+      const res = await listAuditLogs(MODERATOR, '?pageSize=20');
+      const row = (res.body.data.items as Record<string, unknown>[]).find(
+        (candidate) => candidate.targetId === postId && candidate.action === 'review_reject',
+      );
+      expect(row).toMatchObject({
+        actorId: MODERATOR,
+        action: 'review_reject',
+        targetType: 'post',
+        targetId: postId,
+        statusBefore: 'pending_review',
+        statusAfter: 'rejected',
+      });
+      expect(typeof row?.createdAt).toBe('string');
+      // 有这个键，值在无库模式下是 null（内存实现取不到显示名）。
+      expect(row).toHaveProperty('actorName');
+      if (DB_URL) expect(row?.actorName).toBe('审核员甲');
+    });
+
+    /**
+     * 流水**不带被举报内容的原文** —— 它要比它记录的目标活得久：动态被作者删了，
+     * 「谁撤下了它」这条记录仍然必须查得到。带原文会让这一半在删除后变成空字段。
+     */
+    it('不下发内容原文（那是工单的职责，不是流水的）', async () => {
+      const res = await listAuditLogs(MODERATOR, '?pageSize=20');
+      const row = (res.body.data.items as Record<string, unknown>[])[0];
+      expect(row).not.toHaveProperty('content');
+      expect(row).not.toHaveProperty('imageUrls');
+      expect(row).not.toHaveProperty('reason');
+    });
+
+    it('分页规则同其他列表：上限 20、非法值 422', async () => {
+      const one = await listAuditLogs(MODERATOR, '?page=1&pageSize=1');
+      expect(one.status).toBe(200);
+      expect((one.body.data.items as unknown[]).length).toBe(1);
+
+      const two = await listAuditLogs(MODERATOR, '?page=2&pageSize=1');
+      expect((two.body.data.items as { id: string }[])[0].id).not.toBe(
+        (one.body.data.items as { id: string }[])[0].id,
+      );
+
+      for (const query of ['?pageSize=21', '?page=0', '?pageSize=0', '?page=-1']) {
+        const bad = await listAuditLogs(MODERATOR, query);
+        expect(bad.status).toBe(422);
+        expect(bad.body.code).toBe(ERROR_CODES.VALIDATION_FAILED);
+      }
+    });
+
+    /** 只读：这张表没有写入端点，也不该有（流水由复核流程在自己的事务里追加）。 */
+    it('没有写入端点', async () => {
+      for (const method of ['post', 'put', 'patch', 'delete'] as const) {
+        const res = await as(http()[method]('/moderation/audit-logs'), MODERATOR).send({});
+        expect(res.status).toBe(404);
+      }
     });
   });
 

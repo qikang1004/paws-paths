@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import type { ModerationTaskDto } from '@paws/types';
+import type { AuditLogDto, ModerationTaskDto } from '@paws/types';
 
 /** 服务端的统一包络。测试里造响应一律经过它，别各处手拼 JSON。 */
 export function envelope(data: unknown, code = 0, message = 'ok'): string {
@@ -55,4 +55,20 @@ export function stubFetch(bodies: string[], status = 200): FetchCall[] {
 /** 取某次调用的请求体（已解析）。断言 `rejectReason` 之类的字段时用。 */
 export function bodyOf(call: FetchCall): Record<string, unknown> {
   return JSON.parse(String(call.init.body ?? '{}'));
+}
+
+/** 一条流水的默认形状，字段可覆盖。 */
+export function auditLog(over: Partial<AuditLogDto> = {}): AuditLogDto {
+  return {
+    id: 'al-1',
+    actorId: 'u-mod',
+    actorName: 'ops-alice',
+    action: 'review_reject',
+    targetType: 'post',
+    targetId: 'p-1',
+    statusBefore: 'pending_review',
+    statusAfter: 'rejected',
+    createdAt: '2026-08-30T02:00:00.000Z',
+    ...over,
+  };
 }

@@ -86,6 +86,74 @@ function sharedContract(makeRepo: () => AuditLogRepository, reset: () => Promise
   });
 
   /**
+   * `list` 是**全局**视图（运营后台的合规页），与 `listByTarget` 的分工是：
+   * 前者「最近谁做了什么」，后者「这条内容的历史」。
+   */
+  it('list 跨目标返回全部流水，按时间倒序', async () => {
+    await repo.append(entry({ action: 'report' }));
+    await repo.append(entry({ targetType: 'post_image', action: 'review_reject' }));
+    const { items } = await repo.list({ page: 1, pageSize: 10 });
+    const mine = items.filter((r) => r.targetId.startsWith(TARGET));
+    expect(mine).toHaveLength(2);
+    // 后追加的在前 —— 倒序。
+    expect(mine[0].action).toBe('review_reject');
+    expect(mine[1].action).toBe('report');
+  });
+
+  it('list 带 actorName 字段（值可能是 null）', async () => {
+    await repo.append(entry());
+    const { items } = await repo.list({ page: 1, pageSize: 10 });
+    // 无库实现恒为 null；真库靠 LEFT JOIN 取。两边都必须**有这个键** ——
+    // 缺键会让客户端的 `'actorName' in row` 判断出不同结果。
+    expect(items[0]).toHaveProperty('actorName');
+  });
+
+  /**
+   * 机审的流水 `actor_id` 是 NULL，而它们恰恰是最需要留痕的那些 ——
+   * 真库那边若写成 `JOIN` 而不是 `LEFT JOIN`，这一条会红。
+   */
+  it('list 不丢掉没有操作人的流水（机审）', async () => {
+    await repo.append(entry({ actorId: null, action: 'auto_reject' }));
+    const { items } = await repo.list({ page: 1, pageSize: 10 });
+    const mine = items.filter((r) => r.targetId.startsWith(TARGET));
+    expect(mine).toHaveLength(1);
+    expect(mine[0].actorId).toBeNull();
+  });
+
+  /**
+   * 操作人已注销时也不能丢：`actor_id` 不挂外键（流水必须比主体活得久），
+   * 所以「id 指向一个不存在的用户」是正常状态，不是数据损坏。
+   */
+  it('list 不丢掉操作人已注销的流水', async () => {
+    await repo.append(entry({ actorId: 'u-已经不存在了' }));
+    const { items } = await repo.list({ page: 1, pageSize: 10 });
+    const mine = items.filter((r) => r.targetId.startsWith(TARGET));
+    expect(mine).toHaveLength(1);
+    expect(mine[0].actorId).toBe('u-已经不存在了');
+    expect(mine[0].actorName).toBeNull();
+  });
+
+  it('list 分页：pageSize 切片，hasMore 靠多取一条判', async () => {
+    for (const action of ['report', 'review_approve', 'review_reject'] as const) {
+      await repo.append(entry({ action }));
+    }
+    const page1 = await repo.list({ page: 1, pageSize: 2 });
+    expect(page1.items).toHaveLength(2);
+    expect(page1.hasMore).toBe(true);
+
+    // 第二页的第一条不能与第一页最后一条重复 —— 页边界重复就是排序不稳定。
+    const page2 = await repo.list({ page: 2, pageSize: 2 });
+    expect(page2.items[0].id).not.toBe(page1.items[1].id);
+  });
+
+  it('list 越界的页返回空列表与 hasMore=false，不是报错', async () => {
+    await repo.append(entry());
+    const { items, hasMore } = await repo.list({ page: 99, pageSize: 10 });
+    expect(items).toEqual([]);
+    expect(hasMore).toBe(false);
+  });
+
+  /**
    * Global Constraint 25：流水不可变。接口上**没有** update / delete ——
    * 不给它们留方法就是最强的保证。这条断言钉住这一点，防止将来「顺手」加一个。
    */

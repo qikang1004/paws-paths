@@ -1,24 +1,35 @@
 import { useCallback, useState } from 'react';
 import { clearSession, loadSession, type Session } from './api/session';
 import { ToastProvider } from './components/Toast';
+import { AuditLogsPage } from './pages/AuditLogsPage';
 import { LoginPage } from './pages/LoginPage';
 import { TasksPage } from './pages/TasksPage';
 
 /**
- * 只有两个视图（登录 / 工单），所以**不引路由库**：一个 `session` 状态就够了。
- * 引 react-router 是为了「地址栏能表达位置」，而这个后台目前没有第二个能深链的页面 ——
- * 等审计日志页进来再引，那时才有真正的路由需求。
+ * 两个视图之间切换，**仍然不引路由库**。
  *
- * 会话从 `localStorage` 初始化，所以刷新页面不会掉登录态。
+ * 加了流水页之后重新掂量过一次：引 react-router 换来的是「地址栏能表达位置」与
+ * 「刷新回到同一页」，代价是一个依赖加一层 provider。而这个后台的两页都是**队列式**的
+ * 工作面（进来就从第一页开始清），没有「把某一页的链接发给同事」这种用法 ——
+ * 真正需要深链的是「某条内容的审核历史」，而那要先有 `GET /audit-logs?targetId=`
+ * 那个端点。等它进来再引。
  */
+type View = 'tasks' | 'audit-logs';
+
+const VIEWS: readonly { id: View; label: string }[] = [
+  { id: 'tasks', label: '待复核工单' },
+  { id: 'audit-logs', label: '审核流水' },
+];
+
 export function App(): JSX.Element {
   const [session, setSession] = useState<Session | null>(() => loadSession());
+  const [view, setView] = useState<View>('tasks');
 
   /**
    * 令牌失效时把人送回登录页。
    *
    * `client.ts` 收到 401 已经清了 `localStorage`，但**内存里的 `session` 还在** ——
-   * 不同步一下的话界面会停在工单页反复失败。这里读一次本地会话：若已被清掉，
+   * 不同步一下的话界面会停在当前页反复失败。这里读一次本地会话：若已被清掉，
    * 就把内存状态也归零。
    */
   const syncSession = useCallback(() => {
@@ -37,6 +48,24 @@ export function App(): JSX.Element {
       <div className="shell">
         <header className="shell__bar">
           <span className="shell__brand">Paws Paths 运营后台</span>
+          {/*
+            两个视图都对 moderator 与 admin 开放 —— 服务端那两条端点挂的是同一个
+            `ModeratorGuard`。**不按角色藏菜单**：藏了会让人以为自己没权限，
+            而实际上点进去是能用的。真要分权得先在服务端分。
+          */}
+          <nav className="shell__nav">
+            {VIEWS.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                className={v.id === view ? 'shell__tab shell__tab--active' : 'shell__tab'}
+                onClick={() => setView(v.id)}
+                aria-current={v.id === view ? 'page' : undefined}
+              >
+                {v.label}
+              </button>
+            ))}
+          </nav>
           <span className="shell__spacer" />
           <span className="shell__user">
             {session.username}
@@ -46,8 +75,15 @@ export function App(): JSX.Element {
             退出
           </button>
         </header>
-        {/* `onExpired` 由工单页在 401 之后调用（client 已清了本地会话）。 */}
-        <TasksPage key={session.token} onExpired={syncSession} />
+        {/*
+          `key` 挂 token：换账号登进来时两页的分页状态都要重置。
+          `onExpired` 由页面在 401 之后调用（client 已清了本地会话）。
+        */}
+        {view === 'tasks' ? (
+          <TasksPage key={`tasks-${session.token}`} onExpired={syncSession} />
+        ) : (
+          <AuditLogsPage key={`logs-${session.token}`} onExpired={syncSession} />
+        )}
       </div>
     </ToastProvider>
   );

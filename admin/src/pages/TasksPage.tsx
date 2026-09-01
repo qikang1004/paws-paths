@@ -3,6 +3,7 @@ import type { ModerationTaskDto } from '@paws/types';
 import { ApiError, UnauthorizedError } from '../api/client';
 import { fetchTasks, resolveTask, type ResolveResult } from '../api/moderation';
 import { ImageLightbox } from '../components/ImageLightbox';
+import { Pager } from '../components/Pager';
 import { RejectDialog } from '../components/RejectDialog';
 import { TaskCard } from '../components/TaskCard';
 import { useToast } from '../components/Toast';
@@ -126,21 +127,15 @@ export function TasksPage({ onExpired }: { onExpired(): void }): JSX.Element {
         ))}
       </div>
 
-      <nav className="pager">
-        <button type="button" className="btn" disabled={page === 1 || loading} onClick={() => setPage(page - 1)}>
-          上一页
+      {/* `hasMore` 是服务端多取一条判出来的 —— 两页共用同一个组件。 */}
+      <Pager page={page} hasMore={hasMore} busy={loading} onChange={setPage} />
+
+      {/* 清完最后一页时给一个显式的回退入口，而不是留一屏「这一页空了」。 */}
+      {showEmptyBack && (
+        <button type="button" className="btn btn--link" onClick={() => setPage(page - 1)}>
+          回到上一页
         </button>
-        <span className="pager__label">第 {page} 页</span>
-        {/* `hasMore` 是服务端多取一条判出来的，不必知道总数。 */}
-        <button type="button" className="btn" disabled={!hasMore || loading} onClick={() => setPage(page + 1)}>
-          下一页
-        </button>
-        {showEmptyBack && (
-          <button type="button" className="btn btn--link" onClick={() => setPage(page - 1)}>
-            回到上一页
-          </button>
-        )}
-      </nav>
+      )}
 
       {rejecting && (
         <RejectDialog

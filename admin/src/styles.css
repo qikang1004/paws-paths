@@ -150,6 +150,36 @@ body {
   flex: 1;
 }
 
+.shell__nav {
+  display: flex;
+  gap: 4px;
+  margin-left: 16px;
+}
+
+.shell__tab {
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.shell__tab:hover {
+  background: var(--bg);
+}
+
+.shell__tab--active {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.shell__tab:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .shell__user {
   display: flex;
   align-items: center;
@@ -175,6 +205,60 @@ body {
 .page__title {
   margin: 0;
   font-size: 20px;
+}
+
+.page__hint {
+  margin: -8px 0 20px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ---------- 流水表格 ---------- */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.table th,
+.table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.table th {
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table__time {
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.table__id {
+  font-size: 13px;
+}
+
+/* id 与状态用等宽：它们是要照着比对的值，不是要读的句子。 */
+.table__mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .notice {

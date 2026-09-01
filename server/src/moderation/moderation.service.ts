@@ -7,6 +7,7 @@ import {
   MODERATION_TARGET_TYPES,
   REPORT_REASONS,
   type AuditAction,
+  type AuditLogDto,
   type AuditStatus,
   type ModerationTargetType,
   type ModerationTaskDto,
@@ -14,6 +15,11 @@ import {
   type ResolveTaskRequest,
 } from '@paws/types';
 import { ApiException } from '../common/api.exception';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type AuditLogRepository,
+  type AuditLogRowWithActor,
+} from './audit-log.repository';
 import {
   MODERATION_REPOSITORY,
   type ModerationRepository,
@@ -77,6 +83,13 @@ export interface ResolveResponse {
 /** 工单列表的一页。形状与其他列表端点一致（`items` / `hasMore` / `page`）。 */
 export interface TaskListResponse {
   items: ModerationTaskDto[];
+  hasMore: boolean;
+  page: number;
+}
+
+/** 流水列表的一页。形状与其他列表端点一致。 */
+export interface AuditLogListResponse {
+  items: AuditLogDto[];
   hasMore: boolean;
   page: number;
 }
@@ -155,6 +168,7 @@ export function parseResolve(body: Record<string, unknown>): ResolveBody {
 export class ModerationService {
   constructor(
     @Inject(MODERATION_REPOSITORY) private readonly moderation: ModerationRepository,
+    @Inject(AUDIT_LOG_REPOSITORY) private readonly auditLog: AuditLogRepository,
   ) {}
 
   /**
@@ -244,6 +258,23 @@ export class ModerationService {
   }
 
   /**
+   * 审核流水的一页（运营侧的合规视图）。
+   *
+   * 与工单列表分开的理由是**职责**：工单是待办队列（处理完就不在列表里），
+   * 流水是只追加的记录 —— 「谁在什么时候把哪条内容怎么了」要能一直查得到，
+   * 包括那条内容后来被作者删掉的情况。
+   *
+   * 这条路径上没有可见性过滤，同 `listTasks` —— 把关的是 `ModeratorGuard`。
+   */
+  async listAuditLogs(opts: {
+    page: number;
+    pageSize: number;
+  }): Promise<AuditLogListResponse> {
+    const { items, hasMore } = await this.auditLog.list(opts);
+    return { items: items.map(toAuditLogDto), hasMore, page: opts.page };
+  }
+
+  /**
    * 复核一条工单：`pending_review → approved / rejected`。
    *
    * 「不存在」与「已被处理」是**两个不同的响应**（404 与 422），这与举报那条路径
@@ -326,6 +357,20 @@ export class ModerationService {
  * （下发举报人只会招来针对举报人的报复），而列表只出未处理的工单，下发后两个字段
  * 只会诱导客户端去判空。
  */
+function toAuditLogDto(row: AuditLogRowWithActor): AuditLogDto {
+  return {
+    id: row.id,
+    actorId: row.actorId,
+    actorName: row.actorName,
+    action: row.action,
+    targetType: row.targetType,
+    targetId: row.targetId,
+    statusBefore: row.statusBefore,
+    statusAfter: row.statusAfter,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 function toTaskDto(row: ModerationTaskWithContent): ModerationTaskDto {
   return {
     id: row.id,

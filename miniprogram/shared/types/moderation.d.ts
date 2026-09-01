@@ -1,5 +1,6 @@
 // 由 packages/types 同步而来，禁止手改。
 // 改动请改 packages/types，然后跑 npm run sync:types。
+import type { AuditStatus } from './audit';
 /**
  * 举报与人工复核（spec §4.4）。
  *
@@ -76,6 +77,38 @@ export interface ModerationTaskDto {
     imageUrls: string[];
     authorNickname: string;
 }
+/**
+ * 一条审核流水。`GET /moderation/audit-logs` 的列表项。
+ *
+ * 与 `ModerationTaskDto` 的分别是**职责**，不是详略：工单是待办队列（会被更新、
+ * 处理完就不在列表里），流水是只追加的合规记录（谁在什么时候把哪条内容怎么了）。
+ * 所以这里下发的是**动作**与**操作人**，而工单那边刻意不下发举报人是谁。
+ *
+ * 不带被举报内容的原文：流水要比它记录的目标活得久 —— 动态被作者删了，
+ * 那条「谁撤下了它」的记录仍然必须查得到。带原文会让这一半在删除后变成空字段，
+ * 诱导客户端去判空。
+ */
+export interface AuditLogDto {
+    id: string;
+    /** 机审没有操作人 —— `null` 表示这条不是人做的。 */
+    actorId: string | null;
+    /**
+     * 操作人的显示名（运营账号是用户名，微信用户是昵称）。
+     *
+     * `actorId` 有值但这里是 `null`：那个账号已经不在 `users` 表里了。
+     * `audit_log.actor_id` **不挂外键**（流水必须比主体活得久），所以这是正常状态，
+     * 不是数据损坏 —— 客户端该显示「已注销」而不是当成缺字段。
+     */
+    actorName: string | null;
+    action: AuditAction;
+    targetType: ModerationTargetType;
+    targetId: string;
+    statusBefore: AuditStatus;
+    statusAfter: AuditStatus;
+    createdAt: string;
+}
+/** 审核动作的展示文案。客户端直接吃这个，不各自硬编码一份。 */
+export declare const AUDIT_ACTION_LABELS: Record<AuditAction, string>;
 /** `POST /moderation/tasks/:id/resolve` 的请求体。 */
 export interface ResolveTaskRequest {
     /** `approved` = 举报不成立，恢复可见；`rejected` = 举报成立，永久撤下。 */
