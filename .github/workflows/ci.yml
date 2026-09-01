@@ -38,16 +38,25 @@ jobs:
 
       # jest 只typecheck测试引用到的文件，tools/upload.ts 没人 import，
       # 不单独跑 tsc 的话它的类型错误会漏到 CI 之外。
+      #
+      # admin 的 build 是 `tsc --noEmit && vite build`，两半都要跑：打包会因为
+      # 「引了不存在的导出」失败，而 tsc 才抓类型错。它依赖上面那步 @paws/types
+      # 的 dist —— vite 侧走 alias 指到源码，但 tsc 走 node_modules 解析到
+      # dist/index.d.ts，顺序错了是 TS2307（本地删掉 dist 验过）。
       - name: 类型检查
         run: |
           npx tsc -p miniprogram/tsconfig.json
           npm run build -w server
+          npm run build -w @paws/admin
 
       # wxss 不得出现 hex 字面量与裸 px，由 test/style-guard.spec.ts 把关，
       # 跟着 miniprogram 测试一起跑。
       - run: npm test -w @paws/types
       - run: npm test -w server
       - run: npm test -w miniprogram
+      # 运营后台（vitest + jsdom）。漏了这行整个 admin 包就没有安全网 ——
+      # 它进 CI 之前只靠本地跑过。
+      - run: npm test -w @paws/admin
 
   upload:
     needs: test
