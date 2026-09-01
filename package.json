@@ -1,7 +1,12 @@
 {
   "name": "paws-paths",
   "private": true,
-  "workspaces": ["packages/*", "server", "miniprogram"],
+  "workspaces": [
+    "packages/*",
+    "server",
+    "miniprogram",
+    "admin"
+  ],
   "scripts": {
     "test": "npm run test --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",

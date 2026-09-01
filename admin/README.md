@@ -1,106 +1,112 @@
-# Paws Paths 运营后台
+# 运营后台（`@paws/admin`）
 
-独立 Web 应用，用于审核举报工单、查看审计日志等运营管理任务。
+独立的 Web 应用，运营人员用账号密码登录后复核举报工单。
 
-## 技术栈
+**与小程序共用同一套服务端 API**（spec §3.1）—— 权限由 `ModeratorGuard` 在服务端
+每次请求查库判定，前端这一侧不做任何权限决策。
 
-- **框架**: React 18 + TypeScript
-- **构建工具**: Vite 5
-- **路由**: React Router 6
-- **样式**: 原生 CSS（无 UI 框架依赖）
-
-## 开发
+## 跑起来
 
 ```bash
-# 安装依赖
+# 依赖装在仓库根（npm workspaces）
 npm install
 
-# 启动开发服务器（默认端口 5173）
-npm run dev
+# 开发（默认 5173，/api 代理到 localhost:3000）
+npm run dev -w @paws/admin
 
-# 构建生产版本
-npm run build
+# 类型检查 + 打包
+npm run build -w @paws/admin
 
-# 预览生产构建
-npm run preview
+# 测试
+npm test -w @paws/admin
 ```
 
-## 配置
+服务端要一起起着。想连别的后端：`ADMIN_API_TARGET=http://其他地址 npm run dev -w @paws/admin`。
 
-### 后端 API 代理
+## 开发态不产生跨域
 
-开发模式下，Vite 会将 `/api/*` 请求代理到 `http://localhost:3000`（后端服务）。
+Vite 把 `/api/*` 反代到服务端（见 `vite.config.ts`），所以本地开发**压根不发跨域请求** ——
+不必先配 `ADMIN_ORIGINS`。生产是同一个形状：Nginx 把 `/api/` 反代到服务端。
 
-生产环境需要配置 Nginx 或其他反向代理：
-
-```nginx
-location /api/ {
-  proxy_pass http://backend:3000/;
-  proxy_set_header Host $host;
-  proxy_set_header X-Real-IP $remote_addr;
-}
-```
-
-### CORS 配置
-
-后端需要配置 `ADMIN_ORIGINS` 环境变量允许前端域名：
+只有前后端分开部署在不同域时才需要服务端的 CORS：
 
 ```bash
-# 开发环境
-ADMIN_ORIGINS=http://localhost:5173
-
-# 生产环境
-ADMIN_ORIGINS=https://admin.paws-paths.example.com
+ADMIN_ORIGINS=https://admin.example.com   # 服务端环境变量，默认关闭
 ```
 
-## 功能
+那条配置只接受 https（`localhost` / `127.0.0.1` 例外）、拒绝通配符，配错直接启动失败。
 
-### 已实现
+## 建账号
 
-- ✅ 密码登录（JWT 认证）
-- ✅ 待审核工单列表
-- ✅ 批准/驳回操作
-- ✅ 角色菜单控制（审核员 vs 管理员）
-- ✅ 自动刷新 token 过期跳转登录
+后台**没有注册入口** —— 服务端刻意没有那个端点。加人要登服务器：
 
-### 开发中
-
-- 🚧 审计日志查询（管理员）
-- 🚧 工单分页、筛选、排序
-- 🚧 举报内容预览（图片/动态）
-
-## 项目结构
-
-```
-admin/
-├── src/
-│   ├── lib/           # 工具库
-│   │   ├── auth.ts    # 认证状态管理（localStorage）
-│   │   └── api.ts     # API 客户端（Bearer token）
-│   ├── components/    # 通用组件
-│   │   ├── Layout.tsx # 侧边栏布局
-│   │   └── ProtectedRoute.tsx # 路由守卫
-│   ├── pages/         # 页面组件
-│   │   ├── Login.tsx  # 登录页
-│   │   └── Reports.tsx # 工单列表
-│   ├── App.tsx        # 路由配置
-│   └── main.tsx       # 入口文件
-├── index.html
-├── vite.config.ts
-└── package.json
+```bash
+echo '一个至少 12 位的密码' | npm run admin:create -w server -- ops-alice moderator
 ```
 
-## 安全特性
+同一个用户名再跑一次就是改密码与改角色。撤权：`UPDATE users SET role = 'user' WHERE username = $1` ——
+角色不在令牌里，撤权立即生效。
 
-- **无密码明文传输**: HTTPS 强制（生产环境）
-- **JWT 无角色嵌入**: 每次请求从数据库取新鲜角色（Global Constraint 28）
-- **自动登出**: 401 响应触发清空 token + 跳转登录
-- **CORS 限制**: 后端只允许显式配置的域名跨域
+## 已经能用的
 
-## 部署清单
+- 账号密码登录，会话存 `localStorage`，刷新不掉线
+- 待复核工单分页列表（页大小 20，与服务端 `parseListQuery` 的上限一致）
+- 工单带被举报内容的原文、图片、举报原因、作者昵称
+- 放行（举报不成立）与撤下（举报成立，必须写原因）
+- 图片点开看大图
+- 令牌失效时自动回到登录页
 
-1. 构建前端: `npm run build` → `dist/` 目录
-2. 部署静态文件到 Nginx/CDN
-3. 配置反向代理: `/api/` → 后端服务
-4. 后端设置 `ADMIN_ORIGINS` 环境变量
-5. 使用 CLI 创建管理员账号: `npm run admin:create`
+## 还没有的
+
+- **审计日志页**：服务端目前没有查询端点（`AuditLogRepository` 只有写入）
+- **已处理工单的历史**：`GET /moderation/tasks` 只出 `result IS NULL` 的
+- **筛选与排序**：服务端固定按创建时间正序（先举报的先处理）
+- **待审图片看不到**：待审图落私有档，只有作者本人取得到（`UploadsService.fetch`）。
+  运营看已过审的图正常，看待审的图是碎图 —— 这需要服务端为运营开一条取图路径
+
+## 目录
+
+```
+src/
+  api/
+    session.ts      登录态（localStorage 读写 + 存坏了当没登录）
+    client.ts       fetch 包装：Bearer 头、统一包络、401 清会话
+    moderation.ts   两个端点的包装 + 页大小常量
+  components/
+    Toast.tsx       浮出提示（替掉 alert）
+    RejectDialog.tsx 驳回原因输入（替掉 prompt）
+    ImageLightbox.tsx 大图预览
+    TaskCard.tsx    一条工单
+  pages/
+    LoginPage.tsx
+    TasksPage.tsx
+  App.tsx           登录 / 工单两个视图的切换
+  styles.css
+test/               vitest + @testing-library/react，49 个用例
+```
+
+## 几个刻意的选择
+
+**不引路由库。** 只有两个视图，一个 `session` 状态就够。等审计日志页进来、
+真的需要「地址栏表达位置」时再引。
+
+**不引 UI 框架。** 两页七个组件，引一套组件库会为了几个按钮拖进几十个包。
+等手写开始重复再换。
+
+**判据是业务码不是 HTTP 状态。** 服务端的包络是 `{ code, message, data }`，
+`code` 才是真相 —— 与小程序侧同一套约定。
+
+**失败文案原样用服务端的。** 登录失败时服务端刻意让「用户名不存在」与「密码错误」
+收敛成同一句（防枚举），前端按码分支写自己的文案会把那道收敛拆开。唯一的例外是
+429 —— 补一句限流量级，否则运营会以为服务挂了、继续重试把配额烧光。
+
+**UGC 一律走文本插值，绝不用 `dangerouslySetInnerHTML`。** 令牌就在
+`localStorage` 里，被举报的正文是攻击者可控的内容。
+
+## 部署
+
+1. `npm run build -w @paws/admin` → `admin/dist/`
+2. 静态文件交给 Nginx（或 CDN）
+3. Nginx 把 `/api/` 反代到服务端；前后端同域时不必开 CORS
+4. 分域部署才需要服务端配 `ADMIN_ORIGINS`
+5. 用 CLI 建第一个运营账号

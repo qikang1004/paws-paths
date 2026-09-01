@@ -1,0 +1,403 @@
+/*
+ * 手写 CSS，不引 UI 框架。
+ *
+ * 理由是依赖面：这个后台目前只有两页、七个组件，引一套组件库会为了几个按钮
+ * 拖进几十个包（以及它们的升级与安全公告）。等页面多到手写开始重复再换。
+ */
+
+:root {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --line: #e2e5e9;
+  --text: #1f2328;
+  --muted: #6b7280;
+  --primary: #2563eb;
+  --danger: #dc2626;
+  --radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei',
+    sans-serif;
+}
+
+/* ---------- 通用按钮 ---------- */
+
+.btn {
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+/* 禁用态要看得出来 —— 提交中的按钮若与可点的一模一样，人会反复点。 */
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.btn--danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.btn--link {
+  border-color: transparent;
+  background: transparent;
+  color: var(--primary);
+}
+
+.btn--block {
+  width: 100%;
+  justify-content: center;
+}
+
+/* 键盘可见的焦点圈。去掉 outline 是可访问性事故 —— 复核是键盘活。 */
+.btn:focus-visible,
+.field__input:focus-visible,
+.dialog__input:focus-visible,
+.thumb:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ---------- 登录页 ---------- */
+
+.login {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.login__box {
+  width: 100%;
+  max-width: 360px;
+  padding: 32px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.login__title {
+  margin: 0 0 24px;
+  font-size: 18px;
+}
+
+.login__hint {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.field {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.field__label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.field__input {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+/* ---------- 外壳 ---------- */
+
+.shell__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.shell__brand {
+  font-weight: 600;
+}
+
+.shell__spacer {
+  flex: 1;
+}
+
+.shell__user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+/* ---------- 列表页 ---------- */
+
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.page__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.page__title {
+  margin: 0;
+  font-size: 20px;
+}
+
+.notice {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.notice--error {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.cards {
+  display: grid;
+  gap: 16px;
+}
+
+.card {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.card__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.card__time {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.card__author {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* UGC 正文：`pre-wrap` 保留换行，`break-word` 防一长串字符撑破卡片。 */
+.card__content {
+  margin: 0 0 12px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.card__images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.thumb {
+  width: 96px;
+  height: 96px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  cursor: zoom-in;
+  overflow: hidden;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.card__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+}
+
+.badge--muted {
+  background: #f3f4f6;
+  color: var(--muted);
+}
+
+.badge--reason {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.pager__label {
+  color: var(--muted);
+}
+
+/* ---------- 遮罩与对话框 ---------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.overlay--dark {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.dialog {
+  width: 100%;
+  max-width: 440px;
+  padding: 24px;
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.dialog__title {
+  margin: 0 0 10px;
+  font-size: 17px;
+}
+
+.dialog__hint {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.dialog__input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  resize: vertical;
+}
+
+.dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.lightbox__image {
+  max-width: 92vw;
+  max-height: 88vh;
+  border-radius: 4px;
+  cursor: default;
+}
+
+.lightbox__close {
+  position: fixed;
+  top: 16px;
+  right: 20px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* ---------- Toast ---------- */
+
+.toast-stack {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 8px;
+  z-index: 10;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 240px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
+  color: #fff;
+}
+
+.toast--success {
+  background: #16a34a;
+}
+
+.toast--error {
+  background: var(--danger);
+}
+
+.toast__close {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
