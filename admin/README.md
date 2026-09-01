@@ -72,7 +72,8 @@ echo '一个至少 12 位的密码' | npm run admin:create -w server -- ops-alic
 
 ## 还没有的
 
-- **审计日志页**：服务端目前没有查询端点（`AuditLogRepository` 只有写入）
+- **审计日志页**：服务端目前没有分页查询端点 —— `AuditLogRepository` 上只有
+  `append` 与 `listByTarget`（按单个目标查），做不了「最近 100 条操作」那种列表
 - **已处理工单的历史**：`GET /moderation/tasks` 只出 `result IS NULL` 的
 - **筛选与排序**：服务端固定按创建时间正序（先举报的先处理）
 - **待审图片看不到**：待审图落私有档，只有作者本人取得到（`UploadsService.fetch`），

@@ -11,11 +11,15 @@
  * 这个脚本只做一件事：给一个**已存在的**用户挂上用户名与密码，或者建一个
  * 只有凭据、没有微信身份的纯运营账号。它不授予角色之外的任何东西 ——
  * 权限判定仍然每次请求从 `users.role` 读（Global Constraint 28）。
+ *
+ * 那条 upsert 本身在 `../auth/admin-account.ts`：这个文件从 argv 取参、
+ * 从 stdin 读密码、跑完 `process.exit`，测试碰不到它，而那条 SQL 是整条链上
+ * 唯一会写库的语句，必须可测。
  */
 import { createInterface } from 'node:readline';
-import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { USER_ROLES, type UserRole } from '@paws/types';
+import { upsertAdminAccount } from '../auth/admin-account';
 import { hashPassword, PASSWORD_MIN_LENGTH } from '../auth/password';
 
 /** 只允许授这两个 —— `user` 不需要用户名密码（小程序用户走微信）。 */
@@ -80,42 +84,15 @@ async function main(): Promise<void> {
 
   const pool = new Pool({ connectionString, max: 1 });
   try {
-    // 用户名已被占用时**改密码而不是报错**：这个脚本同时是「重置密码」工具。
-    // 但角色一并更新 —— 降权也走这条路（把 moderator 改成 admin 或反过来）。
-    const { rows } = await pool.query<{ id: string; created: boolean }>(
-      `WITH existing AS (
-         UPDATE users SET password_hash = $2, role = $3
-          WHERE username = $1
-         RETURNING id
-       ), created AS (
-         INSERT INTO users (id, openid, nickname, role, username, password_hash)
-         SELECT $4, $5, $1, $3, $1, $2
-          WHERE NOT EXISTS (SELECT 1 FROM existing)
-         RETURNING id
-       )
-       SELECT id, false AS created FROM existing
-       UNION ALL
-       SELECT id, true AS created FROM created`,
-      [
-        username,
-        passwordHash,
-        role,
-        randomUUID(),
-        // 纯运营账号没有微信身份，但 openid 有 NOT NULL UNIQUE 约束 ——
-        // 用一个不可能与真 openid 相撞的前缀占位。
-        `admin:${username}`,
-      ],
-    );
-
-    const row = rows[0];
-    if (!row) {
+    const result = await upsertAdminAccount(pool, { username, passwordHash, role });
+    if (!result) {
       console.error('错误：既没更新也没插入 —— 检查库里 username 那一列是否存在（跑过迁移吗）。');
       process.exit(1);
     }
     console.log(
-      row.created
-        ? `已建运营账号：${username}（${role}），userId=${row.id}`
-        : `已更新既有账号的密码与角色：${username}（${role}），userId=${row.id}`,
+      result.created
+        ? `已建运营账号：${username}（${role}），userId=${result.userId}`
+        : `已更新既有账号的密码与角色：${username}（${role}），userId=${result.userId}`,
     );
     console.log('提醒：角色随时可撤 —— UPDATE users SET role = \'user\' WHERE username = $1；');
     console.log('      令牌里不带角色，所以撤权立即生效，不必等令牌过期。');
