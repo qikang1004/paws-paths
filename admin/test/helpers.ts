@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import type { AuditLogDto, ModerationTaskDto } from '@paws/types';
+import type { AuditLogDto, HandledTaskDto, ModerationTaskDto } from '@paws/types';
 
 /** 服务端的统一包络。测试里造响应一律经过它，别各处手拼 JSON。 */
 export function envelope(data: unknown, code = 0, message = 'ok'): string {
@@ -69,6 +69,26 @@ export function auditLog(over: Partial<AuditLogDto> = {}): AuditLogDto {
     statusBefore: 'pending_review',
     statusAfter: 'rejected',
     createdAt: '2026-08-30T02:00:00.000Z',
+    ...over,
+  };
+}
+
+/** 一条已处理工单的默认形状，字段可覆盖。 */
+export function handled(over: Partial<HandledTaskDto> = {}): HandledTaskDto {
+  return {
+    id: 'h-1',
+    targetType: 'post',
+    targetId: 'p-1',
+    source: 'user_report',
+    reason: 'abuse',
+    createdAt: '2026-08-30T01:00:00.000Z',
+    result: 'rejected',
+    handledBy: 'u-mod',
+    handledByName: 'ops-alice',
+    handledAt: '2026-08-30T02:00:00.000Z',
+    content: '一条判过的动态',
+    imageUrls: [],
+    authorNickname: '小明',
     ...over,
   };
 }

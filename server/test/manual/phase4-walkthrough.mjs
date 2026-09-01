@@ -114,6 +114,56 @@ async function main() {
   log('GET /moderation/tasks?pageSize=21', `${tooBig.status} ${tooBig.code} ${tooBig.message}`);
   must(tooBig.status === 422, '页大小超过 20 应 422（后台固定发 20）');
 
+  // —— 已处理工单的历史（阶段 4 新增）——
+  const handled = await call('GET', '/moderation/tasks/handled?pageSize=20', { token });
+  log('GET /moderation/tasks/handled', `${handled.status} ${handled.data?.items?.length ?? '-'} 条已处理`);
+  must(handled.status === 200, '运营应能读已处理工单');
+  must(Array.isArray(handled.data.items), '应返回 items 数组');
+  // 这条路径**只**出已处理的 —— 混进未处理的等于把待办队列泄进历史。
+  must(
+    handled.data.items.every((row) => row.result !== null && row.result !== undefined),
+    '已处理列表里不该出现 result 为空的工单',
+  );
+  if (handled.data.items.length > 0) {
+    const row = handled.data.items[0];
+    log('最近一条已处理工单', show(row));
+    must(typeof row.handledAt === 'string', '应带处理时间');
+    must('handledByName' in row, '应带复核人显示名这个键（值可能是 null）');
+    // 举报人仍然不下发 —— 回看时也不需要知道，下发只多一条报复路径。
+    must(!('reportedBy' in row), '已处理列表不该下发举报人');
+  }
+
+  const handledTooBig = await call('GET', '/moderation/tasks/handled?pageSize=21', { token });
+  must(handledTooBig.status === 422, '已处理列表的页大小上限也是 20');
+
+  // —— 单条内容的审核历史（阶段 4 新增）——
+  // 挑一条已处理工单的目标来查 —— 它一定有流水（举报一条 + 复核一条）。
+  const sample = handled.data.items[0];
+  if (sample) {
+    const q = `?targetType=${sample.targetType}&targetId=${encodeURIComponent(sample.targetId)}`;
+    const history = await call('GET', `/moderation/audit-logs/by-target${q}`, { token });
+    log('GET /moderation/audit-logs/by-target', `${history.status} ${history.data?.items?.length ?? '-'} 条`);
+    must(history.status === 200, '应能查单条内容的历史');
+    must(history.data.items.length >= 2, '举报 + 复核至少两条流水');
+    must(
+      history.data.items.every((row) => row.targetId === sample.targetId),
+      '不该混进别的目标的流水',
+    );
+    // 不分页：这两个字段不该出现。
+    must(!('hasMore' in history.data), '单条历史不分页，不该有 hasMore');
+    must(!('page' in history.data), '单条历史不分页，不该有 page');
+  } else {
+    log('跳过单条历史', '这个库还没有已处理的工单 —— 先跑一遍 phase3-walkthrough.mjs');
+  }
+
+  const badType = await call('GET', '/moderation/audit-logs/by-target?targetType=pet_photo&targetId=x', {
+    token,
+  });
+  must(badType.status === 422 && badType.code === 42204, '未知 targetType 应是 42204');
+  const noId = await call('GET', '/moderation/audit-logs/by-target?targetType=post', { token });
+  must(noId.status === 422 && noId.code === 42200, '缺 targetId 应是通用校验失败');
+  log('单条历史的入参校验', `未知类型 ${badType.code} / 缺 id ${noId.code}`);
+
   // —— 流水列表（阶段 4 新增的端点）——
   const logs = await call('GET', '/moderation/audit-logs?pageSize=20', { token });
   log('GET /moderation/audit-logs', `${logs.status} ${logs.data?.items?.length ?? '-'} 条流水`);
@@ -141,9 +191,15 @@ async function main() {
   }
   log('流水没有写入端点', '四个动词全 404 —— 流水只由复核流程在自己的事务里追加');
 
-  const logsAsAnon = await call('GET', '/moderation/audit-logs');
-  must(logsAsAnon.status === 401, '未登录读流水应 401');
-  log('未登录读流水', `${logsAsAnon.status} ${logsAsAnon.code}`);
+  for (const path of [
+    '/moderation/audit-logs',
+    '/moderation/tasks/handled',
+    '/moderation/audit-logs/by-target?targetType=post&targetId=x',
+  ]) {
+    const res = await call('GET', path);
+    must(res.status === 401, `未登录读 ${path} 应 401，实际 ${res.status}`);
+  }
+  log('未登录读三条运营端点', '全 401');
 
   // —— 两种失败必须无法区分（防枚举）——
   const wrongPass = await login(USER, `${PASS}-wrong`);

@@ -1,4 +1,10 @@
-import type { AuditLogDto, ModerationTaskDto, UserRole } from '@paws/types';
+import type {
+  AuditLogDto,
+  HandledTaskDto,
+  ModerationTargetType,
+  ModerationTaskDto,
+  UserRole,
+} from '@paws/types';
 import { api } from './client';
 
 /** `GET /moderation/tasks` 的一页。形状与服务端的 `TaskListResponse` 一致。 */
@@ -69,4 +75,31 @@ export interface AuditLogPage {
  */
 export function fetchAuditLogs(page: number): Promise<AuditLogPage> {
   return api.get<AuditLogPage>(`/moderation/audit-logs?page=${page}&pageSize=${PAGE_SIZE}`);
+}
+
+/** `GET /moderation/tasks/handled` 的一页。 */
+export interface HandledTaskPage {
+  items: HandledTaskDto[];
+  hasMore: boolean;
+  page: number;
+}
+
+/** 已处理工单的一页，按处理时间倒序（最近判的在最前）。 */
+export function fetchHandledTasks(page: number): Promise<HandledTaskPage> {
+  return api.get<HandledTaskPage>(`/moderation/tasks/handled?page=${page}&pageSize=${PAGE_SIZE}`);
+}
+
+/**
+ * 某条内容的完整审核历史。**不分页** —— 一条内容的流水撑不到要分页
+ * （举报一条、复核一条，机审最多再两条）。
+ *
+ * 这条路径下发的 `actorName` 恒为 `null`（服务端的 `listByTarget` 不 JOIN users），
+ * 所以调用方要按 `actorId` 显示，不能指望有名字。
+ */
+export function fetchTargetHistory(
+  targetType: ModerationTargetType,
+  targetId: string,
+): Promise<{ items: AuditLogDto[] }> {
+  const query = new URLSearchParams({ targetType, targetId });
+  return api.get<{ items: AuditLogDto[] }>(`/moderation/audit-logs/by-target?${query}`);
 }

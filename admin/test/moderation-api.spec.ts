@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PAGE_SIZE, fetchAuditLogs, fetchTasks, resolveTask } from '../src/api/moderation';
+import {
+  PAGE_SIZE,
+  fetchAuditLogs,
+  fetchHandledTasks,
+  fetchTargetHistory,
+  fetchTasks,
+  resolveTask,
+} from '../src/api/moderation';
 import { bodyOf, envelope, stubFetch } from './helpers';
 
 afterEach(() => {
@@ -58,5 +65,30 @@ describe('流水接口的包装', () => {
     await fetchTasks(1);
     const sizeOf = (url: string) => new URL(url, 'http://x').searchParams.get('pageSize');
     expect(sizeOf(calls[0].url)).toBe(sizeOf(calls[1].url));
+  });
+});
+
+describe('已处理工单与单条历史的包装', () => {
+  it('已处理列表带页码与页大小', async () => {
+    const calls = stubFetch([envelope({ items: [], hasMore: false, page: 3 })]);
+    await fetchHandledTasks(3);
+    expect(calls[0].url).toBe(`/api/moderation/tasks/handled?page=3&pageSize=${PAGE_SIZE}`);
+  });
+
+  it('单条历史带 targetType 与 targetId，且不带分页参数', async () => {
+    const calls = stubFetch([envelope({ items: [] })]);
+    await fetchTargetHistory('post_image', 'pi-9');
+    const url = new URL(calls[0].url, 'http://x');
+    expect(url.pathname).toBe('/api/moderation/audit-logs/by-target');
+    expect(url.searchParams.get('targetType')).toBe('post_image');
+    expect(url.searchParams.get('targetId')).toBe('pi-9');
+    expect(url.searchParams.has('pageSize')).toBe(false);
+  });
+
+  /** id 里可能有需要转义的字符 —— `URLSearchParams` 负责这件事，别手拼。 */
+  it('目标 id 经过 URL 编码', async () => {
+    const calls = stubFetch([envelope({ items: [] })]);
+    await fetchTargetHistory('post', 'a&b=c');
+    expect(new URL(calls[0].url, 'http://x').searchParams.get('targetId')).toBe('a&b=c');
   });
 });

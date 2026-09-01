@@ -78,6 +78,39 @@ export interface ModerationTaskDto {
     authorNickname: string;
 }
 /**
+ * 一条**已处理**的工单。`GET /moderation/tasks/handled` 的列表项。
+ *
+ * 与 `ModerationTaskDto` 分成两个类型而不是把那几个字段改成可选：可选字段会让
+ * 客户端在**两条路径上都**去判空，而实际上「未处理的工单没有结论」与
+ * 「已处理的工单一定有结论」都是确定的。分开之后各自的必填就是真的必填。
+ *
+ * 带 `content` / `imageUrls`：回看时要知道当初判的是什么。但目标可能已被作者删掉
+ * （`moderation_tasks.target_id` 是多态的、不挂外键），那时这两个字段是空的 ——
+ * 这也正是 `AuditLogDto` 刻意不带原文的理由：流水要活得更久。
+ */
+export interface HandledTaskDto {
+    id: string;
+    targetType: ModerationTargetType;
+    targetId: string;
+    source: ModerationSource;
+    reason: ReportReason | null;
+    createdAt: string;
+    /** 已处理的工单一定有结论 —— 这个字段不可空。 */
+    result: 'approved' | 'rejected';
+    /**
+     * 复核人。可空 —— `handled_by` 挂的是 `ON DELETE SET NULL`：工单是队列不是流水，
+     * 账号注销后把指针置空是可接受的（合规留痕由 `audit_log` 承担）。
+     */
+    handledBy: string | null;
+    /** 复核人的显示名。`handledBy` 为 null 时它也是 null。 */
+    handledByName: string | null;
+    handledAt: string;
+    /** 目标已被删除时是空串。 */
+    content: string;
+    imageUrls: string[];
+    authorNickname: string;
+}
+/**
  * 一条审核流水。`GET /moderation/audit-logs` 的列表项。
  *
  * 与 `ModerationTaskDto` 的分别是**职责**，不是详略：工单是待办队列（会被更新、

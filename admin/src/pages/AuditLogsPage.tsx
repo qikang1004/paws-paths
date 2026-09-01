@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AUDIT_ACTION_LABELS, type AuditLogDto } from '@paws/types';
 import { ApiError, UnauthorizedError } from '../api/client';
 import { fetchAuditLogs } from '../api/moderation';
+import { HistoryDialog } from '../components/HistoryDialog';
 import { Pager } from '../components/Pager';
 
 /**
@@ -20,6 +21,7 @@ export function AuditLogsPage({ onExpired }: { onExpired(): void }): JSX.Element
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<AuditLogDto | null>(null);
 
   const load = useCallback(
     async (target: number): Promise<void> => {
@@ -92,7 +94,15 @@ export function AuditLogsPage({ onExpired }: { onExpired(): void }): JSX.Element
                 <td>{AUDIT_ACTION_LABELS[row.action]}</td>
                 <td>{actorLabel(row)}</td>
                 <td className="table__id">
-                  {row.targetType === 'post' ? '动态' : '图片'}
+                  {/* 点目标看这条内容的完整历史 —— 流水是按时间铺开的，
+                      而排查往往要「这一条内容都经历了什么」。 */}
+                  <button
+                    type="button"
+                    className="btn btn--link btn--inline"
+                    onClick={() => setHistory(row)}
+                  >
+                    {row.targetType === 'post' ? '动态' : '图片'}
+                  </button>
                   <br />
                   <span className="table__mono">{row.targetId}</span>
                 </td>
@@ -106,6 +116,14 @@ export function AuditLogsPage({ onExpired }: { onExpired(): void }): JSX.Element
       )}
 
       <Pager page={page} hasMore={hasMore} busy={loading} onChange={setPage} />
+
+      {history && (
+        <HistoryDialog
+          targetType={history.targetType}
+          targetId={history.targetId}
+          onClose={() => setHistory(null)}
+        />
+      )}
     </section>
   );
 }

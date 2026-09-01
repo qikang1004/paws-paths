@@ -64,6 +64,22 @@ export interface ModerationTaskWithContent extends ModerationTaskRow {
 }
 
 /**
+ * 一条已处理的工单，连带内容与复核人显示名。
+ *
+ * `result` / `handledAt` 在这个类型上**不可空** —— 查询的 WHERE 就是
+ * `result IS NOT NULL`，所以那两个字段一定有值。收窄在类型上，DTO 那层就不必判空。
+ *
+ * `handledByName` 是 JOIN 出来的。`handled_by` 挂 `ON DELETE SET NULL`，
+ * 所以它为 null 有两种可能：账号注销后指针被置空，或者显示名取不到。
+ * 两者对运营是同一件事（「不知道是谁」），不必分开。
+ */
+export interface HandledTaskRow extends Omit<ModerationTaskWithContent, 'result' | 'handledAt'> {
+  result: 'approved' | 'rejected';
+  handledAt: Date;
+  handledByName: string | null;
+}
+
+/**
  * 复核一次要落的三件事的入参。
  *
  * 带上 `target` 而不是让仓储自己再查一次：上层为了 `assertTransition` 本来就得
@@ -119,6 +135,19 @@ export interface ModerationRepository {
     page: number;
     pageSize: number;
   }): Promise<{ items: ModerationTaskWithContent[]; hasMore: boolean }>;
+
+  /**
+   * **已处理**工单的一页，按处理时间倒序（最近判的在最前）。
+   *
+   * 与 `listOpenTasks` 分成两个方法而不是加一个 `handled` 开关：两者的排序相反
+   * （待办按举报时间正序 —— 先举报的先处理；历史按处理时间倒序 —— 最近判的先看到），
+   * 而且这一条要多 JOIN 一次 users 取复核人显示名。一个方法里塞两种排序，
+   * 迟早有人改一处忘了另一处。
+   */
+  listHandledTasks(opts: {
+    page: number;
+    pageSize: number;
+  }): Promise<{ items: HandledTaskRow[]; hasMore: boolean }>;
 
   /** 按 id 取一条工单（不论是否已处理）。用于把「不存在」与「已处理」分开。 */
   findTaskById(taskId: string): Promise<ModerationTaskRow | null>;
@@ -202,6 +231,40 @@ export class InMemoryModerationRepository implements ModerationRepository {
       if (described) items.push({ ...task, ...described });
     }
     return { items, hasMore: offset + slice.length < open.length };
+  }
+
+  /**
+   * 已处理的一页，按 `handledAt` 倒序。
+   *
+   * `handledByName` 恒为 null —— 内存用户仓储按 openid 存，这里只有 id
+   * （同 `InMemoryAuditLogRepository.list` 与 `PostTargetSource.describe` 的理由）。
+   */
+  async listHandledTasks(opts: { page: number; pageSize: number }): Promise<{
+    items: HandledTaskRow[];
+    hasMore: boolean;
+  }> {
+    const handled = this.tasks
+      .filter((task): task is ModerationTaskRow & { result: 'approved' | 'rejected'; handledAt: Date } =>
+        task.result !== null && task.handledAt !== null,
+      )
+      // 倒序：最近判的在最前。同一毫秒的两条靠追加序兜底（reverse 前先按时间排）。
+      .sort((a, b) => b.handledAt.getTime() - a.handledAt.getTime());
+    const offset = (opts.page - 1) * opts.pageSize;
+    const slice = handled.slice(offset, offset + opts.pageSize);
+    const items: HandledTaskRow[] = [];
+    for (const task of slice) {
+      const described = await this.targets.describe(task);
+      // 目标被删了：内容给空，**工单仍要出现** —— 这与待办列表相反。
+      // 那边跳过空壳是因为没法处理，而这边是历史：判过什么必须查得到。
+      items.push({
+        ...task,
+        content: described?.content ?? '',
+        imageUrls: described?.imageUrls ?? [],
+        authorNickname: described?.authorNickname ?? '',
+        handledByName: null,
+      });
+    }
+    return { items, hasMore: offset + slice.length < handled.length };
   }
 
   async findTaskById(taskId: string): Promise<ModerationTaskRow | null> {
@@ -397,6 +460,40 @@ export class PostgresModerationRepository implements ModerationRepository {
     return { items, hasMore: rows.length > opts.pageSize };
   }
 
+  /** 已处理的一页，倒序。多取一条判 hasMore（同待办那条）。 */
+  async listHandledTasks(opts: { page: number; pageSize: number }): Promise<{
+    items: HandledTaskRow[];
+    hasMore: boolean;
+  }> {
+    const offset = (opts.page - 1) * opts.pageSize;
+    const { rows } = await this.pool.query<
+      Parameters<typeof toTaskRow>[0] & {
+        content: string | null;
+        image_urls: string[];
+        author_nickname: string | null;
+        handled_by_username: string | null;
+        handled_by_nickname: string | null;
+      }
+    >(`${SELECT_HANDLED_TASKS} LIMIT $1 OFFSET $2`, [opts.pageSize + 1, offset]);
+    const items = rows.slice(0, opts.pageSize).map((row) => {
+      const base = toTaskRow(row);
+      return {
+        ...base,
+        // WHERE 里是 `result IS NOT NULL`，所以这两个一定有值 —— 断言而不是判空，
+        // 让类型上的「不可空」名副其实。
+        result: base.result as 'approved' | 'rejected',
+        handledAt: base.handledAt as Date,
+        // 目标被删掉的工单**照样出现**：这是历史，判过什么必须查得到。
+        content: row.content ?? '',
+        imageUrls: row.image_urls ?? [],
+        authorNickname: row.author_nickname ?? '',
+        // 运营账号的显示名是 username，微信用户没有那一列 —— 回落到昵称。
+        handledByName: row.handled_by_username ?? row.handled_by_nickname ?? null,
+      };
+    });
+    return { items, hasMore: rows.length > opts.pageSize };
+  }
+
   /**
    * 拿票 + 状态迁移 + 写流水，一条语句。
    *
@@ -455,7 +552,19 @@ export class PostgresModerationRepository implements ModerationRepository {
  *
  * 图片类工单的 `image_urls` 只有被举报那一张 —— 举报指向的是这张图，不是整条动态。
  */
-const SELECT_OPEN_TASKS = `
+/**
+ * 工单 + 内容原文的公共部分（`SELECT` 到 `FROM ... JOIN`）。
+ *
+ * 多态目标用两组 LEFT JOIN 摊平，而不是按类型分两条语句：分页要跨类型排序，
+ * 两条语句就得在应用层合并再切片，那等于把 LIMIT 做废（同「过滤必须在 SQL 里」
+ * 的理由）。`target_type` 的比较是 SQL 里的单个 `=`，不是 TS 的状态字面量比较。
+ *
+ * 图片类工单的 `image_urls` 只有被举报那一张 —— 举报指向的是这张图，不是整条动态。
+ *
+ * 提成常量给两个列表共用：待办与历史查的是同一批列、同一组 JOIN，只有 WHERE 与
+ * ORDER BY 不同。抄两份的话，将来给工单加一列会漏改一处。
+ */
+const TASK_WITH_CONTENT_FROM = `
   SELECT t.id, t.target_type, t.target_id, t.source, t.reported_by, t.reason,
          t.result, t.handled_by, t.handled_at, t.created_at,
          COALESCE(po.content, pip.content) AS content,
@@ -465,14 +574,32 @@ const SELECT_OPEN_TASKS = `
                   FROM post_images x WHERE x.post_id = po.id
               ), '[]'::json)
          END AS image_urls,
-         au.nickname AS author_nickname
+         au.nickname AS author_nickname,
+         hu.username AS handled_by_username,
+         hu.nickname AS handled_by_nickname
     FROM moderation_tasks t
     LEFT JOIN posts po ON t.target_type = 'post' AND po.id = t.target_id
     LEFT JOIN post_images pi ON t.target_type = 'post_image' AND pi.id = t.target_id
     LEFT JOIN posts pip ON t.target_type = 'post_image' AND pip.id = pi.post_id
     LEFT JOIN users au ON au.id = COALESCE(po.author_id, pip.author_id)
+    LEFT JOIN users hu ON hu.id = t.handled_by
+`;
+
+/** 待处理的一页，按举报时间**正序** —— 先举报的先处理。 */
+const SELECT_OPEN_TASKS = `${TASK_WITH_CONTENT_FROM}
    WHERE t.result IS NULL
    ORDER BY t.created_at, t.id
+`;
+
+/**
+ * 已处理的一页，按处理时间**倒序** —— 最近判的先看到，与待办正好相反。
+ *
+ * `id DESC` 兜同一时刻的两条（批量复核时 `handled_at` 可能相同）：只按时间排
+ * 会让分页在页边界上漏行或重复，同 `audit_log` 那边的理由。
+ */
+const SELECT_HANDLED_TASKS = `${TASK_WITH_CONTENT_FROM}
+   WHERE t.result IS NOT NULL
+   ORDER BY t.handled_at DESC, t.id DESC
 `;
 
 /**

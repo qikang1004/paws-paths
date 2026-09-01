@@ -73,6 +73,13 @@ body {
   justify-content: center;
 }
 
+/* 表格单元格里的链接式按钮：不要按钮的内外边距，行高跟着文本。 */
+.btn--inline {
+  padding: 0;
+  font-size: inherit;
+  line-height: inherit;
+}
+
 /* 键盘可见的焦点圈。去掉 outline 是可访问性事故 —— 复核是键盘活。 */
 .btn:focus-visible,
 .field__input:focus-visible,
@@ -315,6 +322,12 @@ body {
   overflow-wrap: break-word;
 }
 
+/* 内容已被删除时的说明文字：与真实正文区分开，别让人以为作者写了这句。 */
+.card__content--empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
 .card__images {
   display: flex;
   flex-wrap: wrap;
@@ -378,6 +391,12 @@ body {
   color: #92400e;
 }
 
+/* 已保留 vs 已撤下：结论要一眼分得开，不能只靠读字。 */
+.badge--ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
 .pager {
   display: flex;
   align-items: center;
@@ -410,6 +429,49 @@ body {
   padding: 24px;
   border-radius: var(--radius);
   background: var(--surface);
+}
+
+/* 历史对话框要宽一些：每行有动作 + 时间 + 操作人 + 状态变化四段。 */
+.dialog--wide {
+  max-width: 560px;
+}
+
+/* 时间线可能很长（一条内容被反复举报），限高滚动而不是把对话框撑出屏幕。 */
+.timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.timeline__item {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.timeline__item:last-child {
+  border-bottom: none;
+}
+
+.timeline__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.timeline__head time {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.timeline__meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .dialog__title {

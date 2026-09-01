@@ -9,6 +9,7 @@ import {
   type AuditAction,
   type AuditLogDto,
   type AuditStatus,
+  type HandledTaskDto,
   type ModerationTargetType,
   type ModerationTaskDto,
   type ReportReason,
@@ -22,6 +23,7 @@ import {
 } from './audit-log.repository';
 import {
   MODERATION_REPOSITORY,
+  type HandledTaskRow,
   type ModerationRepository,
   type ModerationTarget,
   type ModerationTaskWithContent,
@@ -87,6 +89,13 @@ export interface TaskListResponse {
   page: number;
 }
 
+/** 已处理工单的一页。 */
+export interface HandledTaskListResponse {
+  items: HandledTaskDto[];
+  hasMore: boolean;
+  page: number;
+}
+
 /** 流水列表的一页。形状与其他列表端点一致。 */
 export interface AuditLogListResponse {
   items: AuditLogDto[];
@@ -139,6 +148,34 @@ export function parseReport(body: Record<string, unknown>): ReportBody {
     targetId,
     reason: reason as ReportReason,
   };
+}
+
+/**
+ * 「某条内容的审核历史」的查询参数校验。
+ *
+ * 与 `parseReport` 用同一份白名单和同一个错误码（`MODERATION_TARGET_INVALID`）——
+ * 客户端要能认出「这个类型服务端压根不支持」，那种错重试也没用。
+ *
+ * 单独一个 parser 而不复用 `parseReport`：那个要 `reason`，而查历史没有原因可填。
+ */
+export function parseTargetRef(query: Record<string, string | undefined>): {
+  targetType: ModerationTargetType;
+  targetId: string;
+} {
+  const targetType = query.targetType;
+  if (
+    typeof targetType !== 'string' ||
+    !(MODERATION_TARGET_TYPES as readonly string[]).includes(targetType)
+  ) {
+    throw new ApiException(
+      ERROR_CODES.MODERATION_TARGET_INVALID,
+      undefined,
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    );
+  }
+  const targetId = (query.targetId ?? '').trim();
+  if (!targetId) fail('缺少目标 id');
+  return { targetType: targetType as ModerationTargetType, targetId };
 }
 
 /**
@@ -258,6 +295,42 @@ export class ModerationService {
   }
 
   /**
+   * 已处理工单的一页，按处理时间倒序。
+   *
+   * 与 `listTasks` 是两个端点而不是一个带 `status` 参数的：排序相反（待办按举报
+   * 时间正序、历史按处理时间倒序），下发的字段也不同（历史必带 `result` 与
+   * `handledBy`，而待办那边刻意不下发 —— 下发只会诱导客户端判空）。
+   *
+   * 与流水页的分别：这里能看到**当初判的是什么内容**（举报原因、正文、图片），
+   * 而流水只有动作与状态变化。代价是目标被删后内容为空 —— 那正是流水不带原文的理由。
+   */
+  async listHandledTasks(opts: {
+    page: number;
+    pageSize: number;
+  }): Promise<HandledTaskListResponse> {
+    const { items, hasMore } = await this.moderation.listHandledTasks(opts);
+    return { items: items.map(toHandledTaskDto), hasMore, page: opts.page };
+  }
+
+  /**
+   * 某条内容的**完整**审核历史，不分页。
+   *
+   * 不分页是有意的：一条内容的流水撑不到要分页（举报一次写一条、复核一次写一条，
+   * 机审最多再两条）。加分页只会让调用方多一段翻页代码去处理永远只有一页的数据。
+   *
+   * 与全局流水共用同一个 DTO —— 字段完全一样，只是筛了目标。`actorName` 在这条
+   * 路径上恒为 null：`listByTarget` 不 JOIN users（它的主调用点在复核流程里，
+   * 那里不需要显示名）。前端据此显示 id 而不是名字，这一点记在端点注释里。
+   */
+  async listAuditLogsByTarget(ref: {
+    targetType: ModerationTargetType;
+    targetId: string;
+  }): Promise<{ items: AuditLogDto[] }> {
+    const rows = await this.auditLog.listByTarget(ref.targetType, ref.targetId);
+    return { items: rows.map((row) => toAuditLogDto({ ...row, actorName: null })) };
+  }
+
+  /**
    * 审核流水的一页（运营侧的合规视图）。
    *
    * 与工单列表分开的理由是**职责**：工单是待办队列（处理完就不在列表里），
@@ -357,6 +430,31 @@ export class ModerationService {
  * （下发举报人只会招来针对举报人的报复），而列表只出未处理的工单，下发后两个字段
  * 只会诱导客户端去判空。
  */
+/**
+ * 已处理工单行 → DTO。
+ *
+ * 与 `toTaskDto` 相反：这里**保留** `result` / `handledBy` / `handledAt`
+ * （回看历史就是要看这几样），但同样摘掉 `reportedBy` —— 运营不该按谁举报判，
+ * 回看时也不需要知道，而下发它只会让「针对举报人的报复」多一条路径。
+ */
+function toHandledTaskDto(row: HandledTaskRow): HandledTaskDto {
+  return {
+    id: row.id,
+    targetType: row.targetType,
+    targetId: row.targetId,
+    source: row.source,
+    reason: row.reason,
+    createdAt: row.createdAt.toISOString(),
+    result: row.result,
+    handledBy: row.handledBy,
+    handledByName: row.handledByName,
+    handledAt: row.handledAt.toISOString(),
+    content: row.content,
+    imageUrls: row.imageUrls,
+    authorNickname: row.authorNickname,
+  };
+}
+
 function toAuditLogDto(row: AuditLogRowWithActor): AuditLogDto {
   return {
     id: row.id,

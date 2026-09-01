@@ -112,6 +112,16 @@ describe('复核 /moderation/tasks', () => {
     return sub ? as(req, sub) : req;
   };
 
+  const listHandled = async (sub?: string, query = '') => {
+    const req = http().get(`/moderation/tasks/handled${query}`);
+    return sub ? as(req, sub) : req;
+  };
+
+  const historyOf = async (sub: string | undefined, query: string) => {
+    const req = http().get(`/moderation/audit-logs/by-target${query}`);
+    return sub ? as(req, sub) : req;
+  };
+
   const resolve = async (taskId: string, body: Record<string, unknown>, sub?: string) => {
     const req = http().post(`/moderation/tasks/${taskId}/resolve`).send(body);
     return sub ? as(req, sub) : req;
@@ -208,23 +218,28 @@ describe('复核 /moderation/tasks', () => {
   });
 
   describe('5. 鉴权（先测这组：它不产生工单，不扰动下面的列表计数）', () => {
-    it('未登录调三个端点都是 401', async () => {
+    it('未登录调每个端点都是 401', async () => {
       expect((await listTasks()).status).toBe(401);
+      expect((await listHandled()).status).toBe(401);
       expect((await listAuditLogs()).status).toBe(401);
+      expect((await historyOf(undefined, '?targetType=post&targetId=po-1')).status).toBe(401);
       expect((await resolve(randomUUID(), { result: 'approved' })).status).toBe(401);
     });
 
-    it('普通用户调三个端点都是 403', async () => {
-      const list = await listTasks(PLAIN);
-      expect(list.status).toBe(403);
-      expect(list.body.code).toBe(ERROR_CODES.FORBIDDEN);
-      // 流水里有「谁撤下了什么」，那是内部信息 —— 与工单同一道守卫。
-      const logs = await listAuditLogs(PLAIN);
-      expect(logs.status).toBe(403);
-      expect(logs.body.code).toBe(ERROR_CODES.FORBIDDEN);
-      const one = await resolve(randomUUID(), { result: 'approved' }, PLAIN);
-      expect(one.status).toBe(403);
-      expect(one.body.code).toBe(ERROR_CODES.FORBIDDEN);
+    /** 每加一个运营端点都要在这里加一行 —— 漏一个守卫等于对所有人开放。 */
+    it('普通用户调每个端点都是 403', async () => {
+      const forbidden = [
+        await listTasks(PLAIN),
+        await listHandled(PLAIN),
+        // 流水里有「谁撤下了什么」，那是内部信息 —— 与工单同一道守卫。
+        await listAuditLogs(PLAIN),
+        await historyOf(PLAIN, '?targetType=post&targetId=po-1'),
+        await resolve(randomUUID(), { result: 'approved' }, PLAIN),
+      ];
+      for (const res of forbidden) {
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe(ERROR_CODES.FORBIDDEN);
+      }
     });
 
     it('作者本人也不能复核自己被举报的内容（他不是运营）', async () => {
@@ -525,6 +540,165 @@ describe('复核 /moderation/tasks', () => {
         const res = await as(http()[method]('/moderation/audit-logs'), MODERATOR).send({});
         expect(res.status).toBe(404);
       }
+    });
+  });
+
+  /**
+   * 已处理工单的历史（阶段 4）。
+   *
+   * 放在复核那几组之后：它要有已处理的工单可读，而那些是上面几组判出来的。
+   * 断言一律 `find` 挑本套件造的 —— 库是共享的，写死行数就是假红。
+   */
+  describe('8. 已处理工单 /moderation/tasks/handled', () => {
+    let approvedPost: string;
+    let rejectedPost: string;
+
+    beforeAll(async () => {
+      const a = await queued('会被放行的历史工单');
+      expect((await resolve(a.taskId, { result: 'approved' }, MODERATOR)).status).toBe(200);
+      approvedPost = a.postId;
+
+      const r = await queued('会被撤下的历史工单');
+      expect(
+        (await resolve(r.taskId, { result: 'rejected', rejectReason: '历史用' }, MODERATOR)).status,
+      ).toBe(200);
+      rejectedPost = r.postId;
+    });
+
+    const handledRows = async (): Promise<Record<string, unknown>[]> => {
+      const res = await listHandled(MODERATOR, '?pageSize=20');
+      expect(res.status).toBe(200);
+      return res.body.data.items as Record<string, unknown>[];
+    };
+
+    it('两种结论的工单都在，且**只**出已处理的', async () => {
+      const rows = await handledRows();
+      const mine = rows.filter(
+        (row) => row.targetId === approvedPost || row.targetId === rejectedPost,
+      );
+      expect(mine).toHaveLength(2);
+      // 未处理的工单绝不该出现在这条路径上 —— 那是待办列表的职责。
+      for (const row of rows) expect(row.result).not.toBeNull();
+    });
+
+    /** 与待办列表相反：这里**必带** result / handledBy / handledAt。 */
+    it('带结论、复核人与处理时间', async () => {
+      const row = (await handledRows()).find((candidate) => candidate.targetId === rejectedPost);
+      expect(row).toMatchObject({
+        result: 'rejected',
+        handledBy: MODERATOR,
+        targetType: 'post',
+        source: 'user_report',
+        reason: 'spam',
+      });
+      expect(typeof row?.handledAt).toBe('string');
+      expect(row).toHaveProperty('handledByName');
+      if (DB_URL) expect(row?.handledByName).toBe('审核员甲');
+    });
+
+    it('带当初判的内容原文 —— 回看要知道判的是什么', async () => {
+      const row = (await handledRows()).find((candidate) => candidate.targetId === rejectedPost);
+      expect(row?.content).toBe('会被撤下的历史工单');
+      expect(Array.isArray(row?.imageUrls)).toBe(true);
+    });
+
+    /** 举报人仍然不下发 —— 回看时也不需要知道，下发只多一条报复路径。 */
+    it('不下发举报人是谁', async () => {
+      const row = (await handledRows())[0];
+      expect(row).not.toHaveProperty('reportedBy');
+    });
+
+    /** 待办按举报时间正序，历史按处理时间倒序 —— 两条排序相反，这是分开的理由之一。 */
+    it('按处理时间倒序：后判的在前', async () => {
+      const rows = await handledRows();
+      const iApproved = rows.findIndex((row) => row.targetId === approvedPost);
+      const iRejected = rows.findIndex((row) => row.targetId === rejectedPost);
+      expect(iRejected).toBeLessThan(iApproved);
+    });
+
+    it('分页规则同其他列表：上限 20、非法值 422', async () => {
+      const one = await listHandled(MODERATOR, '?page=1&pageSize=1');
+      expect((one.body.data.items as unknown[]).length).toBe(1);
+      expect(one.body.data.hasMore).toBe(true);
+
+      const two = await listHandled(MODERATOR, '?page=2&pageSize=1');
+      expect((two.body.data.items as { id: string }[])[0].id).not.toBe(
+        (one.body.data.items as { id: string }[])[0].id,
+      );
+
+      for (const query of ['?pageSize=21', '?page=0', '?pageSize=0']) {
+        const bad = await listHandled(MODERATOR, query);
+        expect(bad.status).toBe(422);
+        expect(bad.body.code).toBe(ERROR_CODES.VALIDATION_FAILED);
+      }
+    });
+  });
+
+  /**
+   * 单条内容的审核历史（阶段 4）。仓储上的 `listByTarget` 之前没有任何端点用它。
+   */
+  describe('9. 单条内容的流水 /moderation/audit-logs/by-target', () => {
+    let postId: string;
+
+    beforeAll(async () => {
+      const q = await queued('查单条历史的动态');
+      expect(
+        (await resolve(q.taskId, { result: 'rejected', rejectReason: '单条历史' }, MODERATOR)).status,
+      ).toBe(200);
+      postId = q.postId;
+    });
+
+    it('返回这条内容的全部流水，倒序，不分页', async () => {
+      const res = await historyOf(MODERATOR, `?targetType=post&targetId=${postId}`);
+      expect(res.status).toBe(200);
+      const items = res.body.data.items as Record<string, unknown>[];
+      // 举报一条 + 复核一条。全都属于这个目标 —— 不该混进别的。
+      expect(items).toHaveLength(2);
+      expect(items.every((row) => row.targetId === postId)).toBe(true);
+      expect(items[0].action).toBe('review_reject');
+      expect(items[1].action).toBe('report');
+      // 不分页：没有 hasMore / page 这两个字段。
+      expect(res.body.data).not.toHaveProperty('hasMore');
+      expect(res.body.data).not.toHaveProperty('page');
+    });
+
+    /**
+     * `actorName` 恒为 null：`listByTarget` 不 JOIN users（主调用点在复核流程里，
+     * 那里不需要显示名）。有这个键但值为空 —— 客户端据此显示 id。
+     */
+    it('带 actorName 键但值为 null（这条路径不 JOIN users）', async () => {
+      const res = await historyOf(MODERATOR, `?targetType=post&targetId=${postId}`);
+      const row = (res.body.data.items as Record<string, unknown>[])[0];
+      expect(row).toHaveProperty('actorName');
+      expect(row.actorName).toBeNull();
+      expect(row.actorId).toBe(MODERATOR);
+    });
+
+    it('没有流水的目标返回空列表，不是 404', async () => {
+      const res = await historyOf(MODERATOR, '?targetType=post&targetId=po-从来没被举报过');
+      expect(res.status).toBe(200);
+      expect(res.body.data.items).toEqual([]);
+    });
+
+    /** 目标类型白名单与举报那条同源、同一个错误码 —— 那种错重试也没用。 */
+    it('未知 targetType → 422 MODERATION_TARGET_INVALID', async () => {
+      for (const type of ['pet_photo', '乱值', '']) {
+        const res = await historyOf(MODERATOR, `?targetType=${type}&targetId=${postId}`);
+        expect(res.status).toBe(422);
+        expect(res.body.code).toBe(ERROR_CODES.MODERATION_TARGET_INVALID);
+      }
+    });
+
+    it('缺 targetId → 422 VALIDATION_FAILED', async () => {
+      const res = await historyOf(MODERATOR, '?targetType=post');
+      expect(res.status).toBe(422);
+      expect(res.body.code).toBe(ERROR_CODES.VALIDATION_FAILED);
+    });
+
+    /** 图片与动态的流水不能串 —— `target_id` 是多态的，光比 id 会混。 */
+    it('targetType 不同时不串流水', async () => {
+      const res = await historyOf(MODERATOR, `?targetType=post_image&targetId=${postId}`);
+      expect(res.body.data.items).toEqual([]);
     });
   });
 

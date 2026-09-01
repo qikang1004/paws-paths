@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { ERROR_CODES } from '@paws/types';
 import { App } from '../src/App';
 import { loadSession, saveSession } from '../src/api/session';
-import { auditLog, envelope, stubFetch, task } from './helpers';
+import { auditLog, envelope, handled, stubFetch, task } from './helpers';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -38,6 +38,25 @@ describe('外壳与视图切换', () => {
     await screen.findByRole('heading', { name: '待复核工单' });
     await userEvent.click(screen.getByRole('button', { name: '审核流水' }));
     expect(await screen.findByRole('heading', { name: '审核流水' })).toBeInTheDocument();
+  });
+
+  it('点「已处理」切到历史页', async () => {
+    saveSession({ token: 'tok', username: 'ops', role: 'moderator' });
+    stubFetch([page([task()]), page([handled()])]);
+    render(<App />);
+    await screen.findByRole('heading', { name: '待复核工单' });
+    await userEvent.click(screen.getByRole('button', { name: '已处理' }));
+    expect(await screen.findByRole('heading', { name: '已处理工单' })).toBeInTheDocument();
+  });
+
+  /** 三个入口都对 moderator 开放 —— 服务端三条端点挂的是同一个守卫。 */
+  it('三个视图入口都在', () => {
+    saveSession({ token: 'tok', username: 'ops', role: 'moderator' });
+    stubFetch([page([])]);
+    render(<App />);
+    for (const label of ['待复核工单', '已处理', '审核流水']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
   });
 
   /**

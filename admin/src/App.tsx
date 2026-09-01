@@ -2,22 +2,27 @@ import { useCallback, useState } from 'react';
 import { clearSession, loadSession, type Session } from './api/session';
 import { ToastProvider } from './components/Toast';
 import { AuditLogsPage } from './pages/AuditLogsPage';
+import { HandledTasksPage } from './pages/HandledTasksPage';
 import { LoginPage } from './pages/LoginPage';
 import { TasksPage } from './pages/TasksPage';
 
 /**
- * 两个视图之间切换，**仍然不引路由库**。
+ * 三个视图之间切换，**仍然不引路由库**。
  *
- * 加了流水页之后重新掂量过一次：引 react-router 换来的是「地址栏能表达位置」与
- * 「刷新回到同一页」，代价是一个依赖加一层 provider。而这个后台的两页都是**队列式**的
- * 工作面（进来就从第一页开始清），没有「把某一页的链接发给同事」这种用法 ——
- * 真正需要深链的是「某条内容的审核历史」，而那要先有 `GET /audit-logs?targetId=`
- * 那个端点。等它进来再引。
+ * 之前记的判断是「等『某条内容的审核历史』进来就引」——那个端点现在有了，
+ * 但它做成了**对话框**而不是页面：它总是从某一行点开的（工单、已处理、流水三处），
+ * 独立页面要么丢掉「我从哪来」的上下文，要么得给每处都记一个返回目标。
+ * 对话框没有自己的地址，所以路由需求还是没出现。
+ *
+ * 真会让我引路由的是「把某条内容的历史链接发给同事」这个需求 —— 那时对话框
+ * 才需要变成可深链的页面。目前三页都是队列式工作面（进来就从第一页开始清）。
  */
-type View = 'tasks' | 'audit-logs';
+type View = 'tasks' | 'handled' | 'audit-logs';
 
+/** 顺序就是运营的工作顺序：先清队列，再回看判过的，最后查流水。 */
 const VIEWS: readonly { id: View; label: string }[] = [
   { id: 'tasks', label: '待复核工单' },
+  { id: 'handled', label: '已处理' },
   { id: 'audit-logs', label: '审核流水' },
 ];
 
@@ -79,9 +84,11 @@ export function App(): JSX.Element {
           `key` 挂 token：换账号登进来时两页的分页状态都要重置。
           `onExpired` 由页面在 401 之后调用（client 已清了本地会话）。
         */}
-        {view === 'tasks' ? (
-          <TasksPage key={`tasks-${session.token}`} onExpired={syncSession} />
-        ) : (
+        {view === 'tasks' && <TasksPage key={`tasks-${session.token}`} onExpired={syncSession} />}
+        {view === 'handled' && (
+          <HandledTasksPage key={`handled-${session.token}`} onExpired={syncSession} />
+        )}
+        {view === 'audit-logs' && (
           <AuditLogsPage key={`logs-${session.token}`} onExpired={syncSession} />
         )}
       </div>
