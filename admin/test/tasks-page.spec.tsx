@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ERROR_CODES } from '@paws/types';
 import { TasksPage } from '../src/pages/TasksPage';
@@ -180,3 +180,48 @@ describe('工单列表页', () => {
 function resolveCall(calls: FetchCall[]): FetchCall | undefined {
   return calls.find((c) => c.url.includes('/resolve'));
 }
+
+/**
+ * 图片取不到时的表现。
+ *
+ * 这一组存在的理由是一个真实的配置错误：`vite.config.ts` 起初只代理了 `/api`，
+ * 而工单里的 `imageUrls` 是 `/uploads/...` —— 那些请求全打在 dev server 上拿 404，
+ * **所有图都是碎图**。代理补上了，但「取不到」仍是待审图的常态（私有档只对作者
+ * 开放，`<img>` 递不了 Authorization 头），所以界面必须说清这件事。
+ */
+describe('图片取不到时', () => {
+  it('缩略图换成占位，不留浏览器的碎图图标', async () => {
+    stubFetch([page([task({ imageUrls: ['/uploads/u-1/gone.jpg'] })])]);
+    renderPage();
+    const img = await screen.findByRole('button', { name: '放大查看这张图片' });
+    fireEvent.error(img.querySelector('img') as HTMLImageElement);
+    expect(await screen.findByRole('button', { name: /取不到/ })).toBeInTheDocument();
+  });
+
+  it('占位仍然可点，点开能看到原因说明', async () => {
+    stubFetch([page([task({ imageUrls: ['/uploads/u-1/gone.jpg'] })])]);
+    renderPage();
+    const thumb = await screen.findByRole('button', { name: '放大查看这张图片' });
+    fireEvent.error(thumb.querySelector('img') as HTMLImageElement);
+    await userEvent.click(await screen.findByRole('button', { name: /取不到/ }));
+    expect(screen.getByRole('dialog', { name: '图片预览' })).toBeInTheDocument();
+  });
+
+  it('大图加载失败时说明「待审图只有作者能取」，并把 URL 显示出来', async () => {
+    stubFetch([page([task({ imageUrls: ['/uploads/u-1/pending.jpg'] })])]);
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: '放大查看这张图片' }));
+    fireEvent.error(screen.getByAltText('被举报的图片'));
+    expect(await screen.findByText(/只有作者本人能取/)).toBeInTheDocument();
+    expect(screen.getByText('/uploads/u-1/pending.jpg')).toBeInTheDocument();
+  });
+
+  /** 排错线索：图全打不开时，第一个要查的就是反向代理有没有转 `/uploads/`。 */
+  it('失败说明里提到检查反向代理', async () => {
+    stubFetch([page([task({ imageUrls: ['/uploads/u-1/pending.jpg'] })])]);
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: '放大查看这张图片' }));
+    fireEvent.error(screen.getByAltText('被举报的图片'));
+    expect(await screen.findByText(/反向代理/)).toBeInTheDocument();
+  });
+});

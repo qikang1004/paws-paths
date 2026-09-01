@@ -23,10 +23,22 @@ npm test -w @paws/admin
 
 服务端要一起起着。想连别的后端：`ADMIN_API_TARGET=http://其他地址 npm run dev -w @paws/admin`。
 
-## 开发态不产生跨域
+## 两个前缀都要反代
 
-Vite 把 `/api/*` 反代到服务端（见 `vite.config.ts`），所以本地开发**压根不发跨域请求** ——
-不必先配 `ADMIN_ORIGINS`。生产是同一个形状：Nginx 把 `/api/` 反代到服务端。
+Vite 把 `/api/*` 与 `/uploads/*` 都反代到服务端（见 `vite.config.ts`），所以本地开发
+**压根不发跨域请求** —— 不必先配 `ADMIN_ORIGINS`。
+
+**`/uploads/` 那条不是可选的。** 工单里的 `imageUrls` 是服务端拼的相对路径
+（`/uploads/:ownerId/:name`），漏了这条规则，那些请求会打在前端自己的 server 上拿 404 ——
+后台里**一张图都看不见**，不只是待审的那些。`/api` 会被去掉前缀（服务端路由上没有那一段），
+`/uploads` **不能** —— 服务端那条路由本身就带这个前缀。
+
+生产是同一个形状，Nginx 两条都要配：
+
+```nginx
+location /api/     { proxy_pass http://服务端:3000/; }        # 去掉 /api 前缀
+location /uploads/ { proxy_pass http://服务端:3000/uploads/; } # 保留前缀
+```
 
 只有前后端分开部署在不同域时才需要服务端的 CORS：
 
@@ -35,6 +47,8 @@ ADMIN_ORIGINS=https://admin.example.com   # 服务端环境变量，默认关闭
 ```
 
 那条配置只接受 https（`localhost` / `127.0.0.1` 例外）、拒绝通配符，配错直接启动失败。
+
+注意 CORS 管不到 `<img>` —— 图片不受同源策略约束，它只需要那条反代存在。
 
 ## 建账号
 
@@ -61,8 +75,10 @@ echo '一个至少 12 位的密码' | npm run admin:create -w server -- ops-alic
 - **审计日志页**：服务端目前没有查询端点（`AuditLogRepository` 只有写入）
 - **已处理工单的历史**：`GET /moderation/tasks` 只出 `result IS NULL` 的
 - **筛选与排序**：服务端固定按创建时间正序（先举报的先处理）
-- **待审图片看不到**：待审图落私有档，只有作者本人取得到（`UploadsService.fetch`）。
-  运营看已过审的图正常，看待审的图是碎图 —— 这需要服务端为运营开一条取图路径
+- **待审图片看不到**：待审图落私有档，只有作者本人取得到（`UploadsService.fetch`），
+  而 `<img>` 压根不会带 Authorization 头 —— 运营连自己的身份都递不过去。已过审的图
+  （公开档）正常显示。界面上取不到的图会画成占位并说明原因，不留碎图图标。
+  真要看待审图，得服务端为运营单独开一条取图路径
 
 ## 目录
 
@@ -82,7 +98,7 @@ src/
     TasksPage.tsx
   App.tsx           登录 / 工单两个视图的切换
   styles.css
-test/               vitest + @testing-library/react，49 个用例
+test/               vitest + @testing-library/react，58 个用例
 ```
 
 ## 几个刻意的选择
@@ -107,6 +123,7 @@ test/               vitest + @testing-library/react，49 个用例
 
 1. `npm run build -w @paws/admin` → `admin/dist/`
 2. 静态文件交给 Nginx（或 CDN）
-3. Nginx 把 `/api/` 反代到服务端；前后端同域时不必开 CORS
-4. 分域部署才需要服务端配 `ADMIN_ORIGINS`
+3. Nginx 反代**两个**前缀到服务端：`/api/`（去前缀）与 `/uploads/`（保留前缀）——
+   漏了后者后台里一张图都看不见
+4. 前后端同域时不必开 CORS；分域部署才需要服务端配 `ADMIN_ORIGINS`
 5. 用 CLI 建第一个运营账号

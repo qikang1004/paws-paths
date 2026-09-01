@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { REPORT_REASON_LABELS, type ModerationTaskDto } from '@paws/types';
 
 /** 目标类型的展示文案。服务端的两个值（`post` / `post_image`）各对一条。 */
@@ -57,15 +58,7 @@ export function TaskCard({
       {task.imageUrls.length > 0 && (
         <div className="card__images">
           {task.imageUrls.map((url) => (
-            <button
-              key={url}
-              type="button"
-              className="thumb"
-              onClick={() => onPreview(url)}
-              aria-label="放大查看这张图片"
-            >
-              <img src={url} alt="" loading="lazy" />
-            </button>
+            <Thumb key={url} url={url} onPreview={() => onPreview(url)} />
           ))}
         </div>
       )}
@@ -80,6 +73,33 @@ export function TaskCard({
         </button>
       </footer>
     </article>
+  );
+}
+
+/**
+ * 一张缩略图。
+ *
+ * 取不到时**显式画一个占位**而不是留浏览器的碎图图标：待审图运营取不到是常态
+ * （私有档只对作者开放，`<img>` 递不了 Authorization 头），而碎图图标看起来
+ * 与「后台坏了」一模一样。仍然可点 —— 大图那边的说明更详细。
+ */
+function Thumb({ url, onPreview }: { url: string; onPreview(): void }): JSX.Element {
+  const [failed, setFailed] = useState(false);
+  return (
+    <button
+      type="button"
+      className={failed ? 'thumb thumb--failed' : 'thumb'}
+      onClick={onPreview}
+      aria-label={failed ? '这张图取不到，点开看说明' : '放大查看这张图片'}
+    >
+      {failed ? (
+        <span className="thumb__placeholder" aria-hidden="true">
+          取不到
+        </span>
+      ) : (
+        <img src={url} alt="" loading="lazy" onError={() => setFailed(true)} />
+      )}
+    </button>
   );
 }
 
