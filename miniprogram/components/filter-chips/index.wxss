@@ -5,15 +5,40 @@
   gap: var(--space-sm);
 }
 
+/**
+ * 横向滚动的一行 chip。
+ *
+ * **`height` 是必须的，不是装饰。** Skyline 下 scroll-view 是真正的滚动容器，
+ * 横向滚动时它不会被子元素顶开 —— 不给高度就算成 0，两行 chip 渲染到容器之外，
+ * 紧随其后的瀑布流按正常流排上来就盖在它们身上（真机上表现为「筛选按钮被列表遮挡」）。
+ *
+ * 这与 `.page-scroll` 那处（纵向，靠 flex:1 + height:0）是同一类问题的另一半：
+ * 纵向那次的高度由 flex 分配，横向这里没有可分配的主轴尺寸，只能显式给。
+ *
+ * 值写成 calc 而不是 48rpx 或 `var(--space-lg)`：chip 的高度是「一行 label 文字
+ * 加上下内边距」，而那两个字面量恰好都等于 48rpx 纯属巧合 —— 改了字号或间距
+ * token 之后，写死的数值会静默错位，而这个式子跟着变。
+ *
+ * 与 `.chip` 的 padding 一致是前提：那边用的也是 `--space-xs`（见 semantic.wxss）。
+ * 没有全局 box-sizing 重置，所以这里的 height 是内容高度，chip 的 padding 已经
+ * 算在式子里了。
+ */
 .filter-chips__row {
   display: flex;
   flex-direction: row;
   gap: var(--space-sm);
   white-space: nowrap;
+  height: calc(var(--font-label-md-line) + var(--space-xs) * 2);
 }
 
+/**
+ * 第二行（品种）多留一点上间距。
+ *
+ * 用 margin 而不是 padding：上面那条 height 是内容高度（没有全局 box-sizing 重置），
+ * padding 会把这一行的实际高度撑到 48+8，两行因此不等高。
+ */
 .filter-chips__row--sub {
-  padding-top: var(--space-xs);
+  margin-top: var(--space-xs);
 }
 
 .filter-chips__chip {

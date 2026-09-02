@@ -69,11 +69,23 @@
   margin-bottom: var(--space-sm);
 }
 
-/* 横向滑动的宠物条：宠物少的时候不该占满一屏高度。 */
+/**
+ * 横向滑动的宠物条。宠物少的时候不该占满一屏高度。
+ *
+ * `height` 与 filter-chips 那两行同理：Skyline 下横向 scroll-view 不会被子元素
+ * 顶开，不给高度就算成 0，后面的内容会盖上来。这里此前没表现出问题是因为子项
+ * `.me__pet-cover` 有 140rpx 的显式高度撑着 —— 补上这条是为了不依赖那个巧合。
+ *
+ * 高度 = 封面 + gap + 一行名字。140rpx 与下面 `.me__pet-cover` 的重复没有消除：
+ * 提成局部自定义属性会被 `tools/style-guard.ts` 的 `findUndefinedVars` 判为
+ * 未定义变量（它只认 tokens.wxss 里的定义），而把封面尺寸提进 tokens 层意味着
+ * 一个只有这一处用的值进全局命名空间。两害相权，留重复并在此注明。
+ */
 .me__pets {
   display: flex;
   flex-direction: row;
   white-space: nowrap;
+  height: calc(140rpx + var(--space-xs) + var(--font-label-md-line));
 }
 
 .me__pet {

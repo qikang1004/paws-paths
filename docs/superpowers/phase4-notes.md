@@ -227,7 +227,58 @@ HTTP 200 也可能带非 0 的码。与小程序侧同一套约定。
 真会触发引路由的需求是「把某条内容的历史链接发给同事」—— 那时对话框才需要变成
 可深链的页面。
 
-## 十三、验证到哪一步了
+## 十三、横向 scroll-view 也不会被子元素顶开
+
+真机上「广场页顶部筛选按钮被内容列表遮挡」。不是 z-index，也不是定位 ——
+`components/filter-chips/index.wxml` 那两行筛选是横向 `scroll-view`，而它的
+`.filter-chips__row` 只给了 `display: flex` 与 `gap`，**没有 height**。
+
+Skyline 下 `scroll-view` 是真正的滚动容器，横向滚动时它不会被子元素顶开 ——
+高度算成 0，两行 chip 渲染到容器之外，紧随其后的瀑布流按正常流排上来就盖住它们。
+
+这与 `d81974a`（纵向，`.page-scroll` 用 `flex: 1` + `height: 0`）是**同一类问题的
+另一半**：纵向那次的高度由 flex 分配，横向这里没有可分配的主轴尺寸，只能显式给。
+那次只修了纵向，横向这批漏在网外直到现在。
+
+### 为什么 profile 那处没先暴露出来
+
+`pages/profile/index.wxml` 里的宠物条也是横向 `scroll-view`，但它没出问题 ——
+子项 `.me__pet-cover` 有 `height: 140rpx` 撑着，而 glass-easel 回退路径上
+scroll-view 的高度还能由内容决定。而 `.chip` 是 `inline-flex` + padding，自己不带高度。
+
+两处都补了显式高度，不依赖那个巧合。
+
+### 高度写成 calc 而不是 48rpx
+
+chip 的高度是「一行 label 文字 + 上下内边距」= `--font-label-md-line`(32rpx) +
+`--space-xs`(8rpx) × 2 = 48rpx。而 `--space-lg` 恰好也是 48rpx。
+
+两个字面量都能work，但都是巧合 —— 改字号或间距 token 之后写死的数值会静默错位。
+`calc(var(--font-label-md-line) + var(--space-xs) * 2)` 把「高度从哪来」写在式子里。
+
+### 第二行的 padding 换成 margin
+
+`.filter-chips__row--sub` 原来是 `padding-top`。没有全局 `box-sizing` 重置，
+那条 `height` 是内容高度，padding 会把第二行的实际高度撑到 48+8，两行不等高。
+
+### 新守卫：`test/horizontal-scroll.spec.ts`
+
+遍历全部 wxml 找 `scroll-x` 的容器，要求对应 wxss 里有 `height` / `min-height` /
+`aspect-ratio`，且值里引用了 token（不是凑出来的字面量）。
+
+去掉那条 height 重跑，13 例里 3 例转红 —— 确认它真钉住了这个 bug。
+
+单元测试抓不到这类问题（它们只读 markup 文本），所以守卫拦的是「新加一个
+横向 scroll-view 又忘了给高度」。纵向那批早就有 `test/page-scroll.spec.ts` 兜着。
+
+### 一处没消除的重复
+
+profile 里 `140rpx` 出现四次（容器高度的 calc、封面 width/height、名字 max-width）。
+提成局部自定义属性会被 `tools/style-guard.ts` 的 `findUndefinedVars` 判为未定义
+（它只认 `tokens.wxss` 里的定义），而把封面尺寸提进 tokens 层意味着一个只有这一处
+用的值进全局命名空间。留了重复并在那里注明理由。
+
+## 十四、验证到哪一步了
 
 **本环境没有 Postgres 也没有 Redis**（docker daemon 不可用，`which postgres`
 `which redis-server` 都空），所以所有带库断言仍是 skip 状态。
@@ -256,10 +307,10 @@ HTTP 200 也可能带非 0 的码。与小程序侧同一套约定。
   跑一次会把该 IP 的配额烧满一小时）
 - CORS 的预检请求（`OPTIONS`）与浏览器里的实际跨域调用
 
-## 十四、这一阶段的测试计数
+## 十五、这一阶段的测试计数
 
 | 包 | 阶段 3 收口时 | 现在 |
 | --- | --- | --- |
 | server | 47 套 / 490 例（127 skip） | 48 套 / 525 例（141 skip） |
 | admin | — | 10 套 / 108 例 |
-| miniprogram | 41 套 / 520 例 | 不变 |
+| miniprogram | 41 套 / 520 例 | 42 套 / 533 例 |
