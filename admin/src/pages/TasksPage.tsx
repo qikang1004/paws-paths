@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { ModerationTaskDto } from '@paws/types';
+import type { ModerationFilter, ModerationTaskDto } from '@paws/types';
 import { ApiError, UnauthorizedError } from '../api/client';
 import { fetchTasks, resolveTask, type ResolveResult } from '../api/moderation';
 import { ImageLightbox } from '../components/ImageLightbox';
+import { FilterBar } from '../components/FilterBar';
 import { Pager } from '../components/Pager';
 import { RejectDialog } from '../components/RejectDialog';
 import { TaskCard } from '../components/TaskCard';
@@ -21,6 +22,7 @@ import { useToast } from '../components/Toast';
  */
 export function TasksPage({ onExpired }: { onExpired(): void }): JSX.Element {
   const [page, setPage] = useState(1);
+  const [filter, setFilter] = useState<ModerationFilter>({});
   const [items, setItems] = useState<ModerationTaskDto[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -31,11 +33,12 @@ export function TasksPage({ onExpired }: { onExpired(): void }): JSX.Element {
   const [preview, setPreview] = useState<string | null>(null);
   const toast = useToast();
 
-  const load = useCallback(async (target: number): Promise<void> => {
+  const load = useCallback(
+    async (target: number, active: ModerationFilter): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchTasks(target);
+      const data = await fetchTasks(target, active);
       setItems(data.items);
       setHasMore(data.hasMore);
     } catch (err) {
@@ -49,11 +52,22 @@ export function TasksPage({ onExpired }: { onExpired(): void }): JSX.Element {
     } finally {
       setLoading(false);
     }
-  }, [onExpired]);
+    },
+    [onExpired],
+  );
 
   useEffect(() => {
-    void load(page);
-  }, [load, page]);
+    void load(page, filter);
+  }, [load, page, filter]);
+
+  /**
+   * 改筛选时**回到第一页**：留在第 3 页而筛完只有一页，会得到一屏空列表加一个
+   * 「这一页空了」——那看起来像筛选把什么都滤掉了。
+   */
+  function applyFilter(next: ModerationFilter): void {
+    setFilter(next);
+    setPage(1);
+  }
 
   /**
    * 落一次复核。
@@ -67,7 +81,7 @@ export function TasksPage({ onExpired }: { onExpired(): void }): JSX.Element {
     try {
       await resolveTask(task.id, result, reason);
       toast.show('success', result === 'approved' ? '已保留这条内容' : '已撤下这条内容');
-      await load(page);
+      await load(page, filter);
     } catch (err) {
       if (err instanceof UnauthorizedError) {
         onExpired();
@@ -76,7 +90,7 @@ export function TasksPage({ onExpired }: { onExpired(): void }): JSX.Element {
       if (err instanceof ApiError) {
         toast.show('error', err.message);
         // 并发败者、或目标已被作者删掉：两者都意味着这一页过期了。
-        await load(page);
+        await load(page, filter);
       } else {
         toast.show('error', '操作失败，请重试');
       }
@@ -92,15 +106,23 @@ export function TasksPage({ onExpired }: { onExpired(): void }): JSX.Element {
     <section className="page">
       <header className="page__head">
         <h1 className="page__title">待复核工单</h1>
-        <button type="button" className="btn" onClick={() => void load(page)} disabled={loading}>
+        <button type="button" className="btn" onClick={() => void load(page, filter)} disabled={loading}>
           {loading ? '加载中…' : '刷新'}
         </button>
       </header>
 
+      {/* 待办没有 `result` 可筛（恒为空），也没有 `action`（那是流水的维度）。 */}
+      <FilterBar
+        dimensions={['targetType', 'reason']}
+        value={filter}
+        busy={loading}
+        onChange={applyFilter}
+      />
+
       {error && (
         <div className="notice notice--error">
           {error}
-          <button type="button" className="btn btn--link" onClick={() => void load(page)}>
+          <button type="button" className="btn btn--link" onClick={() => void load(page, filter)}>
             重试
           </button>
         </div>
@@ -108,9 +130,17 @@ export function TasksPage({ onExpired }: { onExpired(): void }): JSX.Element {
 
       {loading && items.length === 0 && <p className="notice">正在加载…</p>}
 
+      {/*
+        空列表的三种成因要分开说：翻过头了、筛没命中、队列真的空。
+        混成一句「没有数据」会让人以为队列清完了，而实际上是筛选条件太窄。
+      */}
       {!loading && !error && items.length === 0 && (
         <p className="notice">
-          {page > 1 ? '这一页已经空了。' : '队列是空的 —— 没有待复核的内容。'}
+          {page > 1
+            ? '这一页已经空了。'
+            : Object.keys(filter).length > 0
+              ? '没有符合筛选条件的工单 —— 换个条件或清空筛选。'
+              : '队列是空的 —— 没有待复核的内容。'}
         </p>
       )}
 

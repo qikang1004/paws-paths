@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { REPORT_REASON_LABELS, type HandledTaskDto } from '@paws/types';
+import { REPORT_REASON_LABELS, type HandledTaskDto, type ModerationFilter } from '@paws/types';
 import { ApiError, UnauthorizedError } from '../api/client';
 import { fetchHandledTasks } from '../api/moderation';
 import { HistoryDialog } from '../components/HistoryDialog';
+import { FilterBar } from '../components/FilterBar';
 import { Pager } from '../components/Pager';
 
 /**
@@ -17,6 +18,7 @@ import { Pager } from '../components/Pager';
  */
 export function HandledTasksPage({ onExpired }: { onExpired(): void }): JSX.Element {
   const [page, setPage] = useState(1);
+  const [filter, setFilter] = useState<ModerationFilter>({});
   const [items, setItems] = useState<HandledTaskDto[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -24,11 +26,11 @@ export function HandledTasksPage({ onExpired }: { onExpired(): void }): JSX.Elem
   const [history, setHistory] = useState<HandledTaskDto | null>(null);
 
   const load = useCallback(
-    async (target: number): Promise<void> => {
+    async (target: number, active: ModerationFilter): Promise<void> => {
       setLoading(true);
       setError(null);
       try {
-        const data = await fetchHandledTasks(target);
+        const data = await fetchHandledTasks(target, active);
         setItems(data.items);
         setHasMore(data.hasMore);
       } catch (err) {
@@ -45,24 +47,41 @@ export function HandledTasksPage({ onExpired }: { onExpired(): void }): JSX.Elem
   );
 
   useEffect(() => {
-    void load(page);
-  }, [load, page]);
+    void load(page, filter);
+  }, [load, page, filter]);
+
+  /**
+   * 改筛选时**回到第一页**：留在第 3 页而筛完只有一页，会得到一屏空列表加一句
+   * 「这一页空了」——那看起来像筛选把什么都滤掉了。
+   */
+  function applyFilter(next: ModerationFilter): void {
+    setFilter(next);
+    setPage(1);
+  }
 
   return (
     <section className="page">
       <header className="page__head">
         <h1 className="page__title">已处理工单</h1>
-        <button type="button" className="btn" onClick={() => void load(page)} disabled={loading}>
+        <button type="button" className="btn" onClick={() => void load(page, filter)} disabled={loading}>
           {loading ? '加载中…' : '刷新'}
         </button>
       </header>
+
+      {/* 比待办多一个 `result`：「上周撤下了哪些」是回看时最常问的。 */}
+      <FilterBar
+        dimensions={['targetType', 'reason', 'result']}
+        value={filter}
+        busy={loading}
+        onChange={applyFilter}
+      />
 
       <p className="page__hint">按处理时间倒序，最近判的在最前。内容被作者删掉后这里的原文会是空的。</p>
 
       {error && (
         <div className="notice notice--error">
           {error}
-          <button type="button" className="btn btn--link" onClick={() => void load(page)}>
+          <button type="button" className="btn btn--link" onClick={() => void load(page, filter)}>
             重试
           </button>
         </div>
@@ -71,7 +90,13 @@ export function HandledTasksPage({ onExpired }: { onExpired(): void }): JSX.Elem
       {loading && items.length === 0 && <p className="notice">正在加载…</p>}
 
       {!loading && !error && items.length === 0 && (
-        <p className="notice">{page > 1 ? '这一页已经空了。' : '还没有处理过任何工单。'}</p>
+        <p className="notice">
+          {page > 1
+            ? '这一页已经空了。'
+            : Object.keys(filter).length > 0
+              ? '没有符合筛选条件的工单 —— 换个条件或清空筛选。'
+              : '还没有处理过任何工单。'}
+        </p>
       )}
 
       <div className="cards">

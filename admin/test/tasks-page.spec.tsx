@@ -225,3 +225,75 @@ describe('图片取不到时', () => {
     expect(await screen.findByText(/反向代理/)).toBeInTheDocument();
   });
 });
+
+/**
+ * 筛选。这一组的重点是「筛选与分页的互动」——那是最容易写错的一半。
+ */
+describe('工单页的筛选', () => {
+  it('选一个原因后带上参数重新拉取', async () => {
+    const calls = stubFetch([page([task()]), page([task({ id: 't-2' })])]);
+    renderPage();
+    await screen.findByText('一条被举报的动态');
+    await userEvent.selectOptions(screen.getByLabelText('举报原因'), 'porn');
+    await waitFor(() => expect(calls.some((c) => c.url.includes('reason=porn'))).toBe(true));
+  });
+
+  /**
+   * 改筛选要**回到第一页**。留在第 3 页而筛完只有一页，会得到一屏空列表 ——
+   * 那看起来像筛选把什么都滤掉了。
+   */
+  it('改筛选时回到第一页', async () => {
+    const calls = stubFetch([
+      page([task()], true),
+      page([task({ id: 't-2' })], true),
+      page([task({ id: 't-3' })]),
+    ]);
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: '下一页' }));
+    await waitFor(() => expect(calls.some((c) => c.url.includes('page=2'))).toBe(true));
+
+    await userEvent.selectOptions(screen.getByLabelText('举报原因'), 'spam');
+    await waitFor(() => {
+      const last = calls[calls.length - 1];
+      expect(last.url).toContain('page=1');
+      expect(last.url).toContain('reason=spam');
+    });
+  });
+
+  it('清空筛选后不再带那个参数', async () => {
+    const calls = stubFetch([page([task()])]);
+    renderPage();
+    await screen.findByText('一条被举报的动态');
+    await userEvent.selectOptions(screen.getByLabelText('举报原因'), 'spam');
+    await waitFor(() => expect(calls.some((c) => c.url.includes('reason=spam'))).toBe(true));
+    await userEvent.click(screen.getByRole('button', { name: /清空筛选/ }));
+    await waitFor(() => expect(calls[calls.length - 1].url).not.toContain('reason='));
+  });
+
+  /**
+   * 空列表的三种成因要分开说。混成「没有数据」会让人以为队列清完了，
+   * 而实际上是筛选条件太窄。
+   */
+  it('筛没命中时说的是「换个条件」，不是「队列是空的」', async () => {
+    stubFetch([page([task()]), page([])]);
+    renderPage();
+    await screen.findByText('一条被举报的动态');
+    await userEvent.selectOptions(screen.getByLabelText('举报原因'), 'fraud');
+    expect(await screen.findByText(/没有符合筛选条件/)).toBeInTheDocument();
+    expect(screen.queryByText(/队列是空的/)).toBeNull();
+  });
+
+  it('没筛且队列空时说的是「队列是空的」', async () => {
+    stubFetch([page([])]);
+    renderPage();
+    expect(await screen.findByText(/队列是空的/)).toBeInTheDocument();
+  });
+
+  /** 待办的 result 恒为空，那一维不该出现在界面上。 */
+  it('待办页没有「结论」筛选', async () => {
+    stubFetch([page([task()])]);
+    renderPage();
+    await screen.findByText('一条被举报的动态');
+    expect(screen.queryByLabelText('结论')).toBeNull();
+  });
+});

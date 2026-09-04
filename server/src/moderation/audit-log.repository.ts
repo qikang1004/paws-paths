@@ -1,7 +1,51 @@
 import { Injectable } from '@nestjs/common';
-import type { AuditAction, AuditStatus, ModerationTargetType } from '@paws/types';
+import type {
+  AuditAction,
+  AuditStatus,
+  ModerationFilter,
+  ModerationTargetType,
+} from '@paws/types';
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
+
+/**
+ * 流水的筛选谓词（无库）与 SQL 片段（真库）。
+ *
+ * 流水能筛的两个维度是**动作**与**目标类型** —— 它没有 `reason`（举报原因在工单表上）
+ * 也没有 `result`（流水记的是动作，不是结论）。传了那两个也不筛，因为 controller
+ * 的 `allowed` 里压根没放它们。
+ *
+ * 两个实现必须语义一致：双跑契约测试（`audit-log-repository.spec.ts`）钉着这一点。
+ */
+function matchesLogFilter(
+  row: Pick<AuditLogRow, 'action' | 'targetType'>,
+  filter?: ModerationFilter,
+): boolean {
+  if (!filter) return true;
+  if (filter.action && row.action !== filter.action) return false;
+  if (filter.targetType && row.targetType !== filter.targetType) return false;
+  return true;
+}
+
+/** 见 `matchesLogFilter`。`startAt` 之前的占位符留给 LIMIT / OFFSET。 */
+function buildLogFilter(
+  filter: ModerationFilter | undefined,
+  startAt: number,
+): { sql: string; params: unknown[] } {
+  const clauses: string[] = [];
+  const params: unknown[] = [];
+  let n = startAt;
+  // 值走占位符 —— 它们过了白名单，但拼进语句文本仍是一条不该开的路。
+  if (filter?.action) {
+    clauses.push(`l.action = $${n++}`);
+    params.push(filter.action);
+  }
+  if (filter?.targetType) {
+    clauses.push(`l.target_type = $${n++}`);
+    params.push(filter.targetType);
+  }
+  return { sql: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '', params };
+}
 
 /** DI token：审计流水仓储。无库时内存实现驱动演示（与 FOLLOW_REPOSITORY 同款）。 */
 export const AUDIT_LOG_REPOSITORY = 'AuditLogRepository';
@@ -67,6 +111,7 @@ export interface AuditLogRepository {
   list(opts: {
     page: number;
     pageSize: number;
+    filter?: ModerationFilter;
   }): Promise<{ items: AuditLogRowWithActor[]; hasMore: boolean }>;
 }
 
@@ -94,13 +139,17 @@ export class InMemoryAuditLogRepository implements AuditLogRepository {
    * `actorId`，换一个显示名要把用户仓储注进来。不值那个耦合：无库是演示降级，
    * 合规视图在真库上看（同 `PostTargetSource.describe` 里昵称回退成 id 的理由）。
    */
-  async list(opts: { page: number; pageSize: number }): Promise<{
+  async list(opts: {
+    page: number;
+    pageSize: number;
+    filter?: ModerationFilter;
+  }): Promise<{
     items: AuditLogRowWithActor[];
     hasMore: boolean;
   }> {
     // 追加序即时间序，倒序输出。不依赖 createdAt 的毫秒精度 —— 同一毫秒内
     // 追加的两条在真库上靠 id DESC 兜底，这里靠数组顺序。
-    const all = [...this.rows].reverse();
+    const all = [...this.rows].reverse().filter((row) => matchesLogFilter(row, opts.filter));
     const offset = (opts.page - 1) * opts.pageSize;
     const slice = all.slice(offset, offset + opts.pageSize);
     return {
@@ -182,11 +231,16 @@ export class PostgresAuditLogRepository implements AuditLogRepository {
    * 完全相同（`now()` 在一条语句里是常量），只按时间排会出不确定的顺序 ——
    * 那会让分页在页边界上漏行或重复。
    */
-  async list(opts: { page: number; pageSize: number }): Promise<{
+  async list(opts: {
+    page: number;
+    pageSize: number;
+    filter?: ModerationFilter;
+  }): Promise<{
     items: AuditLogRowWithActor[];
     hasMore: boolean;
   }> {
     const offset = (opts.page - 1) * opts.pageSize;
+    const where = buildLogFilter(opts.filter, 3);
     const { rows } = await this.pool.query<{
       id: string;
       actor_id: string | null;
@@ -198,16 +252,19 @@ export class PostgresAuditLogRepository implements AuditLogRepository {
       status_after: AuditStatus;
       created_at: Date;
     }>(
+      // 筛选片段插在 JOIN 与 ORDER BY 之间。`$1` `$2` 是 LIMIT / OFFSET，
+      // 筛选参数从 `$3` 起 —— PG 的占位符是位置绑定的。
       `SELECT l.id, l.actor_id,
               COALESCE(u.username, u.nickname) AS actor_name,
               l.action, l.target_type, l.target_id,
               l.status_before, l.status_after, l.created_at
          FROM audit_log l
          LEFT JOIN users u ON u.id = l.actor_id
+        ${where.sql}
         ORDER BY l.created_at DESC, l.id DESC
         LIMIT $1 OFFSET $2`,
       // 多取一条判 hasMore，省一次 count（同其他列表端点）。
-      [opts.pageSize + 1, offset],
+      [opts.pageSize + 1, offset, ...where.params],
     );
     const items = rows.slice(0, opts.pageSize).map((r) => ({
       id: r.id,

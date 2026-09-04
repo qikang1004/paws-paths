@@ -4,12 +4,14 @@ import {
   canTransition,
   ERROR_CODES,
   isVisibleTo,
+  AUDIT_ACTIONS,
   MODERATION_TARGET_TYPES,
   REPORT_REASONS,
   type AuditAction,
   type AuditLogDto,
   type AuditStatus,
   type HandledTaskDto,
+  type ModerationFilter,
   type ModerationTargetType,
   type ModerationTaskDto,
   type ReportReason,
@@ -151,6 +153,50 @@ export function parseReport(body: Record<string, unknown>): ReportBody {
 }
 
 /**
+ * 筛选参数的校验，三个列表端点共用。
+ *
+ * **枚举值一律走白名单**（Global Constraint 31：白名单在服务端定义）。非法值是
+ * 422 而不是「静默当没筛」—— 后者会让客户端以为筛生效了，而实际返回的是全量，
+ * 那种错在界面上表现成「筛选按钮没反应」，极难查。
+ *
+ * `allowed` 指定这个端点认哪几个维度。**没列进去的字段直接忽略**，不报错 ——
+ * 那样客户端可以把同一个筛选器状态原样发给任一端点（流水页发过来的 `action`
+ * 在工单端点上无意义，但不该因此拒绝整个请求）。
+ */
+export function parseModerationFilter(
+  q: Record<string, string | undefined>,
+  allowed: readonly (keyof ModerationFilter)[],
+): ModerationFilter {
+  const filter: ModerationFilter = {};
+  const pick = <T extends string>(
+    key: keyof ModerationFilter,
+    whitelist: readonly string[],
+    label: string,
+  ): T | undefined => {
+    if (!allowed.includes(key)) return undefined;
+    const raw = q[key];
+    // 空串按「没传」处理：前端把筛选器清空时最自然的写法就是 `?reason=`。
+    if (raw == null || raw === '') return undefined;
+    if (!whitelist.includes(raw)) fail(`非法的${label}：${raw}`);
+    return raw as T;
+  };
+
+  const targetType = pick<ModerationTargetType>('targetType', MODERATION_TARGET_TYPES, '目标类型');
+  if (targetType) filter.targetType = targetType;
+
+  const reason = pick<ReportReason>('reason', REPORT_REASONS, '举报原因');
+  if (reason) filter.reason = reason;
+
+  const result = pick<'approved' | 'rejected'>('result', ['approved', 'rejected'], '复核结论');
+  if (result) filter.result = result;
+
+  const action = pick<AuditAction>('action', AUDIT_ACTIONS, '审核动作');
+  if (action) filter.action = action;
+
+  return filter;
+}
+
+/**
  * 「某条内容的审核历史」的查询参数校验。
  *
  * 与 `parseReport` 用同一份白名单和同一个错误码（`MODERATION_TARGET_INVALID`）——
@@ -289,7 +335,11 @@ export class ModerationService {
    * 对非作者藏起来，而运营正是非作者、又必须看得见要判的东西。这是 Global
    * Constraint 16 上一处有意的例外，把关的是 `ModeratorGuard` 而不是可见性判定。
    */
-  async listTasks(opts: { page: number; pageSize: number }): Promise<TaskListResponse> {
+  async listTasks(opts: {
+    page: number;
+    pageSize: number;
+    filter?: ModerationFilter;
+  }): Promise<TaskListResponse> {
     const { items, hasMore } = await this.moderation.listOpenTasks(opts);
     return { items: items.map(toTaskDto), hasMore, page: opts.page };
   }
@@ -307,6 +357,7 @@ export class ModerationService {
   async listHandledTasks(opts: {
     page: number;
     pageSize: number;
+    filter?: ModerationFilter;
   }): Promise<HandledTaskListResponse> {
     const { items, hasMore } = await this.moderation.listHandledTasks(opts);
     return { items: items.map(toHandledTaskDto), hasMore, page: opts.page };
@@ -342,6 +393,7 @@ export class ModerationService {
   async listAuditLogs(opts: {
     page: number;
     pageSize: number;
+    filter?: ModerationFilter;
   }): Promise<AuditLogListResponse> {
     const { items, hasMore } = await this.auditLog.list(opts);
     return { items: items.map(toAuditLogDto), hasMore, page: opts.page };

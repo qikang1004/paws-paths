@@ -118,3 +118,21 @@ describe('审核流水页', () => {
     expect(document.querySelector('img[src="x"]')).toBeNull();
   });
 });
+
+describe('流水页的筛选', () => {
+  it('可以按动作筛', async () => {
+    const calls = stubFetch([page([auditLog()]), page([auditLog()])]);
+    renderPage();
+    await screen.findByText('复核撤下');
+    await userEvent.selectOptions(screen.getByLabelText('动作'), 'auto_reject');
+    await waitFor(() => expect(calls.some((c) => c.url.includes('action=auto_reject'))).toBe(true));
+  });
+
+  /** 流水没有 reason 那一列 —— 那个下拉不该出现。 */
+  it('流水页没有「举报原因」筛选', async () => {
+    stubFetch([page([auditLog()])]);
+    renderPage();
+    await screen.findByText('复核撤下');
+    expect(screen.queryByLabelText('举报原因')).toBeNull();
+  });
+});

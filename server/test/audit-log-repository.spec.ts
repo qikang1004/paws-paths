@@ -154,6 +154,70 @@ function sharedContract(makeRepo: () => AuditLogRepository, reset: () => Promise
   });
 
   /**
+   * 筛选：`action` 与 `targetType` 两维。两个实现（内存的谓词与 SQL 的 WHERE）
+   * 必须语义一致 —— 这组用例在双跑里各跑一遍，分叉会当场红。
+   */
+  it('list 按 action 筛', async () => {
+    await repo.append(entry({ action: 'report' }));
+    await repo.append(entry({ action: 'review_reject' }));
+    const { items } = await repo.list({ page: 1, pageSize: 10, filter: { action: 'review_reject' } });
+    const mine = items.filter((r) => r.targetId.startsWith(TARGET));
+    expect(mine).toHaveLength(1);
+    expect(mine[0].action).toBe('review_reject');
+  });
+
+  it('list 按 targetType 筛，不串多态目标', async () => {
+    await repo.append(entry({ targetType: 'post' }));
+    await repo.append(entry({ targetType: 'post_image' }));
+    const { items } = await repo.list({
+      page: 1,
+      pageSize: 10,
+      filter: { targetType: 'post_image' },
+    });
+    const mine = items.filter((r) => r.targetId.startsWith(TARGET));
+    expect(mine).toHaveLength(1);
+    expect(mine[0].targetType).toBe('post_image');
+  });
+
+  it('两个维度同时给时是「与」关系', async () => {
+    await repo.append(entry({ action: 'report', targetType: 'post' }));
+    await repo.append(entry({ action: 'report', targetType: 'post_image' }));
+    await repo.append(entry({ action: 'review_reject', targetType: 'post_image' }));
+    const { items } = await repo.list({
+      page: 1,
+      pageSize: 10,
+      filter: { action: 'report', targetType: 'post_image' },
+    });
+    const mine = items.filter((r) => r.targetId.startsWith(TARGET));
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({ action: 'report', targetType: 'post_image' });
+  });
+
+  it('不传 filter 时不筛', async () => {
+    await repo.append(entry({ action: 'report' }));
+    await repo.append(entry({ action: 'review_approve' }));
+    const { items } = await repo.list({ page: 1, pageSize: 10 });
+    expect(items.filter((r) => r.targetId.startsWith(TARGET))).toHaveLength(2);
+  });
+
+  /**
+   * **筛选必须在取数时生效，不能取回来再筛** —— 否则 LIMIT 作用在筛之前的行集上，
+   * 分页整个算错。这条用「筛完只剩一条，而 pageSize=1 时 hasMore 必须是 false」
+   * 来间接证明：若是先取一页再筛，两条里筛掉一条会让 hasMore 仍为 true。
+   */
+  it('筛选参与分页计算，不是取回来再筛', async () => {
+    await repo.append(entry({ action: 'report' }));
+    await repo.append(entry({ action: 'review_approve' }));
+    const { items, hasMore } = await repo.list({
+      page: 1,
+      pageSize: 1,
+      filter: { action: 'report' },
+    });
+    expect(items.filter((r) => r.targetId.startsWith(TARGET))).toHaveLength(1);
+    expect(hasMore).toBe(false);
+  });
+
+  /**
    * Global Constraint 25：流水不可变。接口上**没有** update / delete ——
    * 不给它们留方法就是最强的保证。这条断言钉住这一点，防止将来「顺手」加一个。
    */

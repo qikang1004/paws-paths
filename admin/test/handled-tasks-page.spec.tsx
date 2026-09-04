@@ -120,3 +120,20 @@ describe('已处理工单页', () => {
     expect(document.querySelector('img[src="x"]')).toBeNull();
   });
 });
+
+describe('已处理页的筛选', () => {
+  it('可以按结论筛', async () => {
+    const calls = stubFetch([page([handled()]), page([handled()])]);
+    renderPage();
+    await screen.findByText('已撤下');
+    await userEvent.selectOptions(screen.getByLabelText('结论'), 'rejected');
+    await waitFor(() => expect(calls.some((c) => c.url.includes('result=rejected'))).toBe(true));
+  });
+
+  it('结论下拉的文案是「已保留 / 已撤下」，与卡片上一致', async () => {
+    stubFetch([page([handled()])]);
+    renderPage();
+    await screen.findByText('已撤下');
+    expect(screen.getByRole('option', { name: '已保留' })).toBeInTheDocument();
+  });
+});

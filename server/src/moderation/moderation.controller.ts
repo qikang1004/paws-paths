@@ -16,6 +16,7 @@ import { parseListQuery } from '../common/list-query';
 import {
   ModerationService,
   parseResolve,
+  parseModerationFilter,
   parseTargetRef,
   type AuditLogListResponse,
   type HandledTaskListResponse,
@@ -39,7 +40,10 @@ export class ModerationController {
   @UseGuards(AuthGuard, ModeratorGuard)
   async tasks(@Query() query: Record<string, string | undefined>): Promise<TaskListResponse> {
     const { page, pageSize } = parseListQuery(query);
-    return this.moderation.listTasks({ page, pageSize });
+    // 待办没有 `result` 可筛（恒为空），也没有 `action`（那是流水的维度）。
+    // 不认识的字段静默忽略 —— 客户端可以把同一个筛选器状态发给任一端点。
+    const filter = parseModerationFilter(query, ['targetType', 'reason']);
+    return this.moderation.listTasks({ page, pageSize, filter });
   }
 
   /**
@@ -58,7 +62,9 @@ export class ModerationController {
     @Query() query: Record<string, string | undefined>,
   ): Promise<HandledTaskListResponse> {
     const { page, pageSize } = parseListQuery(query);
-    return this.moderation.listHandledTasks({ page, pageSize });
+    // 比待办多一个 `result`：「上周撤下了哪些」是回看时最常问的。
+    const filter = parseModerationFilter(query, ['targetType', 'reason', 'result']);
+    return this.moderation.listHandledTasks({ page, pageSize, filter });
   }
 
   /**
@@ -94,7 +100,10 @@ export class ModerationController {
     @Query() query: Record<string, string | undefined>,
   ): Promise<AuditLogListResponse> {
     const { page, pageSize } = parseListQuery(query);
-    return this.moderation.listAuditLogs({ page, pageSize });
+    // 流水能筛动作与目标类型。没有 `reason`（那在工单表上）也没有 `result`
+    // （流水记的是动作，不是结论）。
+    const filter = parseModerationFilter(query, ['targetType', 'action']);
+    return this.moderation.listAuditLogs({ page, pageSize, filter });
   }
 
   /**

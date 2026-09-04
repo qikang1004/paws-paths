@@ -201,6 +201,64 @@ async function main() {
   }
   log('未登录读三条运营端点', '全 401');
 
+  // —— 筛选（阶段 4 新增）——
+  const filtered = await call('GET', '/moderation/tasks?pageSize=20&targetType=post', { token });
+  must(filtered.status === 200, '按目标类型筛应 200');
+  must(
+    filtered.data.items.every((row) => row.targetType === 'post'),
+    '筛 targetType=post 后不该出现图片类工单',
+  );
+  log('GET /moderation/tasks?targetType=post', `${filtered.data.items.length} 条，全是动态`);
+
+  const byResult = await call('GET', '/moderation/tasks/handled?pageSize=20&result=rejected', {
+    token,
+  });
+  must(byResult.status === 200, '已处理按结论筛应 200');
+  must(
+    byResult.data.items.every((row) => row.result === 'rejected'),
+    '筛 result=rejected 后不该出现放行的工单',
+  );
+  log('GET /moderation/tasks/handled?result=rejected', `${byResult.data.items.length} 条，全是撤下的`);
+
+  const byAction = await call('GET', '/moderation/audit-logs?pageSize=20&action=review_reject', {
+    token,
+  });
+  must(byAction.status === 200, '流水按动作筛应 200');
+  must(
+    byAction.data.items.every((row) => row.action === 'review_reject'),
+    '筛 action=review_reject 后不该出现别的动作',
+  );
+  log('GET /moderation/audit-logs?action=review_reject', `${byAction.data.items.length} 条`);
+
+  /**
+   * 非法枚举值一律 422。**不能静默当没筛** —— 那会让客户端以为筛生效了而实际
+   * 返回全量，界面上表现成「筛选按钮没反应」。
+   */
+  for (const [path, query] of [
+    ['/moderation/tasks', 'targetType=pet_photo'],
+    ['/moderation/tasks', 'reason=%E8%87%AA%E7%94%B1%E6%96%87%E6%9C%AC'],
+    ['/moderation/tasks/handled', 'result=pending'],
+    ['/moderation/audit-logs', 'action=nope'],
+  ]) {
+    const res = await call('GET', `${path}?${query}`, { token });
+    must(res.status === 422, `${path}?${query} 应 422，实际 ${res.status}`);
+  }
+  log('筛选的非法值', '四种全 422，不是静默当没筛');
+
+  /** 不认识的维度**静默忽略** —— 客户端可以把同一个筛选器状态发给任一端点。 */
+  const ignored = await call('GET', '/moderation/tasks?pageSize=20&action=report', { token });
+  must(ignored.status === 200, '待办端点收到 action 应忽略而不是报错');
+  const ignored2 = await call('GET', '/moderation/audit-logs?pageSize=20&reason=spam', { token });
+  must(ignored2.status === 200, '流水端点收到 reason 应忽略而不是报错');
+  log('不认识的维度', '待办收到 action、流水收到 reason，都是 200（静默忽略）');
+
+  /** 空串等于没传 —— 前端清空筛选器时最自然的写法就是 `?reason=`。 */
+  const emptyFilter = await call('GET', '/moderation/tasks?pageSize=20&reason=&targetType=', {
+    token,
+  });
+  must(emptyFilter.status === 200, '空串的筛选参数应当被当成没筛');
+  log('空串筛选参数', '200，等于没筛');
+
   // —— 两种失败必须无法区分（防枚举）——
   const wrongPass = await login(USER, `${PASS}-wrong`);
   const noSuchUser = await login(`no-such-${Date.now().toString(36)}`, PASS);

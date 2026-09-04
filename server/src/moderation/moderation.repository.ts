@@ -1,8 +1,34 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import type { AuditStatus, ModerationSource, ModerationTargetType, ReportReason } from '@paws/types';
+import type {
+  AuditStatus,
+  ModerationFilter,
+  ModerationSource,
+  ModerationTargetType,
+  ReportReason,
+} from '@paws/types';
 import type { Pool } from 'pg';
 import type { AuditLogEntry } from './audit-log.repository';
+
+/**
+ * 无库模式的筛选谓词。
+ *
+ * 与 Postgres 侧的 `buildTaskFilter` 必须**语义一致** —— 两个实现分叉会让
+ * 「本地绿、上线红」，那正是双跑契约测试存在的理由。这里只认工单表上有的两个
+ * 维度（目标类型、举报原因）与结论；`action` 是流水的维度，工单表上没有那一列。
+ *
+ * `undefined` 的字段不筛。这与 SQL 侧「不追加 WHERE 片段」等价。
+ */
+function matchesFilter(
+  task: Pick<ModerationTaskRow, 'targetType' | 'reason' | 'result'>,
+  filter?: ModerationFilter,
+): boolean {
+  if (!filter) return true;
+  if (filter.targetType && task.targetType !== filter.targetType) return false;
+  if (filter.reason && task.reason !== filter.reason) return false;
+  if (filter.result && task.result !== filter.result) return false;
+  return true;
+}
 
 /** DI token：审核工单仓储（队列）。无库时内存实现驱动演示（与 AUDIT_LOG_REPOSITORY 同款）。 */
 export const MODERATION_REPOSITORY = 'ModerationRepository';
@@ -134,6 +160,7 @@ export interface ModerationRepository {
   listOpenTasks(opts: {
     page: number;
     pageSize: number;
+    filter?: ModerationFilter;
   }): Promise<{ items: ModerationTaskWithContent[]; hasMore: boolean }>;
 
   /**
@@ -147,6 +174,7 @@ export interface ModerationRepository {
   listHandledTasks(opts: {
     page: number;
     pageSize: number;
+    filter?: ModerationFilter;
   }): Promise<{ items: HandledTaskRow[]; hasMore: boolean }>;
 
   /** 按 id 取一条工单（不论是否已处理）。用于把「不存在」与「已处理」分开。 */
@@ -217,11 +245,17 @@ export class InMemoryModerationRepository implements ModerationRepository {
   }
 
   /** 追加序即创建时间序 —— 不依赖 `createdAt` 的毫秒精度（同流水仓储的理由）。 */
-  async listOpenTasks(opts: { page: number; pageSize: number }): Promise<{
+  async listOpenTasks(opts: {
+    page: number;
+    pageSize: number;
+    filter?: ModerationFilter;
+  }): Promise<{
     items: ModerationTaskWithContent[];
     hasMore: boolean;
   }> {
-    const open = this.tasks.filter((task) => task.result === null);
+    const open = this.tasks.filter(
+      (task) => task.result === null && matchesFilter(task, opts.filter),
+    );
     const offset = (opts.page - 1) * opts.pageSize;
     const slice = open.slice(offset, offset + opts.pageSize);
     const items: ModerationTaskWithContent[] = [];
@@ -239,13 +273,17 @@ export class InMemoryModerationRepository implements ModerationRepository {
    * `handledByName` 恒为 null —— 内存用户仓储按 openid 存，这里只有 id
    * （同 `InMemoryAuditLogRepository.list` 与 `PostTargetSource.describe` 的理由）。
    */
-  async listHandledTasks(opts: { page: number; pageSize: number }): Promise<{
+  async listHandledTasks(opts: {
+    page: number;
+    pageSize: number;
+    filter?: ModerationFilter;
+  }): Promise<{
     items: HandledTaskRow[];
     hasMore: boolean;
   }> {
     const handled = this.tasks
       .filter((task): task is ModerationTaskRow & { result: 'approved' | 'rejected'; handledAt: Date } =>
-        task.result !== null && task.handledAt !== null,
+        task.result !== null && task.handledAt !== null && matchesFilter(task, opts.filter),
       )
       // 倒序：最近判的在最前。同一毫秒的两条靠追加序兜底（reverse 前先按时间排）。
       .sort((a, b) => b.handledAt.getTime() - a.handledAt.getTime());
@@ -438,18 +476,23 @@ export class PostgresModerationRepository implements ModerationRepository {
   }
 
   /** 多取一条判 hasMore，省一次 count（同 `PostgresPostRepository.list`）。 */
-  async listOpenTasks(opts: { page: number; pageSize: number }): Promise<{
+  async listOpenTasks(opts: {
+    page: number;
+    pageSize: number;
+    filter?: ModerationFilter;
+  }): Promise<{
     items: ModerationTaskWithContent[];
     hasMore: boolean;
   }> {
     const offset = (opts.page - 1) * opts.pageSize;
+    const query = selectOpenTasks(opts.filter);
     const { rows } = await this.pool.query<
       Parameters<typeof toTaskRow>[0] & {
         content: string | null;
         image_urls: string[];
         author_nickname: string | null;
       }
-    >(`${SELECT_OPEN_TASKS} LIMIT $1 OFFSET $2`, [opts.pageSize + 1, offset]);
+    >(query.sql, [opts.pageSize + 1, offset, ...query.params]);
     const items = rows.slice(0, opts.pageSize).map((row) => ({
       ...toTaskRow(row),
       // 目标被删掉的空壳工单：内容取不到就给空串，不让整页 500。
@@ -461,11 +504,16 @@ export class PostgresModerationRepository implements ModerationRepository {
   }
 
   /** 已处理的一页，倒序。多取一条判 hasMore（同待办那条）。 */
-  async listHandledTasks(opts: { page: number; pageSize: number }): Promise<{
+  async listHandledTasks(opts: {
+    page: number;
+    pageSize: number;
+    filter?: ModerationFilter;
+  }): Promise<{
     items: HandledTaskRow[];
     hasMore: boolean;
   }> {
     const offset = (opts.page - 1) * opts.pageSize;
+    const query = selectHandledTasks(opts.filter);
     const { rows } = await this.pool.query<
       Parameters<typeof toTaskRow>[0] & {
         content: string | null;
@@ -474,7 +522,7 @@ export class PostgresModerationRepository implements ModerationRepository {
         handled_by_username: string | null;
         handled_by_nickname: string | null;
       }
-    >(`${SELECT_HANDLED_TASKS} LIMIT $1 OFFSET $2`, [opts.pageSize + 1, offset]);
+    >(query.sql, [opts.pageSize + 1, offset, ...query.params]);
     const items = rows.slice(0, opts.pageSize).map((row) => {
       const base = toTaskRow(row);
       return {
@@ -544,15 +592,6 @@ export class PostgresModerationRepository implements ModerationRepository {
 }
 
 /**
- * 待处理工单一页，连带被举报内容的原文。
- *
- * 多态目标用两组 LEFT JOIN 摊平，而不是按类型分两条语句：分页要跨类型排序，
- * 两条语句就得在应用层合并再切片，那等于把 LIMIT 做废（同「过滤必须在 SQL 里」
- * 的理由）。`target_type` 的比较是 SQL 里的单个 `=`，不是 TS 的状态字面量比较。
- *
- * 图片类工单的 `image_urls` 只有被举报那一张 —— 举报指向的是这张图，不是整条动态。
- */
-/**
  * 工单 + 内容原文的公共部分（`SELECT` 到 `FROM ... JOIN`）。
  *
  * 多态目标用两组 LEFT JOIN 摊平，而不是按类型分两条语句：分页要跨类型排序，
@@ -585,11 +624,57 @@ const TASK_WITH_CONTENT_FROM = `
     LEFT JOIN users hu ON hu.id = t.handled_by
 `;
 
-/** 待处理的一页，按举报时间**正序** —— 先举报的先处理。 */
-const SELECT_OPEN_TASKS = `${TASK_WITH_CONTENT_FROM}
-   WHERE t.result IS NULL
+/**
+ * 把筛选条件译成 SQL 片段与参数。
+ *
+ * **过滤必须在 SQL 里**，不能取回来再筛 —— 那会让 LIMIT 作用在筛之前的行集上，
+ * 分页整个算错（同 `TASK_WITH_CONTENT_FROM` 注释里那条「两条语句得在应用层合并」
+ * 的理由）。
+ *
+ * 参数从 `$startAt` 开始编号：调用方的 LIMIT / OFFSET 已经占了 `$1` `$2`，
+ * 而 PG 的占位符是位置绑定的。返回下一个可用编号让调用方接着拼。
+ *
+ * 与内存实现的 `matchesFilter` 必须语义一致（双跑契约测试钉着这一点）。
+ */
+function buildTaskFilter(
+  filter: ModerationFilter | undefined,
+  startAt: number,
+): { sql: string; params: unknown[] } {
+  const clauses: string[] = [];
+  const params: unknown[] = [];
+  let n = startAt;
+  // 值一律走占位符 —— 它们过了白名单，但拼进语句文本仍是一条不该开的路。
+  if (filter?.targetType) {
+    clauses.push(`t.target_type = $${n++}`);
+    params.push(filter.targetType);
+  }
+  if (filter?.reason) {
+    clauses.push(`t.reason = $${n++}`);
+    params.push(filter.reason);
+  }
+  if (filter?.result) {
+    clauses.push(`t.result = $${n++}`);
+    params.push(filter.result);
+  }
+  return { sql: clauses.map((c) => ` AND ${c}`).join(''), params };
+}
+
+/**
+ * 待处理的一页，按举报时间**正序** —— 先举报的先处理。
+ *
+ * 是函数不是常量：筛选片段要插在 `WHERE` 与 `ORDER BY` 之间，模板常量拼不出
+ * 那个位置。`$1` `$2` 留给 LIMIT / OFFSET，筛选参数从 `$3` 起（见 `buildTaskFilter`）。
+ */
+function selectOpenTasks(filter?: ModerationFilter): { sql: string; params: unknown[] } {
+  const { sql, params } = buildTaskFilter(filter, 3);
+  return {
+    sql: `${TASK_WITH_CONTENT_FROM}
+   WHERE t.result IS NULL${sql}
    ORDER BY t.created_at, t.id
-`;
+   LIMIT $1 OFFSET $2`,
+    params,
+  };
+}
 
 /**
  * 已处理的一页，按处理时间**倒序** —— 最近判的先看到，与待办正好相反。
@@ -597,10 +682,16 @@ const SELECT_OPEN_TASKS = `${TASK_WITH_CONTENT_FROM}
  * `id DESC` 兜同一时刻的两条（批量复核时 `handled_at` 可能相同）：只按时间排
  * 会让分页在页边界上漏行或重复，同 `audit_log` 那边的理由。
  */
-const SELECT_HANDLED_TASKS = `${TASK_WITH_CONTENT_FROM}
-   WHERE t.result IS NOT NULL
+function selectHandledTasks(filter?: ModerationFilter): { sql: string; params: unknown[] } {
+  const { sql, params } = buildTaskFilter(filter, 3);
+  return {
+    sql: `${TASK_WITH_CONTENT_FROM}
+   WHERE t.result IS NOT NULL${sql}
    ORDER BY t.handled_at DESC, t.id DESC
-`;
+   LIMIT $1 OFFSET $2`,
+    params,
+  };
+}
 
 /**
  * 目标类型 → 复核时的 UPDATE 片段。同 `TARGET_TABLE`，是定值表，不来自请求。

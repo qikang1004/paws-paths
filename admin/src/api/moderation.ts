@@ -1,6 +1,7 @@
 import type {
   AuditLogDto,
   HandledTaskDto,
+  ModerationFilter,
   ModerationTargetType,
   ModerationTaskDto,
   UserRole,
@@ -33,8 +34,25 @@ export function adminLogin(username: string, password: string): Promise<AdminLog
  */
 export const PAGE_SIZE = 20;
 
-export function fetchTasks(page: number): Promise<TaskPage> {
-  return api.get<TaskPage>(`/moderation/tasks?page=${page}&pageSize=${PAGE_SIZE}`);
+export function fetchTasks(page: number, filter?: ModerationFilter): Promise<TaskPage> {
+  return api.get<TaskPage>(`/moderation/tasks?${listQuery(page, filter)}`);
+}
+
+/**
+ * 分页 + 筛选拼成查询串。
+ *
+ * 值为空的维度**整个键都不发**，而不是发一个空串：服务端两种都当「没筛」，
+ * 但不发让 URL 短、也让接口日志一眼看出实际筛了什么。
+ *
+ * 服务端对自己不认识的维度是静默忽略的（`parseModerationFilter` 的 `allowed`），
+ * 所以三个列表可以把同一个筛选器状态原样发出去 —— 前端不必记「哪个端点认哪几维」。
+ */
+function listQuery(page: number, filter?: ModerationFilter): string {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
+  for (const [key, value] of Object.entries(filter ?? {})) {
+    if (value) params.set(key, value);
+  }
+  return params.toString();
 }
 
 /** 复核结论。`approved` = 举报不成立、恢复可见；`rejected` = 举报成立、撤下。 */
@@ -73,8 +91,8 @@ export interface AuditLogPage {
  * 与工单列表共用 `PAGE_SIZE`（服务端两条端点走的是同一个 `parseListQuery`，
  * 上限都是 20）。
  */
-export function fetchAuditLogs(page: number): Promise<AuditLogPage> {
-  return api.get<AuditLogPage>(`/moderation/audit-logs?page=${page}&pageSize=${PAGE_SIZE}`);
+export function fetchAuditLogs(page: number, filter?: ModerationFilter): Promise<AuditLogPage> {
+  return api.get<AuditLogPage>(`/moderation/audit-logs?${listQuery(page, filter)}`);
 }
 
 /** `GET /moderation/tasks/handled` 的一页。 */
@@ -85,8 +103,11 @@ export interface HandledTaskPage {
 }
 
 /** 已处理工单的一页，按处理时间倒序（最近判的在最前）。 */
-export function fetchHandledTasks(page: number): Promise<HandledTaskPage> {
-  return api.get<HandledTaskPage>(`/moderation/tasks/handled?page=${page}&pageSize=${PAGE_SIZE}`);
+export function fetchHandledTasks(
+  page: number,
+  filter?: ModerationFilter,
+): Promise<HandledTaskPage> {
+  return api.get<HandledTaskPage>(`/moderation/tasks/handled?${listQuery(page, filter)}`);
 }
 
 /**

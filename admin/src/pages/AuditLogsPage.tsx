@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AUDIT_ACTION_LABELS, type AuditLogDto } from '@paws/types';
+import { AUDIT_ACTION_LABELS, type AuditLogDto, type ModerationFilter } from '@paws/types';
 import { ApiError, UnauthorizedError } from '../api/client';
 import { fetchAuditLogs } from '../api/moderation';
 import { HistoryDialog } from '../components/HistoryDialog';
+import { FilterBar } from '../components/FilterBar';
 import { Pager } from '../components/Pager';
 
 /**
@@ -17,6 +18,7 @@ import { Pager } from '../components/Pager';
  */
 export function AuditLogsPage({ onExpired }: { onExpired(): void }): JSX.Element {
   const [page, setPage] = useState(1);
+  const [filter, setFilter] = useState<ModerationFilter>({});
   const [items, setItems] = useState<AuditLogDto[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -24,11 +26,11 @@ export function AuditLogsPage({ onExpired }: { onExpired(): void }): JSX.Element
   const [history, setHistory] = useState<AuditLogDto | null>(null);
 
   const load = useCallback(
-    async (target: number): Promise<void> => {
+    async (target: number, active: ModerationFilter): Promise<void> => {
       setLoading(true);
       setError(null);
       try {
-        const data = await fetchAuditLogs(target);
+        const data = await fetchAuditLogs(target, active);
         setItems(data.items);
         setHasMore(data.hasMore);
       } catch (err) {
@@ -45,17 +47,34 @@ export function AuditLogsPage({ onExpired }: { onExpired(): void }): JSX.Element
   );
 
   useEffect(() => {
-    void load(page);
-  }, [load, page]);
+    void load(page, filter);
+  }, [load, page, filter]);
+
+  /**
+   * 改筛选时**回到第一页**：留在第 3 页而筛完只有一页，会得到一屏空列表加一句
+   * 「这一页空了」——那看起来像筛选把什么都滤掉了。
+   */
+  function applyFilter(next: ModerationFilter): void {
+    setFilter(next);
+    setPage(1);
+  }
 
   return (
     <section className="page">
       <header className="page__head">
         <h1 className="page__title">审核流水</h1>
-        <button type="button" className="btn" onClick={() => void load(page)} disabled={loading}>
+        <button type="button" className="btn" onClick={() => void load(page, filter)} disabled={loading}>
           {loading ? '加载中…' : '刷新'}
         </button>
       </header>
+
+      {/* 流水没有 `reason`（那在工单表上）也没有 `result`（它记的是动作，不是结论）。 */}
+      <FilterBar
+        dimensions={['targetType', 'action']}
+        value={filter}
+        busy={loading}
+        onChange={applyFilter}
+      />
 
       <p className="page__hint">
         只追加的合规记录，不可修改。这里不显示被审内容的原文 —— 流水要比它记录的内容活得久。
@@ -64,7 +83,7 @@ export function AuditLogsPage({ onExpired }: { onExpired(): void }): JSX.Element
       {error && (
         <div className="notice notice--error">
           {error}
-          <button type="button" className="btn btn--link" onClick={() => void load(page)}>
+          <button type="button" className="btn btn--link" onClick={() => void load(page, filter)}>
             重试
           </button>
         </div>
@@ -73,7 +92,13 @@ export function AuditLogsPage({ onExpired }: { onExpired(): void }): JSX.Element
       {loading && items.length === 0 && <p className="notice">正在加载…</p>}
 
       {!loading && !error && items.length === 0 && (
-        <p className="notice">{page > 1 ? '这一页已经空了。' : '还没有任何审核动作。'}</p>
+        <p className="notice">
+          {page > 1
+            ? '这一页已经空了。'
+            : Object.keys(filter).length > 0
+              ? '没有符合筛选条件的流水 —— 换个条件或清空筛选。'
+              : '还没有任何审核动作。'}
+        </p>
       )}
 
       {items.length > 0 && (

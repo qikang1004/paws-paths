@@ -268,6 +268,50 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* ---------- 筛选条 ---------- */
+
+.filters {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.filters__field {
+  display: grid;
+  gap: 4px;
+}
+
+.filters__label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* 原生 select：不重画外观，运营在桌面浏览器里用，原生的键盘操作更快。 */
+.filters__select {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.filters__select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.filters__select:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .notice {
   margin: 0 0 16px;
   padding: 14px 16px;

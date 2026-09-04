@@ -702,6 +702,107 @@ describe('复核 /moderation/tasks', () => {
     });
   });
 
+  /**
+   * 筛选（阶段 4）。放在最后：它依赖上面几组造出的工单与流水。
+   *
+   * 断言一律挑本套件造的那几条 —— 库是共享的，写死行数就是假红。
+   */
+  describe('10. 三个列表的筛选', () => {
+    let postId: string;
+
+    beforeAll(async () => {
+      const q = await queued('筛选用的动态');
+      postId = q.postId;
+      expect(
+        (await resolve(q.taskId, { result: 'rejected', rejectReason: '筛选用' }, MODERATOR)).status,
+      ).toBe(200);
+    });
+
+    it('待办按目标类型筛：只出 post 时图片类工单不在', async () => {
+      const res = await listTasks(MODERATOR, '?pageSize=20&targetType=post');
+      expect(res.status).toBe(200);
+      const items = res.body.data.items as Record<string, unknown>[];
+      expect(items.every((row) => row.targetType === 'post')).toBe(true);
+    });
+
+    it('待办按举报原因筛', async () => {
+      const res = await listTasks(MODERATOR, '?pageSize=20&reason=spam');
+      const items = res.body.data.items as Record<string, unknown>[];
+      expect(items.every((row) => row.reason === 'spam')).toBe(true);
+    });
+
+    /** 待办的 `result` 恒为空，所以那一维不在 allowed 里 —— 传了静默忽略。 */
+    it('待办忽略 result 参数，不报错', async () => {
+      const res = await listTasks(MODERATOR, '?pageSize=20&result=rejected');
+      expect(res.status).toBe(200);
+      // 忽略掉之后仍然只出未处理的。
+      const items = res.body.data.items as Record<string, unknown>[];
+      expect(items.every((row) => row.result === undefined)).toBe(true);
+    });
+
+    it('已处理按结论筛：只出 rejected', async () => {
+      const res = await listHandled(MODERATOR, '?pageSize=20&result=rejected');
+      expect(res.status).toBe(200);
+      const items = res.body.data.items as Record<string, unknown>[];
+      expect(items.length).toBeGreaterThan(0);
+      expect(items.every((row) => row.result === 'rejected')).toBe(true);
+    });
+
+    it('已处理按结论筛：approved 与 rejected 互不混', async () => {
+      const res = await listHandled(MODERATOR, '?pageSize=20&result=approved');
+      const items = res.body.data.items as Record<string, unknown>[];
+      expect(items.every((row) => row.result === 'approved')).toBe(true);
+      expect(items.some((row) => row.targetId === postId)).toBe(false);
+    });
+
+    it('流水按动作筛', async () => {
+      const res = await listAuditLogs(MODERATOR, '?pageSize=20&action=review_reject');
+      expect(res.status).toBe(200);
+      const items = res.body.data.items as Record<string, unknown>[];
+      expect(items.length).toBeGreaterThan(0);
+      expect(items.every((row) => row.action === 'review_reject')).toBe(true);
+    });
+
+    /** 流水没有 `reason` 那一列 —— 传了静默忽略而不是 422。 */
+    it('流水忽略 reason 参数，不报错', async () => {
+      const res = await listAuditLogs(MODERATOR, '?pageSize=20&reason=spam');
+      expect(res.status).toBe(200);
+    });
+
+    /**
+     * 非法枚举值一律 422。**不能静默当没筛** —— 那会让客户端以为筛生效了而
+     * 实际返回全量，界面上表现成「筛选按钮没反应」。
+     */
+    it.each([
+      ['/moderation/tasks', 'targetType=pet_photo'],
+      ['/moderation/tasks', 'reason=自由文本'],
+      ['/moderation/tasks/handled', 'result=pending'],
+      ['/moderation/audit-logs', 'action=删除'],
+    ])('%s?%s 非法值 → 422', async (path, query) => {
+      const res = await as(http().get(`${path}?${query}`), MODERATOR);
+      expect(res.status).toBe(422);
+      expect(res.body.code).toBe(ERROR_CODES.VALIDATION_FAILED);
+    });
+
+    /** 前端清空筛选器时最自然的写法就是 `?reason=` —— 那不该是 422。 */
+    it('空串等于没筛', async () => {
+      const res = await listTasks(MODERATOR, '?pageSize=20&reason=&targetType=');
+      expect(res.status).toBe(200);
+    });
+
+    /**
+     * 筛选必须与分页一起在 SQL 里生效。用 pageSize=1 + 一个筛得很窄的条件：
+     * 若是取回一页再筛，筛掉之后这一页可能空，而 hasMore 仍是 true。
+     */
+    it('筛选参与分页计算', async () => {
+      const res = await listHandled(MODERATOR, '?pageSize=1&result=rejected');
+      expect(res.status).toBe(200);
+      const items = res.body.data.items as Record<string, unknown>[];
+      expect(items).toHaveLength(1);
+      expect(items[0].result).toBe('rejected');
+    });
+  });
+
   describe('入参与不存在的工单', () => {
     it('不存在的工单 id → 404', async () => {
       const res = await resolve(randomUUID(), { result: 'approved' }, MODERATOR);

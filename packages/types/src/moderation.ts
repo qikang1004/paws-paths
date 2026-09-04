@@ -179,6 +179,27 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   auto_reject: '机审拒绝',
 };
 
+/**
+ * 三个运营列表的筛选条件。
+ *
+ * 全部**可选**，缺省即不筛。做成一个共用的形状而不是每个端点各定一套：三条路径的
+ * 筛选维度有重叠（目标类型三条都要、举报原因两条要），各定一套会让「加一个维度」
+ * 要改三处，而客户端也得记三种参数名。
+ *
+ * 服务端按端点取自己认识的那几个字段，不认识的**静默忽略**而不是报错 ——
+ * 那样客户端可以把同一个筛选器状态原样发给任一端点。
+ */
+export interface ModerationFilter {
+  /** 目标类型。三个列表都支持。 */
+  targetType?: ModerationTargetType;
+  /** 举报原因。待复核与已处理支持；流水没有这一列。 */
+  reason?: ReportReason;
+  /** 复核结论。**只有已处理**支持 —— 待复核的恒为空，流水记的是动作不是结论。 */
+  result?: 'approved' | 'rejected';
+  /** 审核动作。**只有流水**支持。 */
+  action?: AuditAction;
+}
+
 /** `POST /moderation/tasks/:id/resolve` 的请求体。 */
 export interface ResolveTaskRequest {
   /** `approved` = 举报不成立，恢复可见；`rejected` = 举报成立，永久撤下。 */
