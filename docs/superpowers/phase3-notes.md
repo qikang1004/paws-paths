@@ -215,7 +215,7 @@ feed 页的 `followingCount`：`0` = 一只都没关注（引去广场）、`>0`
 
 ## 八、既有未闭合的账（跨阶段结转，本阶段未动）
 
-1. **`phone_enc` / `pgcrypto` 从未实现。** spec 要求手机号加密存储，实际没有这一列，
+1. （**已补存储层**，见 `carryover/phone-encryption.md`）**`phone_enc` / `pgcrypto` 从未实现。** spec 要求手机号加密存储，实际没有这一列，
    也没装 pgcrypto。
 2. （**已补**，见 `carryover/pet-photo-audit.md`）**`pet_photos` 没有 `audit_status`**，宠物照片**不过机审**。spec §4.1/§4.5 声称有，
    实际没有。宠物相册的安全边界目前只由取图路由兜着（私有档对他人 404）。

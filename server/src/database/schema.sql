@@ -1,4 +1,7 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
+-- 手机号加密存储用（users.phone_enc，见迁移段）。PG13 起 pgcrypto 是 trusted 扩展，
+-- 库的属主即可安装，不需要超级用户。
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
@@ -228,6 +231,24 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 -- （WHERE username = $1 是密码登录的唯一入口）。
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_idx
   ON users (username) WHERE username IS NOT NULL;
+
+-- 手机号加密存储（spec §4.5 第 4 条：phone_enc 用 pgcrypto 加密，接口一律脱敏）。
+--
+-- 两列，各管一件事：
+--   phone_enc  —— pgp_sym_encrypt 的密文（bytea）。钥匙来自环境变量 PHONE_ENC_KEY，
+--                 每次查询作为参数传进来，库里不存钥匙。
+--   phone_hash —— HMAC-SHA256(规范化手机号, PHONE_HASH_KEY) 的十六进制串，只用来按号查人。
+--                 pgp_sym_encrypt 每次加盐，同一个号两次加密结果不同，没法拿密文做等值查找，
+--                 所以查找必须另有一列确定性的值；用带钥匙的 HMAC 而不是裸 SHA-256，
+--                 是因为手机号空间只有百亿级，裸哈希一张彩虹表就能反查。
+-- 两列都允许 NULL：既有用户都没有手机号。没有明文列，也就不存在需要回填的明文数据。
+-- phone_hash 的列级 CHECK 钉死形状，防止有人图省事往这里塞明文。
+-- 查找索引不设唯一：「一个号只能绑一个账号」是业务规则，spec 没有要求，不在 schema 里替它决定。
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_enc BYTEA;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_hash TEXT
+  CHECK (phone_hash ~ '^[0-9a-f]{64}$');
+CREATE INDEX IF NOT EXISTS users_phone_hash_idx
+  ON users (phone_hash) WHERE phone_hash IS NOT NULL;
 
 -- favorites 多态化。spec §4.2 要求 (target_type, target_id)，阶段 1 实际建的是
 -- (user_id, poi_id) 复合主键，只支持场所收藏，宠物详情的收藏心标（原型 _2）

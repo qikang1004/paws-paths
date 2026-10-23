@@ -239,6 +239,36 @@ describe('runMigrations', () => {
     );
   });
 
+  it('手机号加密存储：装 pgcrypto，users 加 phone_enc BYTEA 与 phone_hash，都允许 NULL', async () => {
+    const { pool, queries } = fakePool();
+    await runMigrations(pool);
+    const schema = businessSql(queries)[0];
+
+    // spec §4.5 第 4 条：phone_enc 用 pgcrypto 加密存储。
+    expect(schema).toMatch(/CREATE EXTENSION IF NOT EXISTS pgcrypto;/);
+    expect(schema).toMatch(/ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_enc BYTEA;/);
+    // 查找列只存 HMAC-SHA256 的十六进制串，列级 CHECK 钉死形状 —— 防止哪天有人
+    // 图省事往这里塞明文手机号。
+    expect(schema).toMatch(
+      /ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_hash TEXT\s+CHECK \(phone_hash ~ '\^\[0-9a-f\]\{64\}\$'\);/,
+    );
+    // 不能 NOT NULL：既有用户都没有手机号。
+    expect(schema).not.toMatch(/phone_enc BYTEA NOT NULL/);
+    expect(schema).not.toMatch(/phone_hash TEXT NOT NULL/);
+    // 不存在明文列。
+    expect(schema).not.toMatch(/\bphone TEXT/);
+    expect(schema).toMatch(
+      /CREATE INDEX IF NOT EXISTS users_phone_hash_idx\s+ON users \(phone_hash\) WHERE phone_hash IS NOT NULL/,
+    );
+
+    // 扩展在用到它之前装；列在迁移区（所有建表之后）。
+    const migrationStart = schema.indexOf('-- ── 既有表的迁移');
+    expect(schema.indexOf('ADD COLUMN IF NOT EXISTS phone_enc')).toBeGreaterThan(migrationStart);
+    expect(schema.indexOf('CREATE EXTENSION IF NOT EXISTS pgcrypto')).toBeLessThan(
+      schema.indexOf('ADD COLUMN IF NOT EXISTS phone_enc'),
+    );
+  });
+
   // favorites 是阶段 1 建的表，阶段 2 要把它从「只支持场所」改成多态
   // （spec §4.2）。这是「只增不改」的有意例外，所以约束写得比别的表细：
   // 新库直接建成多态形状，旧库靠 DO 块迁移，两条路都要在 SQL 里看得见。

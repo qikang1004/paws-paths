@@ -57,6 +57,12 @@ export interface UserProfile {
   favoriteCount: number;
 }
 
+/** 写手机号的入参：规范化后的明文（只在这一次调用里出现）与它的查找哈希。 */
+export interface PhoneWrite {
+  phone: string;
+  lookupHash: string;
+}
+
 /** PATCH /me 的可改字段。缺字段表示不动，`avatarUrl: null` 表示清空。 */
 export interface UserProfilePatch {
   nickname?: string;
@@ -88,12 +94,29 @@ export interface UserRepository {
    * 收敛成同一个 401，免得能问出「这个用户名存在」。
    */
   findCredentialByUsername(username: string): Promise<AdminCredential | null>;
+  /**
+   * 绑定 / 改绑手机号，用户不存在返回 false。
+   *
+   * Postgres 实现在库里用 `pgp_sym_encrypt(phone, encKey)` 加密写进 `phone_enc`，
+   * 查找哈希写进 `phone_hash`；明文与钥匙都只作为查询参数出现，不落任何一列。
+   * 规范化与哈希由调用方（`UsersService`）做，仓储不认识手机号的格式。
+   */
+  setPhone(userId: string, input: PhoneWrite, encKey: string): Promise<boolean>;
+  /** 解出明文手机号；没绑过或用户不存在都是 null。钥匙不对时抛错（pgcrypto 解不开）。 */
+  findPhone(userId: string, encKey: string): Promise<string | null>;
+  /** 按查找哈希找用户 id；找不到 null。 */
+  findIdByPhoneHash(lookupHash: string): Promise<string | null>;
 }
 
 /** 无库时的降级实现，驱动 InMemory 模式的演示。 */
 @Injectable()
 export class InMemoryUserRepository implements UserRepository {
   private readonly byOpenid = new Map<string, UserRecord>();
+  /**
+   * 无库模式的手机号：`userId → 写入时的入参`。进程内存不是「落盘」，
+   * 这里不模拟 pgcrypto；加密存储的断言在 Postgres 实现的门控测试里。
+   */
+  private readonly phones = new Map<string, PhoneWrite>();
 
   /**
    * 角色种子。`@Optional()` 是为了不给既有的 `UsersModule` 加必填依赖 ——
@@ -160,6 +183,23 @@ export class InMemoryUserRepository implements UserRepository {
     if (patch.nickname !== undefined) record.nickname = patch.nickname;
     if (patch.avatarUrl !== undefined) record.avatarUrl = patch.avatarUrl;
     return this.findProfile(userId);
+  }
+
+  async setPhone(userId: string, input: PhoneWrite, _encKey: string): Promise<boolean> {
+    if (!this.find(userId)) return false;
+    this.phones.set(userId, { ...input });
+    return true;
+  }
+
+  async findPhone(userId: string, _encKey: string): Promise<string | null> {
+    return this.phones.get(userId)?.phone ?? null;
+  }
+
+  async findIdByPhoneHash(lookupHash: string): Promise<string | null> {
+    for (const [userId, write] of this.phones) {
+      if (write.lookupHash === lookupHash) return userId;
+    }
+    return null;
   }
 
   /** 建号发的是随机 id，按 id 找只能扫一遍；无库模式的用户数以演示为量级。 */
@@ -282,6 +322,40 @@ export class PostgresUserRepository implements UserRepository {
     const role = rows[0].role;
     if (!(USER_ROLES as readonly string[]).includes(role)) return null;
     return { userId: rows[0].id, passwordHash: rows[0].password_hash, role: role as UserRole };
+  }
+
+  /**
+   * `cipher-algo=aes256`：pgcrypto 默认是 aes128，钥匙给到 32 字符以上时没理由用短的。
+   * 钥匙作为参数传入，不拼进 SQL 文本 —— 不会出现在 pg_stat_statements 的语句文本里。
+   */
+  async setPhone(userId: string, input: PhoneWrite, encKey: string): Promise<boolean> {
+    const { rowCount } = await this.pool.query(
+      `UPDATE users
+          SET phone_enc = pgp_sym_encrypt($2, $3, 'cipher-algo=aes256'),
+              phone_hash = $4
+        WHERE id = $1`,
+      [userId, input.phone, encKey, input.lookupHash],
+    );
+    return (rowCount ?? 0) > 0;
+  }
+
+  async findPhone(userId: string, encKey: string): Promise<string | null> {
+    const { rows } = await this.pool.query<{ phone: string | null }>(
+      `SELECT CASE WHEN phone_enc IS NULL THEN NULL
+                   ELSE pgp_sym_decrypt(phone_enc, $2) END AS phone
+         FROM users WHERE id = $1`,
+      [userId, encKey],
+    );
+    return rows[0]?.phone ?? null;
+  }
+
+  async findIdByPhoneHash(lookupHash: string): Promise<string | null> {
+    // 索引不唯一（见 schema.sql）：万一有两个账号绑了同一个号，取最早建的那个，结果稳定。
+    const { rows } = await this.pool.query<{ id: string }>(
+      `SELECT id FROM users WHERE phone_hash = $1 ORDER BY created_at ASC, id ASC LIMIT 1`,
+      [lookupHash],
+    );
+    return rows[0]?.id ?? null;
   }
 
   private toProfile(row: Record<string, unknown>): UserProfile {
