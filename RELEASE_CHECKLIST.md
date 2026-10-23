@@ -22,6 +22,8 @@ git-ignored 的流程草稿里，移到仓库根显式追踪。逐项勾选。
 - [ ] `WX_APPID` / `WX_SECRET` 由平台密钥管理注入，不落任何仓库文件。
 - [ ] `DATABASE_URL` / `REDIS_URL` 同样只从密钥管理注入。本地那份 `server/.env` 是 gitignored 的开发配置，不是部署来源。
 - [ ] 确认数据库账号有建表权限：服务启动时会跑一次 `runMigrations`（幂等，DDL 全是 `IF NOT EXISTS`，且用咨询锁把多实例的并发迁移排成队）。数据库需要 PostGIS 扩展。
+- [ ] 数据库需要能装 `pgcrypto`（手机号加密存储用；PG13 起是 trusted 扩展，库属主即可 `CREATE EXTENSION`）。
+- [ ] `PHONE_ENC_KEY` / `PHONE_HASH_KEY` 由平台密钥管理注入（各自 `openssl rand -hex 32`，两把不能相同），不落任何仓库文件。**写入过数据后不能换**：没有重加密迁移，换了旧密文解不开、按号查人全部落空。
 
 ## 图片存储与静态资源（阶段 2 新增）
 

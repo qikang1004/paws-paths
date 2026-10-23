@@ -1,6 +1,7 @@
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { ERROR_CODES } from '@paws/types';
 import { ApiException } from '../common/api.exception';
+import { maskPhone, normalizePhone, phoneLookupHash, readPhoneKeys } from './phone-crypto';
 import {
   USER_REPOSITORY,
   type UserProfile,
@@ -75,6 +76,38 @@ export class UsersService {
     const updated = await this.repo.updateProfile(userId, patch);
     if (!updated) this.notFound();
     return updated;
+  }
+
+  /**
+   * 绑定 / 改绑手机号，只回脱敏形式（spec §4.5：接口一律返回脱敏形式）。
+   *
+   * 本阶段还没有调用方：手机号的来源是 `wx.getPhoneNumber`，那是企业主体的付费能力
+   * （spec §10），端点等资质下来再接。存储层与这几个方法先按 spec 落好。
+   */
+  async bindPhone(userId: string, raw: unknown): Promise<{ phoneMasked: string }> {
+    const phone = normalizePhone(raw);
+    if (!phone) fail('手机号格式不正确');
+    const keys = readPhoneKeys();
+    const ok = await this.repo.setPhone(
+      userId,
+      { phone, lookupHash: phoneLookupHash(phone, keys.hashKey) },
+      keys.encKey,
+    );
+    if (!ok) this.notFound();
+    return { phoneMasked: maskPhone(phone) };
+  }
+
+  /** 脱敏后的手机号；没绑过 null。 */
+  async maskedPhone(userId: string): Promise<string | null> {
+    const phone = await this.repo.findPhone(userId, readPhoneKeys().encKey);
+    return phone ? maskPhone(phone) : null;
+  }
+
+  /** 按手机号找用户 id（走查找哈希，不解密任何一行）。不是手机号的输入直接 null。 */
+  async findUserIdByPhone(raw: unknown): Promise<string | null> {
+    const phone = normalizePhone(raw);
+    if (!phone) return null;
+    return this.repo.findIdByPhoneHash(phoneLookupHash(phone, readPhoneKeys().hashKey));
   }
 
   private notFound(): never {
