@@ -6,14 +6,13 @@ import { FollowsService, type FollowListResponse } from '../follows/follows.serv
 import { FavoritesService, type FavoriteListResponse } from '../favorites/favorites.service';
 import { HistoryService, type ViewHistoryListResponse } from '../history/history.service';
 import { parseProfilePatch, UsersService } from '../users/users.service';
-import { PetsService, type PetSummary } from '../pets/pets.service';
+import { PetsService } from '../pets/pets.service';
 import { PostsService, type PostListResponse } from '../posts/posts.service';
+import type { MyPetListResponse } from '@paws/types';
 import type { UserProfile } from '../users/user.repository';
 
-/** 形状与 `packages/types` 的 `MyPetListResponse` 一致（刻意不分页）。 */
-export interface MyPetListResponse {
-  items: PetSummary[];
-}
+/** 「我的宠物」响应，唯一定义在 `@paws/types`（刻意不分页，见那里的注释）。 */
+export type { MyPetListResponse } from '@paws/types';
 
 /**
  * 当前用户的个人数据。整个 controller 都在 AuthGuard 后面 ——

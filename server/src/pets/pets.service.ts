@@ -1,5 +1,11 @@
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
-import { ERROR_CODES, type AuditStatus } from '@paws/types';
+import {
+  ERROR_CODES,
+  type PetDetail,
+  type PetListResponse,
+  type PetPhoto,
+  type PetSummary,
+} from '@paws/types';
 import { ApiException } from '../common/api.exception';
 import { auditStatusOfLane } from '../uploads/image-storage';
 import { UploadsService } from '../uploads/uploads.service';
@@ -14,63 +20,11 @@ import {
   type PetSpecies,
 } from './pet.repository';
 
-/** DTO（camelCase），形状与 packages/types 的 PetSummary/PetDetail/PetListResponse 一致。 */
-export interface PetSummary {
-  id: string;
-  name: string;
-  species: PetSpecies;
-  breed: string;
-  gender: 'male' | 'female' | 'unknown';
-  birthDate: string;
-  coverUrl: string;
-  coverWidth: number;
-  coverHeight: number;
-  personalityTags: string[];
-  distanceMeters: number | null;
-  ownerNickname: string;
-  ownerAvatarUrl: string | null;
-  ownerVerified: boolean;
-  isFollowing: boolean;
-}
-
-export interface PetPhoto {
-  id: string;
-  url: string;
-  width: number;
-  height: number;
-  /** 审核状态。别人看到的恒为过审的照片；主人能看到自己的待审照片（编辑页画角标）。 */
-  auditStatus: AuditStatus;
-}
-
-export interface PetDetail {
-  id: string;
-  name: string;
-  species: PetSpecies;
-  breed: string;
-  gender: 'male' | 'female' | 'unknown';
-  birthDate: string;
-  bio: string;
-  personalityTags: string[];
-  distanceMeters: number | null;
-  owner: { nickname: string; avatarUrl: string | null; ownerVerified: boolean };
-  photos: PetPhoto[];
-  isFollowing: boolean;
-  isFavorite: boolean;
-  /**
-   * 这只宠物是不是**看的人自己的**。未登录一律 false。
-   *
-   * 客户端拿它决定关注按钮出不出现（关注自己是 `FOLLOW_SELF:42203`）。
-   * 下发布尔值而不是 `ownerId` —— 主人的用户 id 不进公开响应，
-   * 同 `PetRepository.findOwnerId` 那条「ownerId 不下发客户端」的注释。
-   */
-  isOwn: boolean;
-}
-
-export interface PetListResponse {
-  items: PetSummary[];
-  hasMore: boolean;
-  page: number;
-}
+/**
+ * 宠物 DTO（camelCase）的唯一定义在 `@paws/types`，这里只转出，免得服务端再抄一份
+ * 而与小程序那份漂移（守卫：`test/pet-dto-types.spec.ts`）。
+ */
+export type { PetDetail, PetListResponse, PetPhoto, PetSummary } from '@paws/types';
 
 const VALID_SPECIES: ReadonlySet<string> = new Set(['all', 'dog', 'cat', 'other']);
 
