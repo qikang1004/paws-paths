@@ -8,6 +8,7 @@ import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
 import { MeModule } from '../src/me/me.module';
 import { PetsModule } from '../src/pets/pets.module';
+import { UploadsService } from '../src/uploads/uploads.service';
 import { UsersService } from '../src/users/users.service';
 
 /**
@@ -83,6 +84,14 @@ describe('宠物增改（POST /pets + PATCH/DELETE /pets/:id + 照片）', () =>
     app.useGlobalInterceptors(new ResponseInterceptor());
     app.useGlobalFilters(new AllExceptionsFilter());
     await app.init();
+
+    // 照片的审核状态按文件所在的档定（公开档 = 过审）。这个套件用外链当照片地址，
+    // 真实现会把外链判成待审（fail-closed）—— 那样广场与封面的用例就都测不成了。
+    // 所以把「哪一档」这一个问题替身掉：地址里带 `pending` 的当私有档，其余当公开档。
+    // 机审本身怎么落档，由 uploads.controller.spec.ts 负责。
+    jest
+      .spyOn(app.get(UploadsService), 'laneOfUrl')
+      .mockImplementation(async (url: string) => (url.includes('pending') ? 'private' : 'public'));
 
     // 建号发的是随机 id，token 必须等建完号才能签（同 profile.controller.spec.ts）。
     const { user } = await app.get(UsersService).upsertByOpenid(OPENID);
@@ -556,6 +565,42 @@ describe('宠物增改（POST /pets + PATCH/DELETE /pets/:id + 照片）', () =>
         expect(bad.status).toBe(422);
         expect(bad.body.code).toBe(ERROR_CODES.VALIDATION_FAILED);
       }
+    });
+  });
+
+  describe('照片审核（spec §4.5）', () => {
+    const PENDING = { url: '/uploads/u-x/pending-photo.jpg', width: 600, height: 800 };
+    const APPROVED = { url: 'https://picsum.photos/seed/paws-ok/600/800', width: 600, height: 800 };
+
+    it('待审照片：主人详情里看得见且标 pending，别人与未登录看不见，也撑不起广场封面', async () => {
+      const res = await create({ name: '小审', species: 'dog', ...CENTER });
+      const id = res.body.data.id as string;
+      const added = await auth(http().post(`/pets/${id}/photos`)).send(PENDING).expect(201);
+      expect(added.body.data.auditStatus).toBe('pending');
+
+      const mine = await auth(http().get(`/pets/${id}`)).expect(200);
+      expect(mine.body.data.photos).toEqual([
+        expect.objectContaining({ url: PENDING.url, auditStatus: 'pending' }),
+      ]);
+      const others = await asOther(http().get(`/pets/${id}`)).expect(200);
+      expect(others.body.data.photos).toEqual([]);
+      const anon = await http().get(`/pets/${id}`).expect(200);
+      expect(anon.body.data.photos).toEqual([]);
+
+      const list = await http().get('/pets?pageSize=20').expect(200);
+      expect((list.body.data.items as { id: string }[]).map((i) => i.id)).not.toContain(id);
+
+      // 再来一张过审的：它顶上封面，宠物进广场；待审那张依旧只有主人看得见。
+      await auth(http().post(`/pets/${id}/photos`)).send(APPROVED).expect(201);
+      const after = await http().get('/pets?pageSize=20').expect(200);
+      const card = (after.body.data.items as { id: string; coverUrl: string }[]).find(
+        (i) => i.id === id,
+      );
+      expect(card?.coverUrl).toBe(APPROVED.url);
+      const anonAfter = await http().get(`/pets/${id}`).expect(200);
+      expect((anonAfter.body.data.photos as { url: string }[]).map((p) => p.url)).toEqual([
+        APPROVED.url,
+      ]);
     });
   });
 

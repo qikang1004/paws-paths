@@ -10,8 +10,12 @@
  */
 Component({
   properties: {
-    /** 已选好的图，只需要 `url` 一个字段；宽高由上传通道保管，这里不用。 */
-    images: { type: Array, value: [] as { url: string }[] },
+    /**
+     * 已选好的图，只需要 `url` 一个字段；宽高由上传通道保管，这里不用。
+     * 可选的 `badgeText`：非空时在格子左下角压一个角标（如审核中），
+     * 文案由调用方算好传进来，组件不认识审核状态。
+     */
+    images: { type: Array, value: [] as { url: string; badgeText?: string }[] },
     /** 张数上限。到顶就不再显示「+」—— 点了才提示「最多 N 张」体验更差。 */
     max: { type: Number, value: 9 },
     /** 上传中：禁掉「+」与删除，避免把正在传的那张删掉后回执还回来。 */

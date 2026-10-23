@@ -15,7 +15,7 @@ import {
   type ContentSecurityVerdict,
 } from '../moderation/content-security';
 import { PET_REPOSITORY, type PetRepository } from '../pets/pet.repository';
-import type { StorageLane } from '../uploads/image-storage';
+import { auditStatusOfLane } from '../uploads/image-storage';
 import { UploadsService } from '../uploads/uploads.service';
 import {
   POST_REPOSITORY,
@@ -57,14 +57,6 @@ const REJECT_REASON_OF: Readonly<Record<AuditStatus, string | null>> = {
   rejected: '内容包含疑似违规信息',
 };
 
-/**
- * 图片落的存储档位 → 它的审核状态。档位是机审当时定的，也就是唯一的真相：
- * 公开档说明那张图过审了，私有档说明还没有。
- */
-const STATUS_OF_LANE: Readonly<Record<StorageLane, AuditStatus>> = {
-  public: 'approved',
-  private: 'pending',
-};
 
 /** 校验过的发布入参。图片的 `auditStatus` 不在这里 —— 那是服务端自己算的。 */
 export interface PostCreateBody {
@@ -242,9 +234,8 @@ export class PostsService implements OnModuleDestroy {
     width: number;
     height: number;
   }): Promise<PostImageInput> {
-    const lane = await this.uploads.laneOfUrl(image.url);
-    // 外链、拼错的 key、已经不存在的文件都落在这里：验不了就不放行。
-    return { ...image, auditStatus: lane ? STATUS_OF_LANE[lane] : 'pending' };
+    // 外链、拼错的 key、已经不存在的文件都验不出档位：验不了就不放行（见 auditStatusOfLane）。
+    return { ...image, auditStatus: auditStatusOfLane(await this.uploads.laneOfUrl(image.url)) };
   }
   /** 起一次后台机审并登记句柄。刻意返回 void：调用方不该 await 它。 */
   private trackAuditCheck(row: PostRow, openid: string | null): void {

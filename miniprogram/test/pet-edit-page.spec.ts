@@ -34,8 +34,8 @@ const detail = (over: Partial<PetDetail> = {}): PetDetail => ({
   distanceMeters: null,
   owner: { nickname: '小王', avatarUrl: null, ownerVerified: false },
   photos: [
-    { id: 'ph-1', url: '/uploads/u-1/a.jpg', width: 1200, height: 900 },
-    { id: 'ph-2', url: 'https://picsum.photos/id/2/600/400', width: 600, height: 400 },
+    { id: 'ph-1', url: '/uploads/u-1/a.jpg', width: 1200, height: 900, auditStatus: 'approved' },
+    { id: 'ph-2', url: 'https://picsum.photos/id/2/600/400', width: 600, height: 400, auditStatus: 'approved' },
   ],
   isFollowing: false,
   isFavorite: false,
@@ -150,6 +150,20 @@ describe('buildPhotoTiles', () => {
     expect(tiles[0].isCover).toBe(true);
     expect(tiles[1].isCover).toBe(false);
     expect(tiles[0].id).toBe('ph-1');
+  });
+
+  it('待审 / 未通过的照片带角标文案，过审的不带（主人在编辑页看得到自己的待审照片）', () => {
+    const base = detail().photos[0];
+    const tiles = buildPhotoTiles(
+      [
+        { ...base, id: 'ok', auditStatus: 'approved' },
+        { ...base, id: 'wait', auditStatus: 'pending' },
+        { ...base, id: 'review', auditStatus: 'pending_review' },
+        { ...base, id: 'no', auditStatus: 'rejected' },
+      ],
+      BASE,
+    );
+    expect(tiles.map((t) => t.badgeText)).toEqual(['', '审核中', '审核中', '未通过']);
   });
 });
 

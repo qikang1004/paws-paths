@@ -217,7 +217,7 @@ feed 页的 `followingCount`：`0` = 一只都没关注（引去广场）、`>0`
 
 1. **`phone_enc` / `pgcrypto` 从未实现。** spec 要求手机号加密存储，实际没有这一列，
    也没装 pgcrypto。
-2. **`pet_photos` 没有 `audit_status`**，宠物照片**不过机审**。spec §4.1/§4.5 声称有，
+2. （**已补**，见 `carryover/pet-photo-audit.md`）**`pet_photos` 没有 `audit_status`**，宠物照片**不过机审**。spec §4.1/§4.5 声称有，
    实际没有。宠物相册的安全边界目前只由取图路由兜着（私有档对他人 404）。
    这也是 `MODERATION_TARGET_TYPES` 里没有 `pet_photo` 的原因 —— 没有状态可撤。
 3. **私信本体因类目资质挂起。** `packages/chat` 分包与 `messages` 表在，端点不在。
@@ -233,7 +233,7 @@ feed 页的 `followingCount`：`0` = 一只都没关注（引去广场）、`>0`
 2. **运营侧的界面**：本阶段只有 API（`GET /moderation/tasks` +
    `POST /moderation/tasks/:id/resolve`），没有任何页面。运营目前只能用 curl。
 3. ~~**图片举报的客户端入口**~~ —— **已补做**，见第十一节。
-4. **`pet_photos` 的审核状态**（既有账 2）：要么补上那一列并接机审，要么在 spec 里
+4. （**已补**，见 `carryover/pet-photo-audit.md`）**`pet_photos` 的审核状态**（既有账 2）：要么补上那一列并接机审，要么在 spec 里
    明确记为不做。当前状态是「文档说有、实际没有」，这种不一致比任一选择都差。
 5. ~~**举报的限流**~~ —— **已补做**，见第十节。
 6. **工单列表的筛选与排序**：目前只有「未处理、按时间正序」一种。真实运营会要按
