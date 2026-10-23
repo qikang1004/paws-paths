@@ -221,7 +221,7 @@ feed 页的 `followingCount`：`0` = 一只都没关注（引去广场）、`>0`
    实际没有。宠物相册的安全边界目前只由取图路由兜着（私有档对他人 404）。
    这也是 `MODERATION_TARGET_TYPES` 里没有 `pet_photo` 的原因 —— 没有状态可撤。
 3. **私信本体因类目资质挂起。** `packages/chat` 分包与 `messages` 表在，端点不在。
-4. **`PetDetail` 在服务端有第二份定义**（`pets.service.ts` 里的本地 interface，与
+4. （**已补**：服务端改为从 `@paws/types` 转出 `PetSummary` / `PetPhoto` / `PetDetail` / `PetListResponse` / `MyPetListResponse`，本地定义删除；`server/test/pet-dto-types.spec.ts` 在类型层与文本层双重钉住）**`PetDetail` 在服务端有第二份定义**（`pets.service.ts` 里的本地 interface，与
    `packages/types` 那份形状一致但各自独立）。这是既有结构，本轮 Task 11 只跟着加了
    同一个字段（`isOwn`）。两份定义漂移是既有风险，没有守卫钉住。
 5. **锁定依赖树 76 个 `npm audit` 漏洞告警**（4 low / 18 moderate / 12 high /
