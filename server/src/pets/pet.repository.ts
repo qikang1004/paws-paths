@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import type { Pool } from 'pg';
+import { AUDIT_STATUSES, isPubliclyVisible, isVisibleTo, type AuditStatus } from '@paws/types';
 
 /** DI token：业务侧依赖窄接口，测试注入内存实现（与 USER_REPOSITORY 同款）。 */
 export const PET_REPOSITORY = 'PetRepository';
@@ -46,6 +47,8 @@ export interface PetPhotoRow {
   url: string;
   width: number;
   height: number;
+  /** spec §4.5 的审核状态。对别人只会返回公开可见的照片（筛在查询里，不是事后过滤）。 */
+  auditStatus: AuditStatus;
 }
 
 /**
@@ -87,11 +90,31 @@ export interface PetPhotoInput {
   url: string;
   width: number;
   height: number;
+  /**
+   * 由服务层按文件所在的档算好（公开档 = 过审，其余待审），**不取自请求体**。
+   * 仓储原样落库，不猜默认 —— 库里的列默认值是 'pending'，只兜漏传的那一种失误。
+   */
+  auditStatus: AuditStatus;
+}
+
+/** 照片的公开可见状态集合，SQL 里用 `audit_status = ANY($n)` 比对（不写状态字面量）。 */
+const PUBLIC_STATUSES: readonly AuditStatus[] = AUDIT_STATUSES.filter(isPubliclyVisible);
+
+export interface PetDetailQueryOptions {
+  /**
+   * 连同未过审的照片一起返回 —— 只给主人自己看（编辑页要画「审核中」）。
+   * 默认 false：别人与未登录只拿得到公开可见的照片。
+   */
+  includeHidden?: boolean;
 }
 
 export interface PetRepository {
   list(query: PetQuery): Promise<{ items: PetRow[]; hasMore: boolean }>;
-  getById(id: string, coords?: { lat: number; lng: number }): Promise<{ pet: PetRow; photos: PetPhotoRow[] } | null>;
+  getById(
+    id: string,
+    coords?: { lat: number; lng: number },
+    opts?: PetDetailQueryOptions,
+  ): Promise<{ pet: PetRow; photos: PetPhotoRow[] } | null>;
   /**
    * 归属查询：宠物不存在返回 null。
    *
@@ -129,9 +152,15 @@ export interface PetRepository {
    * 所以照片必须在同一个事务里显式删掉；`follows` / `posts` 靠自己的级联走。
    */
   remove(petId: string): Promise<boolean>;
-  /** 加一张照片；这是这只宠物的第一张时顺带成为封面。 */
+  /**
+   * 加一张照片。顺带挪封面的两种情况：这是第一张；或者新照片公开可见而现封面不是
+   * （待审的封面撑不起广场卡片，有过审的就换上去）。
+   */
   addPhoto(petId: string, photo: PetPhotoInput): Promise<PetPhotoRow>;
-  /** 删照片；删掉的是封面时封面顶给剩下的第一张，一张不剩就置空。 */
+  /**
+   * 删照片；删掉的是封面时封面顶给剩下的照片 —— 公开可见的优先，同档按 sort_order；
+   * 一张不剩就置空。
+   */
   removePhoto(petId: string, photoId: string): Promise<boolean>;
   /** 换封面前的归属校验：这张照片是不是这只宠物的。 */
   hasPhoto(petId: string, photoId: string): Promise<boolean>;
@@ -198,6 +227,7 @@ interface PhotoSeedRecord {
   width: number;
   height: number;
   sortOrder: number;
+  auditStatus: AuditStatus;
 }
 
 const PET_SEED: Omit<PetSeedRecord, 'createdAt'>[] = [
@@ -212,24 +242,28 @@ const PET_SEED: Omit<PetSeedRecord, 'createdAt'>[] = [
 ];
 
 const PHOTO_SEED: PhotoSeedRecord[] = [
-  { id: 'ph-1', petId: 'p-1', url: 'https://picsum.photos/seed/paws-huang/600/800', width: 600, height: 800, sortOrder: 0 },
-  { id: 'ph-2', petId: 'p-1', url: 'https://picsum.photos/seed/paws-huang2/800/600', width: 800, height: 600, sortOrder: 1 },
-  { id: 'ph-3', petId: 'p-1', url: 'https://picsum.photos/seed/paws-huang3/600/800', width: 600, height: 800, sortOrder: 2 },
-  { id: 'ph-4', petId: 'p-2', url: 'https://picsum.photos/seed/paws-naixi/800/600', width: 800, height: 600, sortOrder: 0 },
-  { id: 'ph-5', petId: 'p-2', url: 'https://picsum.photos/seed/paws-naixi2/600/800', width: 600, height: 800, sortOrder: 1 },
-  { id: 'ph-6', petId: 'p-3', url: 'https://picsum.photos/seed/paws-kele/600/800', width: 600, height: 800, sortOrder: 0 },
-  { id: 'ph-7', petId: 'p-3', url: 'https://picsum.photos/seed/paws-kele2/900/600', width: 900, height: 600, sortOrder: 1 },
-  { id: 'ph-8', petId: 'p-4', url: 'https://picsum.photos/seed/paws-doubao/900/600', width: 900, height: 600, sortOrder: 0 },
-  { id: 'ph-9', petId: 'p-4', url: 'https://picsum.photos/seed/paws-doubao2/600/800', width: 600, height: 800, sortOrder: 1 },
-  { id: 'ph-10', petId: 'p-5', url: 'https://picsum.photos/seed/paws-huahua/600/800', width: 600, height: 800, sortOrder: 0 },
-  { id: 'ph-11', petId: 'p-5', url: 'https://picsum.photos/seed/paws-huahua2/800/800', width: 800, height: 800, sortOrder: 1 },
-  { id: 'ph-12', petId: 'p-6', url: 'https://picsum.photos/seed/paws-tuanzi/800/800', width: 800, height: 800, sortOrder: 0 },
-  { id: 'ph-13', petId: 'p-6', url: 'https://picsum.photos/seed/paws-tuanzi2/600/800', width: 600, height: 800, sortOrder: 1 },
-  { id: 'ph-14', petId: 'p-7', url: 'https://picsum.photos/seed/paws-wangcai/600/900', width: 600, height: 900, sortOrder: 0 },
-  { id: 'ph-15', petId: 'p-7', url: 'https://picsum.photos/seed/paws-wangcai2/800/600', width: 800, height: 600, sortOrder: 1 },
-  { id: 'ph-16', petId: 'p-8', url: 'https://picsum.photos/seed/paws-mimi/700/700', width: 700, height: 700, sortOrder: 0 },
-  { id: 'ph-17', petId: 'p-8', url: 'https://picsum.photos/seed/paws-mimi2/600/800', width: 600, height: 800, sortOrder: 1 },
+  { id: 'ph-1', petId: 'p-1', url: 'https://picsum.photos/seed/paws-huang/600/800', width: 600, height: 800, sortOrder: 0, auditStatus: 'approved' },
+  { id: 'ph-2', petId: 'p-1', url: 'https://picsum.photos/seed/paws-huang2/800/600', width: 800, height: 600, sortOrder: 1, auditStatus: 'approved' },
+  { id: 'ph-3', petId: 'p-1', url: 'https://picsum.photos/seed/paws-huang3/600/800', width: 600, height: 800, sortOrder: 2, auditStatus: 'approved' },
+  { id: 'ph-4', petId: 'p-2', url: 'https://picsum.photos/seed/paws-naixi/800/600', width: 800, height: 600, sortOrder: 0, auditStatus: 'approved' },
+  { id: 'ph-5', petId: 'p-2', url: 'https://picsum.photos/seed/paws-naixi2/600/800', width: 600, height: 800, sortOrder: 1, auditStatus: 'approved' },
+  { id: 'ph-6', petId: 'p-3', url: 'https://picsum.photos/seed/paws-kele/600/800', width: 600, height: 800, sortOrder: 0, auditStatus: 'approved' },
+  { id: 'ph-7', petId: 'p-3', url: 'https://picsum.photos/seed/paws-kele2/900/600', width: 900, height: 600, sortOrder: 1, auditStatus: 'approved' },
+  { id: 'ph-8', petId: 'p-4', url: 'https://picsum.photos/seed/paws-doubao/900/600', width: 900, height: 600, sortOrder: 0, auditStatus: 'approved' },
+  { id: 'ph-9', petId: 'p-4', url: 'https://picsum.photos/seed/paws-doubao2/600/800', width: 600, height: 800, sortOrder: 1, auditStatus: 'approved' },
+  { id: 'ph-10', petId: 'p-5', url: 'https://picsum.photos/seed/paws-huahua/600/800', width: 600, height: 800, sortOrder: 0, auditStatus: 'approved' },
+  { id: 'ph-11', petId: 'p-5', url: 'https://picsum.photos/seed/paws-huahua2/800/800', width: 800, height: 800, sortOrder: 1, auditStatus: 'approved' },
+  { id: 'ph-12', petId: 'p-6', url: 'https://picsum.photos/seed/paws-tuanzi/800/800', width: 800, height: 800, sortOrder: 0, auditStatus: 'approved' },
+  { id: 'ph-13', petId: 'p-6', url: 'https://picsum.photos/seed/paws-tuanzi2/600/800', width: 600, height: 800, sortOrder: 1, auditStatus: 'approved' },
+  { id: 'ph-14', petId: 'p-7', url: 'https://picsum.photos/seed/paws-wangcai/600/900', width: 600, height: 900, sortOrder: 0, auditStatus: 'approved' },
+  { id: 'ph-15', petId: 'p-7', url: 'https://picsum.photos/seed/paws-wangcai2/800/600', width: 800, height: 600, sortOrder: 1, auditStatus: 'approved' },
+  { id: 'ph-16', petId: 'p-8', url: 'https://picsum.photos/seed/paws-mimi/700/700', width: 700, height: 700, sortOrder: 0, auditStatus: 'approved' },
+  { id: 'ph-17', petId: 'p-8', url: 'https://picsum.photos/seed/paws-mimi2/600/800', width: 600, height: 800, sortOrder: 1, auditStatus: 'approved' },
 ];
+
+function toPhotoRow(ph: PhotoSeedRecord): PetPhotoRow {
+  return { id: ph.id, url: ph.url, width: ph.width, height: ph.height, auditStatus: ph.auditStatus };
+}
 
 /** 没有坐标的宠物（城市模式下建的）距离一律 null，而不是假装 0 米。 */
 function distanceTo(seed: PetSeedRecord, coords?: { lat: number; lng: number }): number | null {
@@ -276,13 +310,20 @@ export class InMemoryPetRepository implements PetRepository {
   }));
   private readonly photos: PhotoSeedRecord[] = PHOTO_SEED.map((ph) => ({ ...ph }));
 
+  /** 封面是否撑得起公开卡片：有封面、且封面那张照片公开可见（同 Postgres 侧的 JOIN 条件）。 */
+  private hasPublicCover(seed: PetSeedRecord): boolean {
+    if (seed.coverPhotoId == null) return false;
+    const cover = this.photos.find((ph) => ph.id === seed.coverPhotoId);
+    return cover != null && isPubliclyVisible(cover.auditStatus);
+  }
+
   async list(query: PetQuery): Promise<{ items: PetRow[]; hasMore: boolean }> {
     const hasCoords = typeof query.lat === 'number' && typeof query.lng === 'number';
     const rows = this.pets.filter((p) => {
       if (query.filter.species !== 'all' && p.species !== query.filter.species) return false;
       if (query.filter.breed !== 'all' && p.breed !== query.filter.breed) return false;
-      // 没有封面的宠物不进瀑布流，对应 Postgres 侧那个 JOIN pet_photos。
-      if (p.coverPhotoId == null) return false;
+      // 没有封面、或封面还没过审的宠物不进瀑布流，对应 Postgres 侧那个 JOIN pet_photos。
+      if (!this.hasPublicCover(p)) return false;
       return true;
     });
 
@@ -320,16 +361,15 @@ export class InMemoryPetRepository implements PetRepository {
   async getById(
     id: string,
     coords?: { lat: number; lng: number },
+    opts: PetDetailQueryOptions = {},
   ): Promise<{ pet: PetRow; photos: PetPhotoRow[] } | null> {
     const seed = this.pets.find((p) => p.id === id);
     if (!seed) return null;
     // 刻意不过滤封面：没有照片的宠物详情页也要打得开。
-    const photos = this.photosOf(id).map(({ id: photoId, url, width, height }) => ({
-      id: photoId,
-      url,
-      width,
-      height,
-    }));
+    // 照片按审核状态筛：主人（includeHidden）看全部，其余只看公开可见的。
+    const photos = this.photosOf(id)
+      .filter((ph) => isVisibleTo(ph.auditStatus, opts.includeHidden === true))
+      .map(toPhotoRow);
     return { pet: toPetRow(seed, distanceTo(seed, coords)), photos };
   }
 
@@ -344,7 +384,7 @@ export class InMemoryPetRepository implements PetRepository {
   async listByIds(petIds: string[], coords?: { lat: number; lng: number }): Promise<PetRow[]> {
     return petIds
       .map((id) => this.pets.find((p) => p.id === id))
-      .filter((seed): seed is PetSeedRecord => seed != null && seed.coverPhotoId != null)
+      .filter((seed): seed is PetSeedRecord => seed != null && this.hasPublicCover(seed))
       .map((seed) => toPetRow(seed, distanceTo(seed, coords)));
   }
 
@@ -429,11 +469,18 @@ export class InMemoryPetRepository implements PetRepository {
       width: photo.width,
       height: photo.height,
       sortOrder: existing.length ? existing[existing.length - 1].sortOrder + 1 : 0,
+      auditStatus: photo.auditStatus,
     };
     this.photos.push(row);
     // 第一张自动成封面：否则新建的宠物永远进不了广场。
-    if (seed.coverPhotoId == null) this.setCover(seed, row);
-    return { id: row.id, url: row.url, width: row.width, height: row.height };
+    // 现封面没过审而这张过审了：换上这张（同 Postgres 侧的 UPDATE 条件）。
+    if (
+      seed.coverPhotoId == null ||
+      (isPubliclyVisible(row.auditStatus) && !this.hasPublicCover(seed))
+    ) {
+      this.setCover(seed, row);
+    }
+    return toPhotoRow(row);
   }
 
   async removePhoto(petId: string, photoId: string): Promise<boolean> {
@@ -441,8 +488,12 @@ export class InMemoryPetRepository implements PetRepository {
     if (at < 0) return false;
     this.photos.splice(at, 1);
     const seed = this.pets.find((p) => p.id === petId);
-    // 删掉的正是封面：顶给剩下的第一张，一张不剩就置空（宠物随之退出瀑布流）。
-    if (seed && seed.coverPhotoId === photoId) this.setCover(seed, this.photosOf(petId)[0] ?? null);
+    // 删掉的正是封面：顶给剩下的照片，公开可见的优先、同档按 sortOrder；
+    // 一张不剩就置空（宠物随之退出瀑布流）。
+    if (seed && seed.coverPhotoId === photoId) {
+      const rest = this.photosOf(petId);
+      this.setCover(seed, rest.find((ph) => isPubliclyVisible(ph.auditStatus)) ?? rest[0] ?? null);
+    }
     return true;
   }
 
@@ -489,7 +540,7 @@ export class PostgresPetRepository implements PetRepository {
                ph.url AS "coverUrl", ph.width AS "coverWidth", ph.height AS "coverHeight",
                u.nickname AS "ownerNickname", u.avatar_url AS "ownerAvatarUrl", u.is_verified_owner AS "ownerVerified"
         FROM pets p
-        JOIN pet_photos ph ON ph.id = p.cover_photo_id
+        JOIN pet_photos ph ON ph.id = p.cover_photo_id AND ph.audit_status = ANY($8)
         JOIN users u ON u.id = p.owner_id
         WHERE p.visibility = 'public'
           AND ($3 = 'all' OR p.species = $3)
@@ -498,7 +549,7 @@ export class PostgresPetRepository implements PetRepository {
         ORDER BY "distanceMeters" ASC
         LIMIT $6 OFFSET $7
         `,
-        [query.lng, query.lat, species, breed, radius, query.pageSize, offset],
+        [query.lng, query.lat, species, breed, radius, query.pageSize, offset, PUBLIC_STATUSES],
       );
       rows = res.rows;
     } else {
@@ -511,7 +562,7 @@ export class PostgresPetRepository implements PetRepository {
                ph.url AS "coverUrl", ph.width AS "coverWidth", ph.height AS "coverHeight",
                u.nickname AS "ownerNickname", u.avatar_url AS "ownerAvatarUrl", u.is_verified_owner AS "ownerVerified"
         FROM pets p
-        JOIN pet_photos ph ON ph.id = p.cover_photo_id
+        JOIN pet_photos ph ON ph.id = p.cover_photo_id AND ph.audit_status = ANY($5)
         JOIN users u ON u.id = p.owner_id
         WHERE p.visibility = 'public'
           AND ($1 = 'all' OR p.species = $1)
@@ -519,12 +570,12 @@ export class PostgresPetRepository implements PetRepository {
         ORDER BY p.last_active_at DESC, p.id
         LIMIT $3 OFFSET $4
         `,
-        [species, breed, query.pageSize, offset],
+        [species, breed, query.pageSize, offset, PUBLIC_STATUSES],
       );
       rows = res.rows;
     }
 
-    // 计数必须和上面的取数用同一套过滤：没有封面的宠物被 JOIN 挡在页外，
+    // 计数必须和上面的取数用同一套过滤：没有封面（或封面没过审）的宠物被 JOIN 挡在页外，
     // 却算进总数的话，`hasMore` 会指向一页永远取不出内容的幻影下一页。
     const count = await this.pool.query<{ c: number }>(
       `SELECT count(*)::int AS c
@@ -532,8 +583,11 @@ export class PostgresPetRepository implements PetRepository {
        WHERE p.visibility = 'public'
          AND ($1 = 'all' OR p.species = $1)
          AND ($2 = 'all' OR p.breed = $2)
-         AND EXISTS (SELECT 1 FROM pet_photos ph WHERE ph.id = p.cover_photo_id)`,
-      [species, breed],
+         AND EXISTS (
+           SELECT 1 FROM pet_photos ph
+           WHERE ph.id = p.cover_photo_id AND ph.audit_status = ANY($3)
+         )`,
+      [species, breed, PUBLIC_STATUSES],
     );
     return { items: rows, hasMore: offset + rows.length < count.rows[0].c };
   }
@@ -546,6 +600,7 @@ export class PostgresPetRepository implements PetRepository {
   async getById(
     id: string,
     coords?: { lat: number; lng: number },
+    opts: PetDetailQueryOptions = {},
   ): Promise<{ pet: PetRow; photos: PetPhotoRow[] } | null> {
     const hasCoords = coords != null;
     const petSql = hasCoords
@@ -580,9 +635,13 @@ export class PostgresPetRepository implements PetRepository {
       : await this.pool.query<PetRow>(petSql, [id]);
     if (petRes.rows.length === 0) return null;
 
+    // 审核过滤写在 WHERE 里而不是取回来再筛：主人（$3 = true）看全部，其余只看公开可见的。
     const photoRes = await this.pool.query<PetPhotoRow>(
-      `SELECT id, url, width, height FROM pet_photos WHERE pet_id = $1 ORDER BY sort_order ASC`,
-      [id],
+      `SELECT id, url, width, height, audit_status AS "auditStatus"
+       FROM pet_photos
+       WHERE pet_id = $1 AND (audit_status = ANY($2) OR $3::boolean)
+       ORDER BY sort_order ASC`,
+      [id, PUBLIC_STATUSES, opts.includeHidden === true],
     );
     return { pet: petRes.rows[0], photos: photoRes.rows };
   }
@@ -621,11 +680,14 @@ export class PostgresPetRepository implements PetRepository {
              u.is_verified_owner AS "ownerVerified"
       FROM pets p
       JOIN pet_photos ph ON ph.id = p.cover_photo_id
+        AND ph.audit_status = ANY($${hasCoords ? 4 : 2})
       JOIN users u ON u.id = p.owner_id
       WHERE p.id = ANY($1) AND p.visibility = 'public'
       ORDER BY array_position($1::text[], p.id)
     `;
-    const params = hasCoords ? [petIds, coords.lng, coords.lat] : [petIds];
+    const params = hasCoords
+      ? [petIds, coords.lng, coords.lat, PUBLIC_STATUSES]
+      : [petIds, PUBLIC_STATUSES];
     const { rows } = await this.pool.query<PetRow>(sql, params);
     return rows;
   }
@@ -754,16 +816,27 @@ export class PostgresPetRepository implements PetRepository {
     const id = `ph-${randomUUID()}`;
     const { rows } = await this.pool.query<PetPhotoRow>(
       `WITH inserted AS (
-         INSERT INTO pet_photos (id, pet_id, url, width, height, sort_order)
+         INSERT INTO pet_photos (id, pet_id, url, width, height, sort_order, audit_status)
          VALUES ($1, $2, $3, $4, $5,
-                 COALESCE((SELECT max(sort_order) + 1 FROM pet_photos WHERE pet_id = $2), 0))
-         RETURNING id, url, width, height
+                 COALESCE((SELECT max(sort_order) + 1 FROM pet_photos WHERE pet_id = $2), 0),
+                 $6)
+         RETURNING id, url, width, height, audit_status
        ), cover AS (
          -- 第一张自动成封面：没封面的宠物进不了广场瀑布流（那边是 INNER JOIN）。
-         UPDATE pets SET cover_photo_id = $1 WHERE id = $2 AND cover_photo_id IS NULL
+         -- 现封面没过审而这张过审了：换上这张 —— 待审的封面同样撑不起广场卡片。
+         -- 子查询读的是语句开始时的快照，看不见刚插的这张，正好只判「现封面」。
+         UPDATE pets SET cover_photo_id = $1
+         WHERE id = $2
+           AND (
+             cover_photo_id IS NULL
+             OR ($6::text = ANY($7::text[]) AND NOT EXISTS (
+                   SELECT 1 FROM pet_photos c
+                   WHERE c.id = pets.cover_photo_id AND c.audit_status = ANY($7::text[])
+                 ))
+           )
        )
-       SELECT id, url, width, height FROM inserted`,
-      [id, petId, photo.url, photo.width, photo.height],
+       SELECT id, url, width, height, audit_status AS "auditStatus" FROM inserted`,
+      [id, petId, photo.url, photo.width, photo.height, photo.auditStatus, PUBLIC_STATUSES],
     );
     return rows[0];
   }
@@ -774,15 +847,17 @@ export class PostgresPetRepository implements PetRepository {
       `WITH deleted AS (
          DELETE FROM pet_photos WHERE id = $1 AND pet_id = $2 RETURNING id
        ), promoted AS (
-         -- 删掉的正是封面：顶给剩下的第一张，一张不剩就置空（宠物随之退出瀑布流）。
+         -- 删掉的正是封面：顶给剩下的照片 —— 公开可见的优先、同档按 sort_order；
+         -- 一张不剩就置空（宠物随之退出瀑布流）。
          -- id <> $1 不能省：CTE 里的子查询读的是语句开始时的快照，刚删的那张还在里面。
          UPDATE pets SET cover_photo_id =
            (SELECT id FROM pet_photos
-            WHERE pet_id = $2 AND id <> $1 ORDER BY sort_order ASC LIMIT 1)
+            WHERE pet_id = $2 AND id <> $1
+            ORDER BY (audit_status = ANY($3)) DESC, sort_order ASC LIMIT 1)
          WHERE id = $2 AND cover_photo_id = $1 AND EXISTS (SELECT 1 FROM deleted)
        )
        SELECT count(*)::int AS c FROM deleted`,
-      [photoId, petId],
+      [photoId, petId, PUBLIC_STATUSES],
     );
     return rows[0].c === 1;
   }

@@ -196,6 +196,20 @@ CREATE INDEX IF NOT EXISTS moderation_tasks_queue_idx
 ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user'
   CHECK (role IN ('user','moderator','admin'));
 
+-- 宠物照片接入审核（spec §4.5：pet_photos 与 posts / post_images 共用一套状态机）。
+--
+-- 两步走，顺序不能反：
+--   1. 加列时 DEFAULT 'approved' —— 存量照片此前一直公开展示，加列这一刻原地回填成
+--      「已过审」，否则上线即广场全空；
+--   2. 回填完把默认值切到 'pending' —— 之后漏传状态的新行宁可待审，也不默认公开
+--      （fail-closed，同 posts.audit_status）。
+-- 第 2 句每次启动都重跑，但 SET DEFAULT 只改目录、不碰行，幂等且无害；
+-- 第 1 句在列已存在时整句跳过，不会把后来的待审行再刷成 approved。
+-- CHECK 写成列级约束（理由同上面 users.role）。
+ALTER TABLE pet_photos ADD COLUMN IF NOT EXISTS audit_status TEXT NOT NULL DEFAULT 'approved'
+  CHECK (audit_status IN ('pending','approved','pending_review','rejected'));
+ALTER TABLE pet_photos ALTER COLUMN audit_status SET DEFAULT 'pending';
+
 -- 运营后台的登录凭据（阶段 4：独立 Web 后台）。
 --
 -- 两列都**允许 NULL**，这是本段最要紧的一点：小程序用户走微信登录（openid），

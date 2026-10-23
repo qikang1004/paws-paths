@@ -1,3 +1,4 @@
+import type { AuditStatus } from '@paws/types';
 import type { ImageExt } from './image-file';
 
 /**
@@ -12,6 +13,25 @@ import type { ImageExt } from './image-file';
 export type StorageLane = 'public' | 'private';
 
 export const LANES: readonly StorageLane[] = ['public', 'private'];
+
+/**
+ * 图片落的存储档位 → 它的审核状态。档位是机审当时定的，也就是唯一的真相：
+ * 公开档说明那张图过审了，私有档说明还没有。
+ */
+const STATUS_OF_LANE: Readonly<Record<StorageLane, AuditStatus>> = {
+  public: 'approved',
+  private: 'pending',
+};
+
+/**
+ * 按档位定审核状态。`null`（`UploadsService.laneOfUrl` 验不出档位：外链、拼错的 key、
+ * 已经不存在的文件）一律待审 —— 验不了就不放行（fail-closed）。
+ *
+ * 动态的图片与宠物照片共用这一处，两条路径的口径不能各写一份。
+ */
+export function auditStatusOfLane(lane: StorageLane | null): AuditStatus {
+  return lane ? STATUS_OF_LANE[lane] : 'pending';
+}
 
 export const IMAGE_STORAGE = 'ImageStorage';
 

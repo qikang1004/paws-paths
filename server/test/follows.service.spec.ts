@@ -8,6 +8,7 @@ import {
 import { FollowsService } from '../src/follows/follows.service';
 import { InMemoryPetRepository, PET_REPOSITORY } from '../src/pets/pet.repository';
 import { PetsService } from '../src/pets/pets.service';
+import { UploadsService } from '../src/uploads/uploads.service';
 
 describe('FollowsService', () => {
   let service: FollowsService;
@@ -19,6 +20,8 @@ describe('FollowsService', () => {
       providers: [
         { provide: FOLLOW_REPOSITORY, useClass: InMemoryFollowRepository },
         { provide: PET_REPOSITORY, useClass: InMemoryPetRepository },
+        // PetsService 加照片时要按档定审核状态；关注流程用不到，给个空替身。
+        { provide: UploadsService, useValue: { laneOfUrl: async () => null } },
         PetsService,
         FollowsService,
       ],

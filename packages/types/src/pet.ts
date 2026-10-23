@@ -1,3 +1,5 @@
+import type { AuditStatus } from './audit';
+
 export type PetSpecies = 'dog' | 'cat' | 'other';
 export type PetGender = 'male' | 'female' | 'unknown';
 
@@ -28,6 +30,13 @@ export interface PetPhoto {
   url: string;
   width: number;
   height: number;
+  /**
+   * 照片的审核状态（spec §4.5，与动态图片同一套状态机）。
+   *
+   * 别人看到的详情里只会有过审的照片（服务端在 SQL 里就筛掉了），所以这个字段
+   * 对他们恒为 `approved`；主人自己看能拿到全部照片，客户端据此画「审核中」角标。
+   */
+  auditStatus: AuditStatus;
 }
 
 export interface PetDetail {

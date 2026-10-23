@@ -37,6 +37,20 @@
   color: var(--color-inverse-on-surface);
 }
 
+/* 审核角标压在左下角，与右上角的删除键错开。颜色借用删除键那一对反色 token。 */
+.media-picker__badge {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  padding: var(--space-xs);
+  background-color: var(--color-inverse-surface);
+  border-top-right-radius: var(--radius-sm);
+}
+
+.media-picker__badge-text {
+  color: var(--color-inverse-on-surface);
+}
+
 .media-picker__add {
   display: flex;
   flex-direction: column;

@@ -101,9 +101,10 @@ describe('runMigrations', () => {
     expect(schema).toContain('UNIQUE (follower_id, target_pet_id)');
     // view_history：按 (user, target) 幂等更新时间戳，靠唯一约束支撑 ON CONFLICT
     expect(schema).toContain('UNIQUE (user_id, target_type, target_id)');
-    // 审核状态机的四个状态（spec §4.5），posts 与 post_images 各一份
+    // 审核状态机的四个状态（spec §4.5），posts、post_images、pet_photos 各一份
+    // （pet_photos 那份在迁移区加列时带上，见下面的专门用例）
     const auditCheck = /CHECK \(audit_status IN \('pending', ?'approved', ?'pending_review', ?'rejected'\)\)/g;
-    expect(schema.match(auditCheck)).toHaveLength(2);
+    expect(schema.match(auditCheck)).toHaveLength(3);
     // 图片宽高为瀑布流预估高度而存在，spec §4.1 明确非可选
     expect(schema).toContain('width INTEGER NOT NULL CHECK (width > 0)');
     expect(schema).toContain('height INTEGER NOT NULL CHECK (height > 0)');
@@ -151,6 +152,39 @@ describe('runMigrations', () => {
     // 队列不承担合规留痕，运营账号注销后置空指针可接受——与 audit_log 取向不同。
     expect(body).toMatch(/reported_by TEXT REFERENCES users\(id\) ON DELETE SET NULL/);
     expect(body).toMatch(/handled_by TEXT REFERENCES users\(id\) ON DELETE SET NULL/);
+  });
+
+  // pet_photos 是阶段 1 建的表：加 audit_status 一列（只增不改）。
+  it('pet_photos.audit_status：存量回填 approved，之后新行默认 pending（fail-closed）', async () => {
+    const { pool, queries } = fakePool();
+    await runMigrations(pool);
+    const schema = businessSql(queries)[0];
+
+    // 加列那一刻 DEFAULT 'approved'：已经公开展示的存量照片不能一夜之间全变待审，
+    // 否则广场空了。CHECK 列级，跟着 ADD COLUMN IF NOT EXISTS 一起幂等。
+    expect(schema).toMatch(
+      /ALTER TABLE pet_photos ADD COLUMN IF NOT EXISTS audit_status TEXT NOT NULL DEFAULT 'approved'\s+CHECK \(audit_status IN \('pending','approved','pending_review','rejected'\)\)/,
+    );
+    // 回填之后把默认值切到 pending：漏传状态的新行宁可待审，也不能默认公开。
+    expect(schema).toMatch(/ALTER TABLE pet_photos ALTER COLUMN audit_status SET DEFAULT 'pending'/);
+    expect(schema.indexOf("ALTER COLUMN audit_status SET DEFAULT 'pending'")).toBeGreaterThan(
+      schema.indexOf('ADD COLUMN IF NOT EXISTS audit_status'),
+    );
+    expect(schema.indexOf('ALTER TABLE pet_photos ADD COLUMN IF NOT EXISTS audit_status')).toBeGreaterThan(
+      schema.indexOf('-- ── 既有表的迁移'),
+    );
+  });
+
+  it('种子照片显式写 approved —— 列默认值已是 pending，不写新库广场就空了', async () => {
+    const { pool, queries } = fakePool();
+    await runMigrations(pool, { seed: true });
+    const seed = businessSql(queries)[1];
+    expect(seed).toContain(
+      'INSERT INTO pet_photos (id, pet_id, url, width, height, sort_order, audit_status) VALUES',
+    );
+    const rows = seed.match(/\('ph-\d+'[^)]*\)/g) ?? [];
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) expect(row).toMatch(/,'approved'\)$/);
   });
 
   // users 是阶段 1 建的表，阶段 3 只给它加一列 role（Global Constraint 22：只增不改）。

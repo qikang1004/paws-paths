@@ -119,6 +119,15 @@ describe('media-picker', () => {
     expect(read('components/media-picker/index.wxml')).toContain('wx:if="{{canAdd}}"');
   });
 
+  it('每张图可带一条角标文案（页面算好传进来，组件不认识审核状态）', () => {
+    const wxml = read('components/media-picker/index.wxml');
+    expect(wxml).toContain('wx:if="{{item.badgeText}}"');
+    expect(wxml).toContain('{{item.badgeText}}');
+    // 纯展示：状态到文案的映射在页面的纯函数里，组件里不出现状态字面量。
+    const ts = stripComments(read('components/media-picker/index.ts'));
+    expect(ts).not.toMatch(/pending|approved|rejected/);
+  });
+
   it('上传中不接受新的选图与删除', () => {
     expect(read('components/media-picker/index.ts')).toMatch(
       /if \(this\.data\.uploading\) return;[\s\S]*if \(this\.data\.uploading\) return;/,

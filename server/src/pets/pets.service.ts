@@ -1,6 +1,8 @@
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
-import { ERROR_CODES } from '@paws/types';
+import { ERROR_CODES, type AuditStatus } from '@paws/types';
 import { ApiException } from '../common/api.exception';
+import { auditStatusOfLane } from '../uploads/image-storage';
+import { UploadsService } from '../uploads/uploads.service';
 import {
   PET_REPOSITORY,
   type PetCreateInput,
@@ -36,6 +38,8 @@ export interface PetPhoto {
   url: string;
   width: number;
   height: number;
+  /** 审核状态。别人看到的恒为过审的照片；主人能看到自己的待审照片（编辑页画角标）。 */
+  auditStatus: AuditStatus;
 }
 
 export interface PetDetail {
@@ -227,8 +231,11 @@ export function parsePetPatch(body: Record<string, unknown>): PetPatchInput {
   return patch;
 }
 
-/** `POST /pets/:id/photos` 的请求体校验。 */
-export function parsePetPhoto(body: Record<string, unknown>): PetPhotoInput {
+/**
+ * `POST /pets/:id/photos` 的请求体校验。返回值不含 `auditStatus` ——
+ * 那是服务端按文件所在的档自己算的，请求体里给了也不认。
+ */
+export function parsePetPhoto(body: Record<string, unknown>): Omit<PetPhotoInput, 'auditStatus'> {
   const raw = body.url;
   if (typeof raw !== 'string' || !IMAGE_URL_RE.test(raw.trim())) fail('照片地址不合法');
   return {
@@ -240,7 +247,10 @@ export function parsePetPhoto(body: Record<string, unknown>): PetPhotoInput {
 
 @Injectable()
 export class PetsService {
-  constructor(@Inject(PET_REPOSITORY) private readonly repo: PetRepository) {}
+  constructor(
+    @Inject(PET_REPOSITORY) private readonly repo: PetRepository,
+    private readonly uploads: UploadsService,
+  ) {}
 
   async list(query: {
     filter: { species: string; breed: string };
@@ -282,8 +292,9 @@ export class PetsService {
   /**
    * 详情。
    *
-   * `viewerId` 只为算 `isOwn`（关注按钮出不出现）。它是可选的 —— `update()`
-   * 内部也调这个方法，那条路径上不需要归属标记（写操作前已经 `assertOwner` 过了）。
+   * `viewerId` 用来算 `isOwn`（关注按钮出不出现），也决定照片的可见范围：
+   * 主人看得见自己全部的照片（含待审的，客户端画「审核中」），别人与未登录只看得见
+   * 过审的 —— 筛在仓储的 SQL 里，不是取回来再过滤。
    *
    * 归属走 `findOwnerId` 而不是往 `PetRow` 加 `ownerId`：主人的用户 id 不下发
    * 客户端，混进展示投影里容易被顺手带进响应（同 `findOwnerId` 的既有注释）。
@@ -297,11 +308,12 @@ export class PetsService {
       opts && typeof opts.lat === 'number' && typeof opts.lng === 'number'
         ? { lat: opts.lat, lng: opts.lng }
         : undefined;
-    const found = await this.repo.getById(id, coords);
+    const viewerId = opts?.viewerId ?? null;
+    // 归属要在取照片之前算出来：它决定待审照片给不给。
+    const isOwn = viewerId != null && (await this.repo.findOwnerId(id)) === viewerId;
+    const found = await this.repo.getById(id, coords, { includeHidden: isOwn });
     if (!found) return null;
     const { pet, photos } = found;
-    const viewerId = opts?.viewerId ?? null;
-    const isOwn = viewerId != null && (await this.repo.findOwnerId(id)) === viewerId;
     return {
       id: pet.id,
       name: pet.name,
@@ -341,7 +353,8 @@ export class PetsService {
       fail('封面只能选这只宠物自己的照片');
     }
     await this.repo.update(petId, patch);
-    const updated = await this.detail(petId);
+    // 回读带上主人自己：编辑页拿这份响应重画相册，待审照片不能在这一步消失。
+    const updated = await this.detail(petId, { viewerId: userId });
     // 走不到：`getById` 只过滤 visibility，而本阶段没有任何入口把宠物设成私密。
     // 真出现的话说明宠物在这两次查询之间被删了，报 404 比发一份半截资料诚实。
     if (!updated) this.notFound();
@@ -361,7 +374,10 @@ export class PetsService {
     body: Record<string, unknown>,
   ): Promise<PetPhoto> {
     await this.assertOwner(petId, userId);
-    return this.repo.addPhoto(petId, parsePetPhoto(body));
+    const photo = parsePetPhoto(body);
+    // 机审发生在上传那一步，结论就是文件所在的档（同发动态的图片）。
+    const auditStatus = auditStatusOfLane(await this.uploads.laneOfUrl(photo.url));
+    return this.repo.addPhoto(petId, { ...photo, auditStatus });
   }
 
   async removePhoto(petId: string, photoId: string, userId: string): Promise<{ deleted: boolean }> {

@@ -3,6 +3,13 @@ import { ERROR_CODES } from '@paws/types';
 import { ApiException } from '../src/common/api.exception';
 import { InMemoryPetRepository, PET_REPOSITORY } from '../src/pets/pet.repository';
 import { PetsService } from '../src/pets/pets.service';
+import type { StorageLane } from '../src/uploads/image-storage';
+import { UploadsService } from '../src/uploads/uploads.service';
+
+/** 只替身 `laneOfUrl`：照片的审核状态由文件所在的那一档决定（同发动态的图片）。 */
+function fakeUploads(lanes: Record<string, StorageLane> = {}): Partial<UploadsService> {
+  return { laneOfUrl: async (url: string) => lanes[url] ?? null };
+}
 
 describe('PetsService', () => {
   let service: PetsService;
@@ -11,6 +18,7 @@ describe('PetsService', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         { provide: PET_REPOSITORY, useClass: InMemoryPetRepository },
+        { provide: UploadsService, useValue: fakeUploads() },
         PetsService,
       ],
     }).compile();
@@ -90,5 +98,69 @@ describe('PetsService', () => {
       pageSize: 10,
     });
     expect(res.items.every((i) => i.distanceMeters === null)).toBe(true);
+  });
+});
+
+/**
+ * 宠物照片接入机审（spec §4.5）。机审发生在上传那一步（`UploadsService.save`），
+ * 结论落成文件所在的档：public = 过审，private = 待审。加照片时按档定状态，
+ * 与发动态的图片同一条口径；外链 / 拼错的 key 验不了，一律待审（fail-closed）。
+ */
+describe('PetsService 照片审核', () => {
+  let service: PetsService;
+  const OWNER = 'u-1';
+  const PUBLIC_URL = '/uploads/u-1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg';
+  const PRIVATE_URL = '/uploads/u-1/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg';
+  const EXTERNAL_URL = 'https://picsum.photos/seed/paws-ext/600/800';
+
+  beforeEach(async () => {
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        { provide: PET_REPOSITORY, useClass: InMemoryPetRepository },
+        {
+          provide: UploadsService,
+          useValue: fakeUploads({ [PUBLIC_URL]: 'public', [PRIVATE_URL]: 'private' }),
+        },
+        PetsService,
+      ],
+    }).compile();
+    service = moduleRef.get(PetsService);
+  });
+
+  const add = (url: string) => service.addPhoto('p-1', OWNER, { url, width: 600, height: 800 });
+
+  it('公开档 → approved；私有档 → pending；外链验不了 → pending', async () => {
+    expect((await add(PUBLIC_URL)).auditStatus).toBe('approved');
+    expect((await add(PRIVATE_URL)).auditStatus).toBe('pending');
+    expect((await add(EXTERNAL_URL)).auditStatus).toBe('pending');
+  });
+
+  it('请求体里塞 auditStatus 没用 —— 状态只由服务端按档计算', async () => {
+    const row = await service.addPhoto('p-1', OWNER, {
+      url: EXTERNAL_URL,
+      width: 600,
+      height: 800,
+      auditStatus: 'approved',
+    });
+    expect(row.auditStatus).toBe('pending');
+  });
+
+  it('详情：待审照片别人与未登录看不见，主人看得见且带状态', async () => {
+    await add(PRIVATE_URL);
+    const urlsOf = (d: Awaited<ReturnType<PetsService['detail']>>) => d?.photos.map((p) => p.url);
+
+    expect(urlsOf(await service.detail('p-1', { viewerId: 'u-2' }))).not.toContain(PRIVATE_URL);
+    expect(urlsOf(await service.detail('p-1', { viewerId: null }))).not.toContain(PRIVATE_URL);
+    expect(urlsOf(await service.detail('p-1'))).not.toContain(PRIVATE_URL);
+
+    const mine = await service.detail('p-1', { viewerId: OWNER });
+    expect(mine?.photos.find((p) => p.url === PRIVATE_URL)?.auditStatus).toBe('pending');
+  });
+
+  it('主人改资料后回读的详情同样带着自己的待审照片（编辑页靠它画「审核中」）', async () => {
+    await add(PRIVATE_URL);
+    const updated = await service.update('p-1', OWNER, { bio: '换个简介' });
+    expect(updated.photos.map((p) => p.url)).toContain(PRIVATE_URL);
+    expect(updated.isOwn).toBe(true);
   });
 });

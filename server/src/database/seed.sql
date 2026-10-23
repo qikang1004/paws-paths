@@ -38,24 +38,26 @@ INSERT INTO pets (id, owner_id, name, species, breed, gender, birth_date, bio, p
   ('p-8','u-8','咪咪','cat','美国短毛猫','female','2024-09-10','好奇心旺盛，家里的探索者。','{"好奇","活泼"}',ST_SetSRID(ST_MakePoint(116.4060,39.8990),4326),'2026-08-15T20:00:00Z')
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO pet_photos (id, pet_id, url, width, height, sort_order) VALUES
-  ('ph-1','p-1','https://picsum.photos/seed/paws-huang/600/800',600,800,0),
-  ('ph-2','p-1','https://picsum.photos/seed/paws-huang2/800/600',800,600,1),
-  ('ph-3','p-1','https://picsum.photos/seed/paws-huang3/600/800',600,800,2),
-  ('ph-4','p-2','https://picsum.photos/seed/paws-naixi/800/600',800,600,0),
-  ('ph-5','p-2','https://picsum.photos/seed/paws-naixi2/600/800',600,800,1),
-  ('ph-6','p-3','https://picsum.photos/seed/paws-kele/600/800',600,800,0),
-  ('ph-7','p-3','https://picsum.photos/seed/paws-kele2/900/600',900,600,1),
-  ('ph-8','p-4','https://picsum.photos/seed/paws-doubao/900/600',900,600,0),
-  ('ph-9','p-4','https://picsum.photos/seed/paws-doubao2/600/800',600,800,1),
-  ('ph-10','p-5','https://picsum.photos/seed/paws-huahua/600/800',600,800,0),
-  ('ph-11','p-5','https://picsum.photos/seed/paws-huahua2/800/800',800,800,1),
-  ('ph-12','p-6','https://picsum.photos/seed/paws-tuanzi/800/800',800,800,0),
-  ('ph-13','p-6','https://picsum.photos/seed/paws-tuanzi2/600/800',600,800,1),
-  ('ph-14','p-7','https://picsum.photos/seed/paws-wangcai/600/900',600,900,0),
-  ('ph-15','p-7','https://picsum.photos/seed/paws-wangcai2/800/600',800,600,1),
-  ('ph-16','p-8','https://picsum.photos/seed/paws-mimi/700/700',700,700,0),
-  ('ph-17','p-8','https://picsum.photos/seed/paws-mimi2/600/800',600,800,1)
+-- audit_status 显式写 'approved'：列默认值是 'pending'（fail-closed，见 schema.sql），
+-- 不写的话新库上的演示照片全成待审，广场一张卡都没有。
+INSERT INTO pet_photos (id, pet_id, url, width, height, sort_order, audit_status) VALUES
+  ('ph-1','p-1','https://picsum.photos/seed/paws-huang/600/800',600,800,0,'approved'),
+  ('ph-2','p-1','https://picsum.photos/seed/paws-huang2/800/600',800,600,1,'approved'),
+  ('ph-3','p-1','https://picsum.photos/seed/paws-huang3/600/800',600,800,2,'approved'),
+  ('ph-4','p-2','https://picsum.photos/seed/paws-naixi/800/600',800,600,0,'approved'),
+  ('ph-5','p-2','https://picsum.photos/seed/paws-naixi2/600/800',600,800,1,'approved'),
+  ('ph-6','p-3','https://picsum.photos/seed/paws-kele/600/800',600,800,0,'approved'),
+  ('ph-7','p-3','https://picsum.photos/seed/paws-kele2/900/600',900,600,1,'approved'),
+  ('ph-8','p-4','https://picsum.photos/seed/paws-doubao/900/600',900,600,0,'approved'),
+  ('ph-9','p-4','https://picsum.photos/seed/paws-doubao2/600/800',600,800,1,'approved'),
+  ('ph-10','p-5','https://picsum.photos/seed/paws-huahua/600/800',600,800,0,'approved'),
+  ('ph-11','p-5','https://picsum.photos/seed/paws-huahua2/800/800',800,800,1,'approved'),
+  ('ph-12','p-6','https://picsum.photos/seed/paws-tuanzi/800/800',800,800,0,'approved'),
+  ('ph-13','p-6','https://picsum.photos/seed/paws-tuanzi2/600/800',600,800,1,'approved'),
+  ('ph-14','p-7','https://picsum.photos/seed/paws-wangcai/600/900',600,900,0,'approved'),
+  ('ph-15','p-7','https://picsum.photos/seed/paws-wangcai2/800/600',800,600,1,'approved'),
+  ('ph-16','p-8','https://picsum.photos/seed/paws-mimi/700/700',700,700,0,'approved'),
+  ('ph-17','p-8','https://picsum.photos/seed/paws-mimi2/600/800',600,800,1,'approved')
 ON CONFLICT (id) DO NOTHING;
 
 -- 回填 cover_photo_id：第一张即封面

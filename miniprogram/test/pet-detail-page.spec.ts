@@ -21,8 +21,8 @@ const detail = (over: Partial<PetDetail> = {}): PetDetail => ({
   distanceMeters: 1200,
   owner: { nickname: '小鱼', avatarUrl: null, ownerVerified: true },
   photos: [
-    { id: 'ph-1', url: 'https://picsum.photos/id/237/600/800', width: 600, height: 800 },
-    { id: 'ph-2', url: 'https://picsum.photos/id/238/800/600', width: 800, height: 600 },
+    { id: 'ph-1', url: 'https://picsum.photos/id/237/600/800', width: 600, height: 800, auditStatus: 'approved' },
+    { id: 'ph-2', url: 'https://picsum.photos/id/238/800/600', width: 800, height: 600, auditStatus: 'approved' },
   ],
   isFollowing: false,
   isFavorite: false,

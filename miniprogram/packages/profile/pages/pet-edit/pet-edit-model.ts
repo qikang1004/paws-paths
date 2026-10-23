@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '../../../../config';
 import { resolveImageUrl } from '../../../../utils/image-url';
+import { buildAuditBadge } from '../../../../utils/post-view';
 import type {
   PetDetail,
   PetGender,
@@ -179,6 +180,12 @@ export interface PhotoTile {
   url: string;
   /** 第一张就是封面：服务端按 `sort_order` 给，封面指针也指着它。 */
   isCover: boolean;
+  /**
+   * 角标文案。过审的照片是空串（不画角标）；待审 / 复核中 / 未通过的照片
+   * 只有主人看得到（服务端对别人直接不下发），编辑页给它们压一个角标。
+   * 文案与动态的审核角标共用 `buildAuditBadge`，两处措辞不各写一份。
+   */
+  badgeText: string;
 }
 
 export function buildPhotoTiles(photos: PetPhoto[], baseUrl?: string): PhotoTile[] {
@@ -187,5 +194,6 @@ export function buildPhotoTiles(photos: PetPhoto[], baseUrl?: string): PhotoTile
     id: photo.id,
     url: resolveImageUrl(photo.url, base),
     isCover: index === 0,
+    badgeText: buildAuditBadge(photo.auditStatus, null).text,
   }));
 }
